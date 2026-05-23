@@ -128,6 +128,7 @@ export default function App() {
 
   // MULTI-LINE SPELLING BOARD STATE
   const [spelledRows, setSpelledRows] = useState<SpelledLetter[][]>([[]]);
+  const [rowIds, setRowIds] = useState<string[]>(() => ['row-initial-' + Math.random().toString(36).substring(2, 11)]);
 
   // Spelling rows dynamic lifecycle useEffect is defined below after drag state declarations.
 
@@ -166,7 +167,14 @@ export default function App() {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [isSavingInProgress, setIsSavingInProgress] = useState(false);
   const [isReviewingSaved, setIsReviewingSaved] = useState(false);
-  const [deletedRowsHistory, setDeletedRowsHistory] = useState<{ row: SpelledLetter[]; index: number; color?: 'black' | 'blue' | 'red' | 'green' }[]>([]);
+  const [deletedRowsHistory, setDeletedRowsHistory] = useState<{ 
+    row: SpelledLetter[]; 
+    index: number; 
+    color?: 'black' | 'blue' | 'red' | 'green';
+    rowId?: string;
+    cutWires?: boolean;
+    activeMode?: 'save' | 'scissors' | 'trash' | null;
+  }[]>([]);
   
   // Loaded static saved word list in localStore
   const [savedWordsList, setSavedWordsList] = useState<SavedWord[]>(() => {
@@ -518,6 +526,22 @@ export default function App() {
       }
     }
   }, [spelledRows, isCurrentlyDragging]);
+
+  // Synchronize rowIds with spelledRows length for dynamic padding/trimming
+  useEffect(() => {
+    setRowIds(prev => {
+      if (prev.length === spelledRows.length) return prev;
+      if (spelledRows.length > prev.length) {
+        const next = [...prev];
+        while (next.length < spelledRows.length) {
+          next.push('row-' + Math.random().toString(36).substring(2, 11));
+        }
+        return next;
+      } else {
+        return prev.slice(0, spelledRows.length);
+      }
+    });
+  }, [spelledRows.length]);
 
   // Double tap handler refs
   const lastClicksRef = useRef<Record<string, number>>({});
@@ -1470,12 +1494,40 @@ export default function App() {
     if (spelledRows.length === 1) {
       setSpelledRows([[]]);
       setRowColors({});
+      setRowActiveModes({});
+      setCutWiresRows({});
       setActiveRowIdx(0);
+      setRowIds(['row-initial-' + Math.random().toString(36).substring(2, 11)]);
       return;
     }
+    setRowIds(prev => prev.filter((_, idx) => idx !== rIdx));
     setSpelledRows(prev => prev.filter((_, idx) => idx !== rIdx));
     setRowColors(prev => {
       const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+      Object.keys(prev).forEach(k => {
+        const idx = parseInt(k, 10);
+        if (idx < rIdx) {
+          next[idx] = prev[idx];
+        } else if (idx > rIdx) {
+          next[idx - 1] = prev[idx];
+        }
+      });
+      return next;
+    });
+    setRowActiveModes(prev => {
+      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
+      Object.keys(prev).forEach(k => {
+        const idx = parseInt(k, 10);
+        if (idx < rIdx) {
+          next[idx] = prev[idx];
+        } else if (idx > rIdx) {
+          next[idx - 1] = prev[idx];
+        }
+      });
+      return next;
+    });
+    setCutWiresRows(prev => {
+      const next: Record<number, boolean> = {};
       Object.keys(prev).forEach(k => {
         const idx = parseInt(k, 10);
         if (idx < rIdx) {
@@ -1492,11 +1544,21 @@ export default function App() {
   const handleDeleteRowWithHistory = (rIdx: number) => {
     const rowToSave = spelledRows[rIdx];
     const colorToSave = rowColors[rIdx];
+    const rowIdToSave = rowIds[rIdx];
+    const cutWiresToSave = cutWiresRows[rIdx];
+    const activeModeToSave = rowActiveModes[rIdx];
     
     // Save to history stack
     setDeletedRowsHistory(prev => [
       ...prev,
-      { row: rowToSave, index: rIdx, color: colorToSave }
+      { 
+        row: rowToSave, 
+        index: rIdx, 
+        color: colorToSave, 
+        rowId: rowIdToSave,
+        cutWires: cutWiresToSave,
+        activeMode: activeModeToSave
+      }
     ]);
     
     handleRemoveRow(rIdx);
@@ -1507,6 +1569,13 @@ export default function App() {
     
     const lastDeleted = deletedRowsHistory[deletedRowsHistory.length - 1];
     
+    setRowIds(prev => {
+      const copy = [...prev];
+      const insertIdx = Math.min(lastDeleted.index, copy.length);
+      copy.splice(insertIdx, 0, lastDeleted.rowId || ('row-' + Math.random().toString(36).substring(2, 11)));
+      return copy;
+    });
+
     setSpelledRows(prev => {
       const copy = [...prev];
       if (copy.length === 1 && copy[0].length === 0) {
@@ -1534,13 +1603,52 @@ export default function App() {
       });
     }
 
+    setRowActiveModes(prev => {
+      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
+      Object.entries(prev).forEach(([k, val]) => {
+        const idx = parseInt(k, 10);
+        if (idx < lastDeleted.index) {
+          next[idx] = val;
+        } else {
+          next[idx + 1] = val;
+        }
+      });
+      if (lastDeleted.activeMode) {
+        next[lastDeleted.index] = lastDeleted.activeMode;
+      }
+      return next;
+    });
+
+    setCutWiresRows(prev => {
+      const next: Record<number, boolean> = {};
+      Object.entries(prev).forEach(([k, val]) => {
+        const idx = parseInt(k, 10);
+        if (idx < lastDeleted.index) {
+          next[idx] = val;
+        } else {
+          next[idx + 1] = val;
+        }
+      });
+      if (lastDeleted.cutWires !== undefined) {
+        next[lastDeleted.index] = lastDeleted.cutWires;
+      }
+      return next;
+    });
+
     setDeletedRowsHistory(prev => prev.slice(0, -1));
   };
 
   const handleClearAllRows = () => {
     // Collect all rows that actually contain cubes
     const nonKeys = spelledRows
-      .map((row, idx) => ({ row, index: idx, color: rowColors[idx] }))
+      .map((row, idx) => ({ 
+        row, 
+        index: idx, 
+        color: rowColors[idx], 
+        rowId: rowIds[idx],
+        cutWires: cutWiresRows[idx],
+        activeMode: rowActiveModes[idx]
+      }))
       .filter(item => item.row.length > 0);
     
     if (nonKeys.length > 0) {
@@ -1552,7 +1660,10 @@ export default function App() {
 
     setSpelledRows([[]]);
     setRowColors({});
+    setRowActiveModes({});
+    setCutWiresRows({});
     setActiveRowIdx(0);
+    setRowIds(['row-initial-' + Math.random().toString(36).substring(2, 11)]);
   };
 
   const cycleRowColor = (rIdx: number) => {
@@ -1925,6 +2036,7 @@ export default function App() {
 
             {/* SINGLE BOARD CONTAINER (Original style matching the grey dashed card, growing internally) */}
             <motion.div 
+              layout
               transition={{
                 type: "spring",
                 stiffness: 300,
@@ -1938,18 +2050,25 @@ export default function App() {
                 {spelledRows.map((row, rIdx) => {
                   const isActiveRow = activeRowIdx === rIdx;
                   const isLastRow = rIdx === spelledRows.length - 1;
+                  const rowKey = rowIds[rIdx] || `row-box-fallback-${rIdx}`;
 
                   return (
                     <motion.div
-                      initial={{ opacity: 0, scale: 0.98 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.98 }}
+                      layout
+                      initial={{ opacity: 0, y: -15, scale: 0.96 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ 
+                        opacity: 0, 
+                        y: 15, 
+                        scale: 0.96,
+                        transition: { duration: 0.15 }
+                      }}
                       transition={{ 
                         type: "spring",
-                        stiffness: 350,
-                        damping: 30
+                        stiffness: 450,
+                        damping: 32
                       }}
-                      key={`row-box-${rIdx}`}
+                      key={rowKey}
                       onClick={() => setActiveRowIdx(rIdx)}
                       onPointerDown={(e) => {
                         // Do not trigger scrollbar activation on touch if tapping buttons (like scissors)
@@ -2013,84 +2132,102 @@ export default function App() {
                               }}
                             />
 
-                            {/* Top Option: Bookmark (ACTIVE when wires are shown / not hidden) */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRowActiveModes(prev => ({
-                                  ...prev,
-                                  [rIdx]: prev[rIdx] === 'save' ? null : 'save'
-                                }));
-                              }}
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenSaveModal(rIdx);
-                              }}
-                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                              title="Clique uma vez para focar; 2 cliques rápidos para salvar no histórico!"
-                            >
-                              <Bookmark 
-                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                  rowActiveModes[rIdx] === 'save' ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                }`} 
-                              />
-                            </button>
+                             {/* Top Option: Bookmark (ACTIVE when wires are shown / not hidden) */}
+                             <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (rowActiveModes[rIdx] === 'save') {
+                                   handleOpenSaveModal(rIdx);
+                                 } else {
+                                   setRowActiveModes(prev => ({
+                                     ...prev,
+                                     [rIdx]: 'save'
+                                   }));
+                                 }
+                               }}
+                               onDoubleClick={(e) => {
+                                 e.stopPropagation();
+                                 handleOpenSaveModal(rIdx);
+                                }}
+                               style={{ touchAction: 'manipulation' }}
+                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para salvar esta palavra"
+                             >
+                               <Bookmark 
+                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                   rowActiveModes[rIdx] === 'save' ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
+                                 }`} 
+                               />
+                             </button>
 
-                            {/* Middle Option: Scissors (ACTIVE when wires are hidden) */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRowActiveModes(prev => ({
-                                  ...prev,
-                                  [rIdx]: prev[rIdx] === 'scissors' ? null : 'scissors'
-                                }));
-                              }}
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                setCutWiresRows(prev => ({
-                                  ...prev,
-                                  [rIdx]: !prev[rIdx]
-                                }));
-                                setRowActiveModes(prev => ({
-                                  ...prev,
-                                  [rIdx]: 'scissors'
-                                }));
-                              }}
-                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                              title="Clique uma vez para focar; 2 cliques rápidos para cortar/mostrar as linhas desta palavra"
-                            >
-                              <Scissors 
-                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                  rowActiveModes[rIdx] === 'scissors' || cutWiresRows[rIdx] ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                }`} 
-                              />
-                            </button>
+                             {/* Middle Option: Scissors (ACTIVE when wires are hidden) */}
+                             <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (rowActiveModes[rIdx] === 'scissors') {
+                                   setCutWiresRows(prev => ({
+                                     ...prev,
+                                     [rIdx]: !prev[rIdx]
+                                   }));
+                                 } else {
+                                   setRowActiveModes(prev => ({
+                                     ...prev,
+                                     [rIdx]: 'scissors'
+                                   }));
+                                 }
+                               }}
+                               onDoubleClick={(e) => {
+                                 e.stopPropagation();
+                                 setCutWiresRows(prev => ({
+                                   ...prev,
+                                   [rIdx]: !prev[rIdx]
+                                 }));
+                                 setRowActiveModes(prev => ({
+                                   ...prev,
+                                   [rIdx]: 'scissors'
+                                 }));
+                               }}
+                               style={{ touchAction: 'manipulation' }}
+                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para cortar/mostrar conexões"
+                             >
+                               <Scissors 
+                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                   rowActiveModes[rIdx] === 'scissors' || cutWiresRows[rIdx] ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
+                                 }`} 
+                               />
+                             </button>
 
-                            {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setRowActiveModes(prev => ({
-                                  ...prev,
-                                  [rIdx]: prev[rIdx] === 'trash' ? null : 'trash'
-                                }));
-                              }}
-                              onDoubleClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteRowWithHistory(rIdx);
-                              }}
-                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                              title="Clique uma vez para focar; 2 cliques rápidos para excluir esta palavra"
-                            >
-                              <Trash2 
-                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                  rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
-                                }`} 
-                              />
-                            </button>
+                             {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
+                             <button
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (rowActiveModes[rIdx] === 'trash') {
+                                   handleDeleteRowWithHistory(rIdx);
+                                 } else {
+                                   setRowActiveModes(prev => ({
+                                     ...prev,
+                                     [rIdx]: 'trash'
+                                   }));
+                                 }
+                               }}
+                               onDoubleClick={(e) => {
+                                 e.stopPropagation();
+                                 handleDeleteRowWithHistory(rIdx);
+                               }}
+                               style={{ touchAction: 'manipulation' }}
+                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra"
+                             >
+                               <Trash2 
+                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                   rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
+                                 }`} 
+                               />
+                             </button>
                           </div>
                         </div>
 
