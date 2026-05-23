@@ -2340,10 +2340,9 @@ export default function App() {
                                      }}
                                      exit={{ 
                                        opacity: 0, 
-                                       scale: 0.2, 
+                                       scale: 0.8, 
                                        transition: { 
-                                         duration: 0.08, 
-                                         ease: "easeOut"
+                                         duration: 0.01 
                                        } 
                                      }}
                                     className={`relative z-20 min-w-[calc((100vw-6rem)/5)] w-[calc((100vw-6rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
