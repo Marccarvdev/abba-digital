@@ -1622,7 +1622,7 @@ export default function App() {
                 className="w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 flex items-center justify-center z-20"
               >
                 <img
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779389284/logo_abba_bmgx5y.svg"
+                  src="/logo_splash.svg"
                   alt="ABBA Logo"
                   className="w-full h-full object-contain pointer-events-none"
                 />
@@ -1792,7 +1792,7 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           
           <div className="flex items-center gap-2.5">
-            <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10" />
+            <img src="/logo_favicon.svg" alt="ABBA Logo" className="w-10 h-10" />
             <div>
               <h1 className="font-display font-extrabold text-xl tracking-tight text-gray-950 flex items-center gap-1.5">
                 ABBA DIGITAL
