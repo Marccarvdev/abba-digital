@@ -1541,6 +1541,9 @@ export default function App() {
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
     e.preventDefault();
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (err) {}
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = rect.left + rect.width / 2 + window.scrollX;
     const startY = rect.top + rect.height / 2 + window.scrollY;
@@ -1839,6 +1842,9 @@ export default function App() {
                   }`}
                   onPointerDown={(e) => {
                     e.preventDefault();
+                    try {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                    } catch (err) {}
                     if (isReorderCubesActive) {
                       setDraggedShelfIndex(cubeIdx);
                       draggedShelfIndexRef.current = cubeIdx;
