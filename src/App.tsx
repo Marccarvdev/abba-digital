@@ -1840,6 +1840,12 @@ export default function App() {
                       ? 'opacity-30 scale-95 border-2 border-dashed border-gray-300 rounded-2xl' 
                       : 'active:scale-95 cursor-grab'
                   }`}
+                  onTouchStart={(e) => {
+                    if (e.cancelable) e.preventDefault();
+                  }}
+                  onTouchMove={(e) => {
+                    if (e.cancelable) e.preventDefault();
+                  }}
                   onPointerDown={(e) => {
                     e.preventDefault();
                     try {
@@ -2185,6 +2191,12 @@ export default function App() {
                                         : ''
                                     }`}
                                     style={isBeingReplaced ? undefined : undefined}
+                                    onTouchStart={(e) => {
+                                      if (e.cancelable) e.preventDefault();
+                                    }}
+                                    onTouchMove={(e) => {
+                                      if (e.cancelable) e.preventDefault();
+                                    }}
                                     onPointerDown={(e) => {
                                       if (isBeingDragged) return;
                                       e.preventDefault();
