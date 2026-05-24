@@ -113,11 +113,57 @@ import { LetterCube } from './components/LetterCube';
 import { SpelledLetter, LetterCubeData, SavedWord } from './types';
 import { AboutSection } from './components/AboutSection';
 import Loader from './components/Loader';
+import styled from 'styled-components';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
   return match ? `cube-${match.id}` : `cube-cube-${letter.toLowerCase()}`;
 };
+
+interface StyledHamburgerProps {
+  isOpen: boolean;
+}
+
+const StyledHamburger = styled.div<StyledHamburgerProps>`
+  position: relative;
+  width: 24px;
+  height: 21px; /* 3px * 3 + 6px * 2 */
+
+  .bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 1.5px;
+    background: #334155; /* Slate-700 gray */
+    color: inherit;
+    opacity: 1;
+    transition: none 0.35s cubic-bezier(.5,-0.35,.35,1.5) 0s;
+  }
+
+  .bar--top {
+    bottom: ${props => props.isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
+    transform: ${props => props.isOpen ? 'rotate(135deg)' : 'none'};
+    transition-property: bottom, transform;
+    transition-delay: ${props => props.isOpen ? '0s, 0.35s' : '0.35s, 0s'};
+  }
+
+  .bar--middle {
+    top: calc(50% - 3px / 2);
+    opacity: ${props => props.isOpen ? 0 : 1};
+    transition-property: opacity;
+    transition-duration: ${props => props.isOpen ? '0s' : '0.35s'};
+    transition-delay: 0.35s;
+  }
+
+  .bar--bottom {
+    top: ${props => props.isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
+    transform: ${props => props.isOpen ? 'rotate(225deg)' : 'none'};
+    transition-property: top, transform;
+    transition-delay: ${props => props.isOpen ? '0s, 0.35s' : '0.35s, 0s'};
+  }
+`;
+
 
 export default function App() {
   // Hamburger menu open states and activePage tabs matching Apple systems
@@ -2021,14 +2067,14 @@ export default function App() {
             {/* Hamburger button */}
             <button
               onClick={() => setIsMenuOpen(prev => !prev)}
-              className="group p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all text-slate-700 cursor-pointer relative"
+              className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative"
               aria-label="Toggle menu"
             >
-              <div className="w-6 h-6 flex flex-col justify-center items-center gap-1.5 relative overflow-hidden">
-                <span className={`w-5 h-[2px] bg-slate-800 rounded-full transition-all duration-300 transform origin-center ${isMenuOpen ? 'rotate-45 translate-y-[4px]' : ''}`} />
-                <span className={`w-5 h-[2px] bg-slate-800 rounded-full transition-all duration-300 ${isMenuOpen ? 'opacity-0 scale-0' : ''}`} />
-                <span className={`w-5 h-[2px] bg-slate-800 rounded-full transition-all duration-300 transform origin-center ${isMenuOpen ? '-rotate-45 -translate-y-[4px]' : ''}`} />
-              </div>
+              <StyledHamburger isOpen={isMenuOpen}>
+                <div className="bar bar--top" />
+                <div className="bar bar--middle" />
+                <div className="bar bar--bottom" />
+              </StyledHamburger>
             </button>
 
             <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
