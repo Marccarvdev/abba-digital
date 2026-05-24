@@ -364,7 +364,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     setTimeout(() => {
       setIsSending(false);
       setIsWhatsappModalOpen(false);
-      const contactText = `*Nome:* ${whatsappFormValues.firstName}\n*Sobrenome:* ${whatsappFormValues.lastName}\n*Mensagem:* ${whatsappFormValues.message}`;
+      const contactText = `*Nome:* ${whatsappFormValues.firstName}\n*Sobrenome:* ${whatsappFormValues.lastName}\n\n${whatsappFormValues.message}`;
       const url = `https://wa.me/5547999034403?text=${encodeURIComponent(contactText)}`;
       window.open(url, '_blank');
       setWhatsappFormValues({ firstName: '', lastName: '', message: '' });
