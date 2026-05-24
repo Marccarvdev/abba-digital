@@ -173,14 +173,12 @@ export default function App() {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [isSavingInProgress, setIsSavingInProgress] = useState(false);
   const [isReviewingSaved, setIsReviewingSaved] = useState(false);
-  const [deletedRowsHistory, setDeletedRowsHistory] = useState<{ 
-    row: SpelledLetter[]; 
-    index: number; 
-    color?: 'black' | 'blue' | 'red' | 'green';
-    rowId?: string;
-    cutWires?: boolean;
-    activeMode?: 'save' | 'scissors' | 'trash' | null;
-  }[]>([]);
+  type UndoHistoryItem = 
+    | { type: 'row'; row: SpelledLetter[]; index: number; color?: 'black' | 'blue' | 'red' | 'green'; rowId?: string; cutWires?: boolean; activeMode?: 'save' | 'scissors' | 'trash' | null }
+    | { type: 'block'; letter: SpelledLetter; rIdx: number; lIdx: number };
+
+  const [undoHistory, setUndoHistory] = useState<UndoHistoryItem[]>([]);
+  const lastActionTimeRef = useRef<number>(0);
   
   // Loaded static saved word list in localStore
   const [savedWordsList, setSavedWordsList] = useState<SavedWord[]>(() => {
@@ -1242,11 +1240,25 @@ export default function App() {
               }
           } else {
             // Dragged outside: delete the letter on all devices (both mobile and desktop)
+            const sourceRow = spelledRows[sourceIdx.rIdx];
+            const itemDeleted = sourceRow ? sourceRow[sourceIdx.lIdx] : null;
+            if (itemDeleted) {
+              setUndoHistory(prev => [
+                ...prev,
+                {
+                  type: 'block',
+                  letter: itemDeleted,
+                  rIdx: sourceIdx.rIdx,
+                  lIdx: sourceIdx.lIdx
+                }
+              ]);
+            }
+
             setSpelledRows(prev => {
               const copy = prev.map(r => [...r]);
-              const sourceRow = copy[sourceIdx.rIdx];
-              if (sourceRow) {
-                sourceRow.splice(sourceIdx.lIdx, 1);
+              const sRow = copy[sourceIdx.rIdx];
+              if (sRow) {
+                sRow.splice(sourceIdx.lIdx, 1);
               }
               return copy;
             });
@@ -1298,6 +1310,19 @@ export default function App() {
             }
             
             // Remove the letter
+            const itemDeleted = spelledRows[startRef.rowIdx] ? spelledRows[startRef.rowIdx][startRef.index] : null;
+            if (itemDeleted) {
+              setUndoHistory(prev => [
+                ...prev,
+                {
+                  type: 'block',
+                  letter: itemDeleted,
+                  rIdx: startRef.rowIdx,
+                  lIdx: startRef.index
+                }
+              ]);
+            }
+
             setSpelledRows(prev => {
               const copy = prev.map(r => [...r]);
               if (copy[startRef.rowIdx]) {
@@ -1555,9 +1580,10 @@ export default function App() {
     const activeModeToSave = rowActiveModes[rIdx];
     
     // Save to history stack
-    setDeletedRowsHistory(prev => [
+    setUndoHistory(prev => [
       ...prev,
       { 
+        type: 'row',
         row: rowToSave, 
         index: rIdx, 
         color: colorToSave, 
@@ -1571,77 +1597,106 @@ export default function App() {
   };
 
   const handleUndoDelete = () => {
-    if (deletedRowsHistory.length === 0) return;
-    
-    const lastDeleted = deletedRowsHistory[deletedRowsHistory.length - 1];
-    
-    setRowIds(prev => {
-      const copy = [...prev];
-      const insertIdx = Math.min(lastDeleted.index, copy.length);
-      copy.splice(insertIdx, 0, lastDeleted.rowId || ('row-' + Math.random().toString(36).substring(2, 11)));
-      return copy;
-    });
+    if (undoHistory.length === 0) return;
 
-    setSpelledRows(prev => {
-      const copy = [...prev];
-      if (copy.length === 1 && copy[0].length === 0) {
-        return [lastDeleted.row];
+    // Action lock to shield visual updates against rapid repetitive clicks
+    const now = Date.now();
+    if (now - lastActionTimeRef.current < 200) return;
+    lastActionTimeRef.current = now;
+    
+    const lastItem = undoHistory[undoHistory.length - 1];
+    
+    if (lastItem.type === 'row') {
+      setRowIds(prev => {
+        const copy = [...prev];
+        const insertIdx = Math.min(lastItem.index, copy.length);
+        copy.splice(insertIdx, 0, lastItem.rowId || ('row-' + Math.random().toString(36).substring(2, 11)));
+        return copy;
+      });
+
+      setSpelledRows(prev => {
+        const copy = [...prev];
+        if (copy.length === 1 && copy[0].length === 0) {
+          return [lastItem.row];
+        }
+        const insertIdx = Math.min(lastItem.index, copy.length);
+        copy.splice(insertIdx, 0, lastItem.row);
+        return copy;
+      });
+
+      if (lastItem.color) {
+        setRowColors(prev => {
+          const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+          Object.entries(prev).forEach(([k, val]) => {
+            const idx = parseInt(k, 10);
+            const colorVal = val as 'black' | 'blue' | 'red' | 'green';
+            if (idx < lastItem.index) {
+              next[idx] = colorVal;
+            } else {
+              next[idx + 1] = colorVal;
+            }
+          });
+          next[lastItem.index] = lastItem.color as 'black' | 'blue' | 'red' | 'green';
+          return next;
+        });
       }
-      const insertIdx = Math.min(lastDeleted.index, copy.length);
-      copy.splice(insertIdx, 0, lastDeleted.row);
-      return copy;
-    });
 
-    if (lastDeleted.color) {
-      setRowColors(prev => {
-        const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+      setRowActiveModes(prev => {
+        const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
         Object.entries(prev).forEach(([k, val]) => {
           const idx = parseInt(k, 10);
-          const colorVal = val as 'black' | 'blue' | 'red' | 'green';
-          if (idx < lastDeleted.index) {
-            next[idx] = colorVal;
+          if (idx < lastItem.index) {
+            next[idx] = val;
           } else {
-            next[idx + 1] = colorVal;
+            next[idx + 1] = val;
           }
         });
-        next[lastDeleted.index] = lastDeleted.color as 'black' | 'blue' | 'red' | 'green';
+        if (lastItem.activeMode) {
+          next[lastItem.index] = lastItem.activeMode;
+        }
         return next;
       });
+
+      setCutWiresRows(prev => {
+        const next: Record<number, boolean> = {};
+        Object.entries(prev).forEach(([k, val]) => {
+          const idx = parseInt(k, 10);
+          if (idx < lastItem.index) {
+            next[idx] = val;
+          } else {
+            next[idx + 1] = val;
+          }
+        });
+        if (lastItem.cutWires !== undefined) {
+          next[lastItem.index] = lastItem.cutWires;
+        }
+        return next;
+      });
+    } else if (lastItem.type === 'block') {
+      // Restore individual block!
+      const { letter, rIdx, lIdx } = lastItem;
+      setSpelledRows(prev => {
+        const copy = prev.map(r => [...r]);
+        while (copy.length <= rIdx) {
+          copy.push([]);
+        }
+        const row = copy[rIdx];
+        const insertIdx = Math.min(lIdx, row.length);
+        
+        // Generate a new fresh unique key/id to trigger enter transitions beautifully
+        const restoredLetter = {
+          ...letter,
+          id: `letter-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          color: row.length > 0 && row[0].color ? row[0].color : letter.color
+        };
+        
+        row.splice(insertIdx, 0, restoredLetter);
+        return copy;
+      });
+      setActiveRowIdx(rIdx);
     }
 
-    setRowActiveModes(prev => {
-      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
-      Object.entries(prev).forEach(([k, val]) => {
-        const idx = parseInt(k, 10);
-        if (idx < lastDeleted.index) {
-          next[idx] = val;
-        } else {
-          next[idx + 1] = val;
-        }
-      });
-      if (lastDeleted.activeMode) {
-        next[lastDeleted.index] = lastDeleted.activeMode;
-      }
-      return next;
-    });
-
-    setCutWiresRows(prev => {
-      const next: Record<number, boolean> = {};
-      Object.entries(prev).forEach(([k, val]) => {
-        const idx = parseInt(k, 10);
-        if (idx < lastDeleted.index) {
-          next[idx] = val;
-        } else {
-          next[idx + 1] = val;
-        }
-      });
-      if (lastDeleted.cutWires !== undefined) {
-        next[lastDeleted.index] = lastDeleted.cutWires;
-      }
-      return next;
-    });
-
-    setDeletedRowsHistory(prev => prev.slice(0, -1));
+    setUndoHistory(prev => prev.slice(0, -1));
   };
 
   const handleClearAllRows = () => {
@@ -1658,9 +1713,9 @@ export default function App() {
       .filter(item => item.row.length > 0);
     
     if (nonKeys.length > 0) {
-      setDeletedRowsHistory(prev => [
+      setUndoHistory(prev => [
         ...prev,
-        ...nonKeys
+        ...nonKeys.map(item => ({ type: 'row' as const, ...item }))
       ]);
     }
 
@@ -2448,9 +2503,11 @@ export default function App() {
                                      }}
                                      exit={{ 
                                        opacity: 0, 
-                                       scale: 0.8, 
+                                       scale: 0.35, 
+                                       y: 12,
                                        transition: { 
-                                         duration: 0.01 
+                                         duration: 0.22,
+                                         ease: [0.32, 0.94, 0.60, 1]
                                        } 
                                      }}
                                     className={`relative z-20 min-w-[calc((100vw-6rem)/5)] w-[calc((100vw-6rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
@@ -2713,13 +2770,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={handleUndoDelete}
-                  disabled={deletedRowsHistory.length === 0}
+                  disabled={undoHistory.length === 0}
                   className={`p-2 sm:p-2.5 border rounded-xl transition-all cursor-pointer shadow-2xs flex items-center justify-center ${
-                    deletedRowsHistory.length > 0
+                    undoHistory.length > 0
                       ? 'bg-white hover:bg-indigo-50 border-indigo-200 hover:border-indigo-300 text-indigo-600 active:scale-95'
                       : 'bg-gray-50 border-gray-150 text-gray-300 cursor-not-allowed opacity-50'
                   }`}
-                  title={deletedRowsHistory.length > 0 ? "Desfazer última exclusão de palavra" : "Nada para desfazer"}
+                  title={undoHistory.length > 0 ? "Desfazer última exclusão de bloco ou palavra" : "Nada para desfazer"}
                 >
                   <Undo2 className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                 </button>
