@@ -1,5 +1,6 @@
 import React, { SVGProps, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Loader from './Loader';
 
 // Custom icons to keep everything clean and self-contained
 const ArrowLeftIcon = (props: SVGProps<SVGSVGElement>) => (
@@ -1216,31 +1217,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       theme === 'dark' ? 'bg-slate-900/90' : 'bg-white/90'
                     }`}
                   >
-                    <div className="boxes mb-8 scale-75">
-                        <div className="box">
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                        </div>
-                        <div className="box">
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                        </div>
-                        <div className="box">
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                        </div>
-                        <div className="box">
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                            <div></div>
-                        </div>
+                    <div className="mb-8 scale-75">
+                      <Loader />
                     </div>
                     <span className={`text-sm font-semibold tracking-wide animate-pulse ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Encaminhando para o Gmail...</span>
                   </motion.div>
@@ -1480,19 +1458,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       theme === 'dark' ? 'bg-slate-900/90' : 'bg-white/90'
                     }`}
                   >
-                    <div className="boxes mb-8 scale-75">
-                        <div className="box">
-                            <div></div><div></div><div></div><div></div>
-                        </div>
-                        <div className="box">
-                            <div></div><div></div><div></div><div></div>
-                        </div>
-                        <div className="box">
-                            <div></div><div></div><div></div><div></div>
-                        </div>
-                        <div className="box">
-                            <div></div><div></div><div></div><div></div>
-                        </div>
+                    <div className="mb-8 scale-75">
+                      <Loader />
                     </div>
                     <span className={`text-sm font-semibold tracking-wide animate-pulse ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Encaminhando para o WhatsApp...</span>
                   </motion.div>

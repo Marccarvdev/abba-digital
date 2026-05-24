@@ -112,6 +112,7 @@ import { ALPHABET_CUBES } from './data';
 import { LetterCube } from './components/LetterCube';
 import { SpelledLetter, LetterCubeData, SavedWord } from './types';
 import { AboutSection } from './components/AboutSection';
+import Loader from './components/Loader';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -1796,33 +1797,13 @@ export default function App() {
             exit={{ opacity: 0, transition: { duration: 0.3 } }}
             className="fixed inset-0 bg-white/98 backdrop-blur-xl z-[10000] flex flex-col items-center justify-center select-none"
           >
-            <div className="h-28 flex items-center justify-center scale-110">
-              <div className="boxes">
-                <div className="box">
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                </div>
-                <div className="box">
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                </div>
-                <div className="box">
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                </div>
-                <div className="box">
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                  <div></div>
-                </div>
+            <div className="flex flex-col items-center justify-center">
+              <div className="scale-110">
+                <Loader />
               </div>
+              <p className="text-sm font-bold text-slate-500 mt-16 font-sans tracking-wide animate-pulse">
+                Direcionando para a matéria completa...
+              </p>
             </div>
           </motion.div>
         )}
