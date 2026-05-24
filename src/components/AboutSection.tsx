@@ -229,9 +229,11 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
 
   const [formValues, setFormValues] = useState({ firstName: '', lastName: '', phone: '', message: '' });
   const [formErrors, setFormErrors] = useState<{ firstName?: string, lastName?: string, phone?: string, message?: string }>({});
+  const [gmailOffensiveWarned, setGmailOffensiveWarned] = useState(false);
 
   const [whatsappFormValues, setWhatsappFormValues] = useState({ firstName: '', lastName: '', message: '' });
   const [whatsappFormErrors, setWhatsappFormErrors] = useState<{ firstName?: string, lastName?: string, message?: string }>({});
+  const [whatsappOffensiveWarned, setWhatsappOffensiveWarned] = useState(false);
 
   const validatePhone = (phone: string) => {
     const numbers = phone.replace(/\D/g, '');
@@ -265,7 +267,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!fName) {
       errors.firstName = "Nome é obrigatório.";
     } else if (hasOffensiveTerms(fName)) {
-      errors.firstName = "Nome contém termo inadequado.";
+      errors.firstName = "O Nome contém um termo inadequado!";
       hasOffensive = true;
     } else if (isGibberish(fName)) {
       errors.firstName = "Insira um nome válido.";
@@ -274,7 +276,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!lName) {
       errors.lastName = "Sobrenome é obrigatório.";
     } else if (hasOffensiveTerms(lName)) {
-      errors.lastName = "Sobrenome contém termo inadequado.";
+      errors.lastName = "O Sobrenome contém um termo inadequado!";
       hasOffensive = true;
     } else if (isGibberish(lName)) {
       errors.lastName = "Insira um sobrenome válido.";
@@ -283,7 +285,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!formValues.message.trim()) {
       errors.message = "Mensagem é obrigatória.";
     } else if (hasOffensiveTerms(formValues.message)) {
-      errors.message = "Mensagem contém termo inadequado.";
+      errors.message = "A Mensagem contém um termo inadequado!";
       hasOffensive = true;
     }
     
@@ -293,7 +295,11 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (Object.keys(errors).length > 0 || hasOffensive) {
       setFormErrors(errors);
       if (hasOffensive) {
-        setIsRespectModalOpen(true);
+        if (gmailOffensiveWarned) {
+          setIsRespectModalOpen(true);
+        } else {
+          setGmailOffensiveWarned(true);
+        }
       }
       return;
     }
@@ -344,7 +350,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!fName) {
       errors.firstName = "Nome é obrigatório.";
     } else if (hasOffensiveTerms(fName)) {
-      errors.firstName = "Nome contém termo inadequado.";
+      errors.firstName = "O Nome contém um termo inadequado!";
       hasOffensive = true;
     } else if (isGibberish(fName)) {
       errors.firstName = "Insira um nome válido.";
@@ -353,7 +359,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!lName) {
       errors.lastName = "Sobrenome é obrigatório.";
     } else if (hasOffensiveTerms(lName)) {
-      errors.lastName = "Sobrenome contém termo inadequado.";
+      errors.lastName = "O Sobrenome contém um termo inadequado!";
       hasOffensive = true;
     } else if (isGibberish(lName)) {
       errors.lastName = "Insira um sobrenome válido.";
@@ -362,14 +368,18 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!whatsappFormValues.message.trim()) {
       errors.message = "Mensagem é obrigatória.";
     } else if (hasOffensiveTerms(whatsappFormValues.message)) {
-      errors.message = "Mensagem contém termo inadequado.";
+      errors.message = "A Mensagem contém um termo inadequado!";
       hasOffensive = true;
     }
     
     if (Object.keys(errors).length > 0 || hasOffensive) {
       setWhatsappFormErrors(errors);
       if (hasOffensive) {
-        setIsRespectModalOpen(true);
+        if (whatsappOffensiveWarned) {
+          setIsRespectModalOpen(true);
+        } else {
+          setWhatsappOffensiveWarned(true);
+        }
       }
       return;
     }
@@ -1405,6 +1415,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
                       setFormValues({ ...formValues, firstName: val });
                       if (formErrors.firstName) setFormErrors({ ...formErrors, firstName: undefined });
+                      setGmailOffensiveWarned(false);
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer overflow-ellipsis overflow-hidden pr-4 transition-colors duration-300 placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 ${
                     formErrors.firstName 
@@ -1441,6 +1452,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
                       setFormValues({ ...formValues, lastName: val });
                       if (formErrors.lastName) setFormErrors({ ...formErrors, lastName: undefined });
+                      setGmailOffensiveWarned(false);
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer overflow-ellipsis overflow-hidden pr-4 transition-colors duration-300 placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 ${
                     formErrors.lastName 
@@ -1521,6 +1533,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     onChange={(e) => {
                       setFormValues({ ...formValues, message: e.target.value });
                       if (formErrors.message) setFormErrors({ ...formErrors, message: undefined });
+                      setGmailOffensiveWarned(false);
                     }}
                     className={`block w-full text-sm min-h-[120px] max-h-[200px] px-4 pt-6 pb-6 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer resize-y transition-colors duration-300 placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 [&::-webkit-scrollbar]:w-2 [&::-webkit-scrollbar-track]:bg-transparent hover:[&::-webkit-scrollbar-thumb]:bg-gray-400 ${
                     formErrors.message
@@ -1648,6 +1661,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
                       setWhatsappFormValues(prev => ({ ...prev, firstName: val }));
                       if (whatsappFormErrors.firstName) setWhatsappFormErrors(prev => ({ ...prev, firstName: undefined }));
+                      setWhatsappOffensiveWarned(false);
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 transition-colors duration-300 ${
                     whatsappFormErrors.firstName 
@@ -1684,6 +1698,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
                       setWhatsappFormValues(prev => ({ ...prev, lastName: val }));
                       if (whatsappFormErrors.lastName) setWhatsappFormErrors(prev => ({ ...prev, lastName: undefined }));
+                      setWhatsappOffensiveWarned(false);
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 transition-colors duration-300 ${
                     whatsappFormErrors.lastName 
@@ -1719,6 +1734,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     onChange={(e) => {
                       setWhatsappFormValues(prev => ({ ...prev, message: e.target.value }));
                       if (whatsappFormErrors.message) setWhatsappFormErrors(prev => ({ ...prev, message: undefined }));
+                      setWhatsappOffensiveWarned(false);
                     }}
                     className={`block w-full min-h-[120px] text-sm py-4 px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 transition-colors duration-300 resize-y max-h-[300px] ${
                     whatsappFormErrors.message 
