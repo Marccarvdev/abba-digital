@@ -612,6 +612,9 @@ export default function App() {
 
   // Dynamic layout positions of all elements on screen to draw perfect 3D wires
   const [elementPositions, setElementPositions] = useState<Record<string, { x: number; y: number; width?: number; height?: number }>>({});
+  
+  // Cache shelf positions so we don't query 26 client rects continuously on drag
+  const shelfPositionsRef = useRef<Record<string, { x: number; y: number; width?: number; height?: number }>>({});
 
   // HTML Element Refs
   const trayRef = useRef<HTMLDivElement>(null);
@@ -637,20 +640,9 @@ export default function App() {
     );
   };
 
-  // Measure all elements (source alphabets & spelling slots) to keep connection lines perfectly aligned!
-  const updateElementPositions = useCallback(() => {
-    // Skip expensive DOM measurements during active drag-and-drop!
-    // This prevents layout thrashing, eliminates drag latency, and ensures 60fps/120fps smooth line tracking.
-    if (
-      draggedCubeRef.current !== null || 
-      draggedTrayIndexRef.current !== null || 
-      draggedShelfIndexRef.current !== null
-    ) {
-      return;
-    }
+  // Measure static 26 shelf cubes (only on resize/mount/reorder)
+  const updateShelfPositions = useCallback(() => {
     const coords: Record<string, { x: number; y: number; width?: number; height?: number }> = {};
-    
-    // 1. Measure top grid cubes
     shelfCubes.forEach(cube => {
       const domId = `cube-${cube.id}`;
       const el = document.getElementById(domId);
@@ -664,6 +656,12 @@ export default function App() {
         };
       }
     });
+    shelfPositionsRef.current = coords;
+  }, [shelfCubes]);
+
+  // Measure dynamic spelled rows and board slots, merging in cached static shelf coordinates
+  const updateElementPositions = useCallback(() => {
+    const coords = { ...shelfPositionsRef.current };
 
     // 2. Measure active slots inside all spelled rows
     spelledRows.forEach((row, rIdx) => {
@@ -711,9 +709,20 @@ export default function App() {
     }
 
     setElementPositions(coords);
-  }, [shelfCubes, spelledRows]);
+  }, [spelledRows]);
 
-  // Synchronize positions on layout updates, state shifts, scrolls, resizes without layout thrashing infinite loop
+  // Synchronize shelf positions on mount, shelf updates, and resize events
+  useEffect(() => {
+    updateShelfPositions();
+    const timer = setTimeout(updateShelfPositions, 100);
+    window.addEventListener('resize', updateShelfPositions);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updateShelfPositions);
+    };
+  }, [updateShelfPositions]);
+
+  // Synchronize spelling rows on layout updates and active states
   useEffect(() => {
     updateElementPositions();
     // Schedule small delays to capture delayed transitions/animations perfectly
@@ -726,14 +735,12 @@ export default function App() {
       clearTimeout(timer2);
       clearTimeout(timer3);
     };
-  }, [updateElementPositions, draggedCube, draggedTrayIndex, draggedBoardLetter, activeRowIdx, draggedShelfIndex, isReorderCubesActive]);
+  }, [updateElementPositions, spelledRows, draggedCube, draggedTrayIndex, draggedBoardLetter, activeRowIdx, draggedShelfIndex, isReorderCubesActive]);
 
+  // Listen to scrolls for real-time connection wire clipping updates
   useEffect(() => {
-    window.addEventListener('resize', updateElementPositions);
-    window.addEventListener('scroll', updateElementPositions, true); // Use capture phase to catch internal row scorlls!
-
+    window.addEventListener('scroll', updateElementPositions, true); // Use capture phase to catch internal row scrolls!
     return () => {
-      window.removeEventListener('resize', updateElementPositions);
       window.removeEventListener('scroll', updateElementPositions, true);
     };
   }, [updateElementPositions]);
