@@ -260,11 +260,13 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     const fName = formValues.firstName.trim();
     const lName = formValues.lastName.trim();
 
+    let hasOffensive = false;
+
     if (!fName) {
       errors.firstName = "Nome é obrigatório.";
     } else if (hasOffensiveTerms(fName)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.firstName = "Nome contém termo inadequado.";
+      hasOffensive = true;
     } else if (isGibberish(fName)) {
       errors.firstName = "Insira um nome válido.";
     }
@@ -272,8 +274,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!lName) {
       errors.lastName = "Sobrenome é obrigatório.";
     } else if (hasOffensiveTerms(lName)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.lastName = "Sobrenome contém termo inadequado.";
+      hasOffensive = true;
     } else if (isGibberish(lName)) {
       errors.lastName = "Insira um sobrenome válido.";
     }
@@ -281,15 +283,20 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!formValues.message.trim()) {
       errors.message = "Mensagem é obrigatória.";
     } else if (hasOffensiveTerms(formValues.message)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.message = "Mensagem contém termo inadequado.";
+      hasOffensive = true;
     }
     
     const phoneErr = validatePhone(formValues.phone);
     if (phoneErr) errors.phone = phoneErr;
 
-    setFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0 || hasOffensive) {
+      setFormErrors(errors);
+      if (hasOffensive) {
+        setIsRespectModalOpen(true);
+      }
+      return;
+    }
 
     setIsSending(true);
 
@@ -332,11 +339,13 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     const fName = whatsappFormValues.firstName.trim();
     const lName = whatsappFormValues.lastName.trim();
 
+    let hasOffensive = false;
+
     if (!fName) {
       errors.firstName = "Nome é obrigatório.";
     } else if (hasOffensiveTerms(fName)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.firstName = "Nome contém termo inadequado.";
+      hasOffensive = true;
     } else if (isGibberish(fName)) {
       errors.firstName = "Insira um nome válido.";
     }
@@ -344,8 +353,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!lName) {
       errors.lastName = "Sobrenome é obrigatório.";
     } else if (hasOffensiveTerms(lName)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.lastName = "Sobrenome contém termo inadequado.";
+      hasOffensive = true;
     } else if (isGibberish(lName)) {
       errors.lastName = "Insira um sobrenome válido.";
     }
@@ -353,12 +362,17 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     if (!whatsappFormValues.message.trim()) {
       errors.message = "Mensagem é obrigatória.";
     } else if (hasOffensiveTerms(whatsappFormValues.message)) {
-      setIsRespectModalOpen(true);
-      return;
+      errors.message = "Mensagem contém termo inadequado.";
+      hasOffensive = true;
     }
     
-    setWhatsappFormErrors(errors);
-    if (Object.keys(errors).length > 0) return;
+    if (Object.keys(errors).length > 0 || hasOffensive) {
+      setWhatsappFormErrors(errors);
+      if (hasOffensive) {
+        setIsRespectModalOpen(true);
+      }
+      return;
+    }
 
     setIsSending(true);
 
