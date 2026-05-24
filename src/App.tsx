@@ -2921,6 +2921,20 @@ export default function App() {
 
           return visibleWires.map((w) => {
             const { letter, rIdx } = w;
+
+            // Hide the connection wire if the placed block is scrolled out of the visible viewport of boardRef
+            if (boardRef.current) {
+              const boardRect = boardRef.current.getBoundingClientRect();
+              const letterEl = document.getElementById(letter.id);
+              if (letterEl) {
+                const rect = letterEl.getBoundingClientRect();
+                // If the block is above the visible top or below the visible bottom of the board container, hide its wire!
+                if (rect.bottom < boardRect.top + 4 || rect.top > boardRect.bottom - 4) {
+                  return null;
+                }
+              }
+            }
+
             const start = elementPositions[letter.originCubeId];
             const end = elementPositions[letter.id];
 
