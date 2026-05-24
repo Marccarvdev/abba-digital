@@ -1,9 +1,13 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const Loader = () => {
+interface LoaderProps {
+  isDark?: boolean;
+}
+
+const Loader: React.FC<LoaderProps> = ({ isDark = false }) => {
   return (
-    <StyledWrapper>
+    <StyledWrapper isDark={isDark}>
       <div className="boxes">
         <div className="box">
           <div />
@@ -34,7 +38,12 @@ const Loader = () => {
   );
 }
 
-const StyledWrapper = styled.div`
+const StyledWrapper = styled.div<{ isDark: boolean }>`
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding-bottom: 54px; /* Extends container height to clear the projected 3D shadow */
+
   .boxes {
     --size: 32px;
     --duration: 800ms;
@@ -117,7 +126,7 @@ const StyledWrapper = styled.div`
   }
 
   .boxes .box > div:nth-child(4) {
-    --background: #DBE3F4;
+    --background: ${props => props.isDark ? '#0b0f19' : '#DBE3F4'};
     --top: 0;
     --left: 0;
     --translateZ: calc(var(--size) * 3 * -1);
@@ -217,6 +226,7 @@ const StyledWrapper = styled.div`
     100% {
       transform: translate(100%, 100%);
     }
-  }`;
+  }
+`;
 
 export default Loader;

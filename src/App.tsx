@@ -1847,7 +1847,7 @@ export default function App() {
               <div className="scale-110">
                 <Loader />
               </div>
-              <p className="text-sm font-bold text-slate-500 mt-16 font-sans tracking-wide animate-pulse">
+              <p className="text-sm font-bold text-slate-500 mt-8 font-sans tracking-wide animate-pulse">
                 Direcionando para a matéria completa...
               </p>
             </div>

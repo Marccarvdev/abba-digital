@@ -1670,8 +1670,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       theme === 'dark' ? 'bg-slate-900/90' : 'bg-white/90'
                     }`}
                   >
-                    <div className="mb-8 scale-75">
-                      <Loader />
+                    <div className="mb-12 scale-75">
+                      <Loader isDark={theme === 'dark'} />
                     </div>
                     <span className={`text-sm font-semibold tracking-wide animate-pulse ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Encaminhando para o Gmail...</span>
                   </motion.div>
@@ -1916,8 +1916,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                       theme === 'dark' ? 'bg-slate-900/90' : 'bg-white/90'
                     }`}
                   >
-                    <div className="mb-8 scale-75">
-                      <Loader />
+                    <div className="mb-12 scale-75">
+                      <Loader isDark={theme === 'dark'} />
                     </div>
                     <span className={`text-sm font-semibold tracking-wide animate-pulse ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>Encaminhando para o WhatsApp...</span>
                   </motion.div>
