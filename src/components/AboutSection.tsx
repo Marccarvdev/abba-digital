@@ -148,6 +148,60 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
   const [isWhatsappModalOpen, setIsWhatsappModalOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [isExiting, setIsExiting] = useState(false);
+  const [isRespectModalOpen, setIsRespectModalOpen] = useState(false);
+
+  const OFFENSIVE_WORDS = [
+    'porra', 'caralho', 'puta', 'viado', 'fdp', 'corno', 'bosta', 'merda', 'otario', 'otário',
+    'imbecil', 'idiota', 'retardado', 'lixo', 'babaca', 'burro', 'estupido', 'estúpido',
+    'cu', 'cuzao', 'cuzão', 'asshole', 'bitch', 'shit', 'fuck', 'paspalho', 'arrombado', 'desgraçado',
+    'chupador', 'vagabundo', 'canalha', 'safado', 'cretino', 'escroto', 'fedorento', 'corrupto'
+  ];
+
+  const hasOffensiveTerms = (text: string): boolean => {
+    const normalized = text.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // strip accents for check
+    return OFFENSIVE_WORDS.some(word => {
+      const wordNormalized = word.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const regex = new RegExp(`\\b${wordNormalized}\\b|${wordNormalized}`, 'i');
+      return regex.test(normalized);
+    });
+  };
+
+  const isGibberish = (text: string): boolean => {
+    const trimmed = text.trim();
+    if (trimmed.length < 2) return true;
+
+    // 1. Repeated letters (3 or more same letters consecutively)
+    if (/(.)\1\1/.test(trimmed)) return true;
+
+    // 2. Count vowels and consonants
+    const vowels = (trimmed.match(/[aeiouyáéíóúâêôãõüÀ-ÿ]/gi) || []).length;
+    const letters = (trimmed.match(/[a-zA-ZÀ-ÿ]/g) || []).length;
+    const consonants = letters - vowels;
+
+    // A valid name must have at least one vowel
+    if (vowels === 0 && letters > 0) return true;
+
+    // Consonant smash (e.g. "sdfgh")
+    if (/[bcdfghjklmnpqrstvwxz]{4,}/i.test(trimmed)) return true;
+
+    // Vowel smash (e.g. "aeiouy")
+    if (/[aeiouyáéíóúâêôãõü]{5,}/i.test(trimmed)) return true;
+
+    // Extreme ratios
+    if (letters >= 4) {
+      if (vowels / letters < 0.15) return true;
+      if (vowels / letters === 1) return true;
+    }
+
+    // Key smash patterns
+    const commonSmashes = ['qwe', 'asd', 'zxc', 'jkl', 'dfg', 'yui', 'bnm', 'hjkl', 'asdf'];
+    const lower = trimmed.toLowerCase();
+    if (commonSmashes.some(smash => lower.includes(smash))) return true;
+
+    return false;
+  };
 
   const [formValues, setFormValues] = useState({ firstName: '', lastName: '', phone: '', message: '' });
   const [formErrors, setFormErrors] = useState<{ firstName?: string, lastName?: string, phone?: string, message?: string }>({});
@@ -179,9 +233,33 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     e.preventDefault();
     
     const errors: any = {};
-    if (!formValues.firstName.trim()) errors.firstName = "Nome é obrigatório.";
-    if (!formValues.lastName.trim()) errors.lastName = "Sobrenome é obrigatório.";
-    if (!formValues.message.trim()) errors.message = "Mensagem é obrigatória.";
+    const fName = formValues.firstName.trim();
+    const lName = formValues.lastName.trim();
+
+    if (!fName) {
+      errors.firstName = "Nome é obrigatório.";
+    } else if (hasOffensiveTerms(fName)) {
+      setIsRespectModalOpen(true);
+      return;
+    } else if (isGibberish(fName)) {
+      errors.firstName = "Insira um nome válido.";
+    }
+
+    if (!lName) {
+      errors.lastName = "Sobrenome é obrigatório.";
+    } else if (hasOffensiveTerms(lName)) {
+      setIsRespectModalOpen(true);
+      return;
+    } else if (isGibberish(lName)) {
+      errors.lastName = "Insira um sobrenome válido.";
+    }
+
+    if (!formValues.message.trim()) {
+      errors.message = "Mensagem é obrigatória.";
+    } else if (hasOffensiveTerms(formValues.message)) {
+      setIsRespectModalOpen(true);
+      return;
+    }
     
     const phoneErr = validatePhone(formValues.phone);
     if (phoneErr) errors.phone = phoneErr;
@@ -227,9 +305,33 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
     e.preventDefault();
     
     const errors: any = {};
-    if (!whatsappFormValues.firstName.trim()) errors.firstName = "Nome é obrigatório.";
-    if (!whatsappFormValues.lastName.trim()) errors.lastName = "Sobrenome é obrigatório.";
-    if (!whatsappFormValues.message.trim()) errors.message = "Mensagem é obrigatória.";
+    const fName = whatsappFormValues.firstName.trim();
+    const lName = whatsappFormValues.lastName.trim();
+
+    if (!fName) {
+      errors.firstName = "Nome é obrigatório.";
+    } else if (hasOffensiveTerms(fName)) {
+      setIsRespectModalOpen(true);
+      return;
+    } else if (isGibberish(fName)) {
+      errors.firstName = "Insira um nome válido.";
+    }
+
+    if (!lName) {
+      errors.lastName = "Sobrenome é obrigatório.";
+    } else if (hasOffensiveTerms(lName)) {
+      setIsRespectModalOpen(true);
+      return;
+    } else if (isGibberish(lName)) {
+      errors.lastName = "Insira um sobrenome válido.";
+    }
+
+    if (!whatsappFormValues.message.trim()) {
+      errors.message = "Mensagem é obrigatória.";
+    } else if (hasOffensiveTerms(whatsappFormValues.message)) {
+      setIsRespectModalOpen(true);
+      return;
+    }
     
     setWhatsappFormErrors(errors);
     if (Object.keys(errors).length > 0) return;
@@ -1262,7 +1364,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     name="firstName" 
                     value={formValues.firstName}
                     onChange={(e) => {
-                      setFormValues({ ...formValues, firstName: e.target.value });
+                      const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
+                      setFormValues({ ...formValues, firstName: val });
                       if (formErrors.firstName) setFormErrors({ ...formErrors, firstName: undefined });
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer overflow-ellipsis overflow-hidden pr-4 transition-colors duration-300 placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 ${
@@ -1297,7 +1400,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     name="lastName" 
                     value={formValues.lastName}
                     onChange={(e) => {
-                      setFormValues({ ...formValues, lastName: e.target.value });
+                      const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
+                      setFormValues({ ...formValues, lastName: val });
                       if (formErrors.lastName) setFormErrors({ ...formErrors, lastName: undefined });
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer overflow-ellipsis overflow-hidden pr-4 transition-colors duration-300 placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 ${
@@ -1503,7 +1607,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     name="firstName" 
                     value={whatsappFormValues.firstName}
                     onChange={(e) => {
-                      setWhatsappFormValues(prev => ({ ...prev, firstName: e.target.value }));
+                      const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
+                      setWhatsappFormValues(prev => ({ ...prev, firstName: val }));
                       if (whatsappFormErrors.firstName) setWhatsappFormErrors(prev => ({ ...prev, firstName: undefined }));
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 transition-colors duration-300 ${
@@ -1538,7 +1643,8 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     name="lastName" 
                     value={whatsappFormValues.lastName}
                     onChange={(e) => {
-                      setWhatsappFormValues(prev => ({ ...prev, lastName: e.target.value }));
+                      const val = e.target.value.replace(/[^a-zA-Z\sÀ-ÿ]/g, '');
+                      setWhatsappFormValues(prev => ({ ...prev, lastName: val }));
                       if (whatsappFormErrors.lastName) setWhatsappFormErrors(prev => ({ ...prev, lastName: undefined }));
                     }}
                     className={`block w-full text-sm h-[50px] px-4 bg-transparent rounded-[8px] border appearance-none focus:outline-none focus:ring-1 peer placeholder-transparent focus:placeholder-gray-400 dark:focus:placeholder-slate-500 transition-colors duration-300 ${
@@ -1619,6 +1725,113 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                 </button>
               </div>
             </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* RESPECT AND LEGAL WARNING MODAL */}
+      <AnimatePresence>
+        {isRespectModalOpen && (
+          <motion.div
+            key="respect-warning-modal"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className={`fixed inset-0 z-[11000] flex items-center justify-center p-4 backdrop-blur-xl ${
+              theme === 'dark' ? 'bg-black/85' : 'bg-black/50'
+            }`}
+            onClick={() => setIsRespectModalOpen(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              onClick={(e) => e.stopPropagation()}
+              className={`p-8 rounded-2xl shadow-2xl relative max-w-lg w-full max-h-[90vh] overflow-y-auto border transition-colors duration-300 ${
+                theme === 'dark' 
+                  ? 'bg-slate-900 border-red-500/30 text-white shadow-red-950/20' 
+                  : 'bg-white border-red-200 text-slate-900 shadow-slate-200'
+              }`}
+            >
+              {/* Alert Header Icon */}
+              <div className="flex items-center gap-4 mb-6">
+                <div className="p-3 bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 rounded-xl">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold font-inter tracking-tight text-red-600 dark:text-red-400">
+                    Aviso de Respeito e Cidadania
+                  </h3>
+                  <p className={`text-xs mt-0.5 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    Internet não é terra sem leis
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4 text-[14.5px] leading-relaxed font-sans">
+                <p className={theme === 'dark' ? 'text-slate-300' : 'text-slate-700'}>
+                  Detectamos termos ofensivos ou inadequados nos campos digitados. A empatia, a ética e o respeito mútuo são fundamentais para uma convivência harmônica em nossa sociedade.
+                </p>
+
+                <div className={`p-4 rounded-xl border ${
+                  theme === 'dark' 
+                    ? 'bg-slate-950/50 border-slate-800' 
+                    : 'bg-slate-50 border-slate-100'
+                }`}>
+                  <h4 className="font-bold text-sm mb-2 uppercase tracking-wider text-red-500 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-500"></span>
+                    Crimes Virtuais de Ofensa
+                  </h4>
+                  <p className={`text-[13px] leading-normal ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'} mb-3`}>
+                    No Brasil, injúrias, calúnias ou difamações proferidas por meios eletrônicos (redes sociais, formulários, e-mails) constituem infrações de alta gravidade enquadradas no <strong>Código Penal Brasileiro</strong>:
+                  </p>
+                  <ul className="space-y-2.5 text-[13px] list-none pl-0">
+                    <li className="flex gap-2">
+                      <span className="text-red-500 font-bold">•</span>
+                      <span><strong>Injúria (Art. 140)</strong>: Ofender a dignidade ou o decoro de outrem. Pena aumentada caso utilize elementos discriminatórios.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-red-500 font-bold">•</span>
+                      <span><strong>Difamação (Art. 139)</strong>: Difamar a reputação alheia imputando-lhe fato ofensivo à sua reputação.</span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-red-500 font-bold">•</span>
+                      <span><strong>Calúnia (Art. 138)</strong>: Afirmar falsamente que alguém cometeu um ato criminoso.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="pt-2">
+                  <p className={`text-xs font-semibold ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} mb-2`}>
+                    Consulte a legislação oficial sobre Crimes Contra a Honra diretamente no site do Planalto:
+                  </p>
+                  <a
+                    href="https://www.planalto.gov.br/ccivil_03/decreto-lei/del2848compilado.htm"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-sm font-bold text-sky-500 hover:text-sky-400 hover:underline transition-colors"
+                  >
+                    <span>Decreto-Lei nº 2.848 (Código Penal Brasileiro)</span>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </a>
+                </div>
+              </div>
+
+              {/* Close Button */}
+              <div className="mt-8 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setIsRespectModalOpen(false)}
+                  className="w-full py-3 px-6 rounded-xl font-bold text-sm text-white bg-red-600 hover:bg-red-500 active:scale-98 transition-all shadow-md shadow-red-600/10 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2 dark:focus:ring-offset-slate-900"
+                >
+                  Entendi e me comprometo a respeitar
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}
