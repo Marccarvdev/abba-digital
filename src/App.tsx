@@ -1,141 +1,67 @@
-import React, { useState, useEffect, useRef, useCallback, type MouseEvent, type SVGProps } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  Trash2, 
+  Plus,
+  HelpCircle,
+  Replace,
+  ChevronDown
+} from 'lucide-react';
 
-const IconBase: React.FC<SVGProps<SVGSVGElement>> = ({ children, ...props }) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    {children}
-  </svg>
-);
-
-const Trash2: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <IconBase {...props}>
-    <path d="M3 6h18" />
-    <path d="M9 6V4h6v2" />
-    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-    <line x1="10" y1="11" x2="10" y2="17" />
-    <line x1="14" y1="11" x2="14" y2="17" />
-  </IconBase>
-);
-
-const Plus: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <IconBase {...props}>
-    <line x1="12" y1="5" x2="12" y2="19" />
-    <line x1="5" y1="12" x2="19" y2="12" />
-  </IconBase>
-);
-
-const RefreshCw: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg
-    viewBox="0 0 64 64"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="3"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M54.89,26.73A23.52,23.52,0,0,1,15.6,49" />
-    <path d="M9,37.17a23.75,23.75,0,0,1-.53-5A23.51,23.51,0,0,1,48.3,15.2" />
-    <polyline points="37.73 16.24 48.62 15.44 47.77 5.24" />
-    <polyline points="25.91 47.76 15.03 48.56 15.88 58.76" />
-  </svg>
-);
-
-const HelpCircle: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <IconBase {...props}>
-    <circle cx="12" cy="12" r="10" />
-    <path d="M9.09 9a3 3 0 0 1 5.82 1c0 2-3 2.5-3 4" />
-    <line x1="12" y1="17" x2="12" y2="17" />
-  </IconBase>
-);
-
-const Replace: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <IconBase {...props}>
-    <path d="M3 7V3h4" />
-    <path d="M3 3a9 9 0 0 1 9-9" />
-    <polyline points="1 8 3 10 5 8" />
-  </IconBase>
-);
-
-const Scissors: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg
-    viewBox="0 0 256 256"
-    fill="currentColor"
-    {...props}
-  >
-    <path d="M157.73193,113.13086a8.00047,8.00047,0,0,1,2.085-11.12012l67.66553-46.29785A8.00013,8.00013,0,0,1,236.51758,68.918l-67.66553,46.29785a7.99794,7.99794,0,0,1-11.12012-2.085Zm80.87061,85.07129a7.99794,7.99794,0,0,1-11.12012,2.085l-91.4826-62.59351L93.49408,166.77686a36.034,36.034,0,1,1-9.05035-13.19458l37.38867-25.582-37.3891-25.582a35.84637,35.84637,0,1,1,9.0506-13.19458L236.51758,187.082A8.00047,8.00047,0,0,1,238.60254,198.20215ZM80,180a20,20,0,1,0-5.85791,14.1416A19.86692,19.86692,0,0,0,80,180ZM74.14209,90.1416a20,20,0,1,0-28.28418,0A19.86692,19.86692,0,0,0,74.14209,90.1416Z"/>
-  </svg>
-);
-
-const ChevronDown: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <IconBase {...props}>
-    <polyline points="6 9 12 15 18 9" />
-  </IconBase>
-);
-
-const Bookmark: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg
-    viewBox="0 0 24 24"
-    fill="none"
-    {...props}
-  >
-    <path fillRule="evenodd" clipRule="evenodd" d="M6.75 6L7.5 5.25H16.5L17.25 6V19.3162L12 16.2051L6.75 19.3162V6ZM8.25 6.75V16.6838L12 14.4615L15.75 16.6838V6.75H8.25Z" fill="currentColor"/>
-  </svg>
-);
-
-const Undo2: React.FC<SVGProps<SVGSVGElement>> = (props) => (
-  <svg
-    viewBox="0 0 21 21"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <g fill="none" fillRule="evenodd" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" transform="translate(3 6)">
-      <path d="m1.378 1.376 4.243.003v4.242" transform="matrix(-.70710678 .70710678 .70710678 .70710678 3.500179 -1.449821)"/>
-      <path d="m5.5 9.49998326h5c2 .00089417 3-.99910025 3-2.99998326s-1-3.00088859-3-3.00001674h-10"/>
-    </g>
-  </svg>
-);
+import {
+  Scissors,
+  Undo2,
+  RefreshCw,
+  Bookmark
+} from './components/CustomIcons';
 
 import { ALPHABET_CUBES } from './data';
 import { LetterCube } from './components/LetterCube';
 import { SpelledLetter, LetterCubeData, SavedWord } from './types';
 import { AboutSection } from './components/AboutSection';
 
-const getShelfCubeIdForLetter = (letter: string): string => {
-  const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
-  return match ? `cube-${match.id}` : `cube-cube-${letter.toLowerCase()}`;
-};
-
 export default function App() {
+  // Hamburger menu open states and activePage tabs matching Apple systems
+  const [activeTab, setActiveTab] = useState<'app' | 'about'>('app');
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isAboutLoading, setIsAboutLoading] = useState(false);
   // Ref for scrolling to the enter button on landing page
   const enterButtonRef = useRef<HTMLDivElement>(null);
 
-  // States for navigation menu overlay and about/scientific article section
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [showAbout, setShowAbout] = useState(false);
-
-  const handleScrollToButton = (e: MouseEvent<HTMLDivElement>) => {
+  const handleScrollToButton = (e: React.MouseEvent) => {
     e.stopPropagation();
     enterButtonRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   };
 
   // MULTI-LINE SPELLING BOARD STATE
   const [spelledRows, setSpelledRows] = useState<SpelledLetter[][]>([[]]);
-  const [rowIds, setRowIds] = useState<string[]>(() => ['row-initial-' + Math.random().toString(36).substring(2, 11)]);
 
-  // Spelling rows dynamic lifecycle useEffect is defined below after drag state declarations.
+  // Keep spelling rows neat & automatically append an empty row below when the last one gets spelled
+  useEffect(() => {
+    const cleaned = spelledRows.filter((row, idx) => {
+      return row.length > 0 || idx === spelledRows.length - 1;
+    });
+
+    if (cleaned.length === 0) {
+      setSpelledRows([[]]);
+      setActiveRowIdx(0);
+      return;
+    }
+
+    const lastRowIndex = cleaned.length - 1;
+    const lastRow = cleaned[lastRowIndex];
+
+    if (lastRow.length > 0) {
+      const updated = [...cleaned.map(r => [...r]), []];
+      setSpelledRows(updated);
+    } else {
+      const beforeStr = JSON.stringify(spelledRows);
+      const afterStr = JSON.stringify(cleaned);
+      if (beforeStr !== afterStr) {
+        setSpelledRows(cleaned);
+      }
+    }
+  }, [spelledRows]);
 
   // Which row index is currently focused / active for adding clicked letters (or landing drops in general)
   const [activeRowIdx, setActiveRowIdx] = useState<number>(0);
@@ -172,14 +98,7 @@ export default function App() {
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [isSavingInProgress, setIsSavingInProgress] = useState(false);
   const [isReviewingSaved, setIsReviewingSaved] = useState(false);
-  const [deletedRowsHistory, setDeletedRowsHistory] = useState<{ 
-    row: SpelledLetter[]; 
-    index: number; 
-    color?: 'black' | 'blue' | 'red' | 'green';
-    rowId?: string;
-    cutWires?: boolean;
-    activeMode?: 'save' | 'scissors' | 'trash' | null;
-  }[]>([]);
+  const [deletedRowsHistory, setDeletedRowsHistory] = useState<{ row: SpelledLetter[]; index: number; color?: 'black' | 'blue' | 'red' | 'green' }[]>([]);
   
   // Loaded static saved word list in localStore
   const [savedWordsList, setSavedWordsList] = useState<SavedWord[]>(() => {
@@ -188,13 +107,13 @@ export default function App() {
       if (!saved) return [];
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed)) {
-        return parsed.map((item: string | SavedWord) => {
+        return parsed.map((item: any) => {
           if (typeof item === 'string') {
             // Converts legacy string word into default spelled letter objects for continuity
             const letters: SpelledLetter[] = item.split('').map((char, index) => ({
               id: `legacy-${item}-${index}-${Math.random()}`,
               letter: char,
-              originCubeId: getShelfCubeIdForLetter(char),
+              originCubeId: `cube-${char.toLowerCase()}`,
               originalOrdinal: `${index + 1}°`
             }));
             return {
@@ -249,7 +168,7 @@ export default function App() {
   const [rowOverflows, setRowOverflows] = useState<Record<number, boolean>>({});
   const [activeScrollingRow, setActiveScrollingRow] = useState<number | null>(null);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState<number | null>(null);
-  const activeScrollingTimeoutRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
+  const activeScrollingTimeoutRef = useRef<Record<number, NodeJS.Timeout>>({});
   const previousLengthsRef = useRef<number[]>([]);
 
   // Splash/Landing screen state managers (blank screen first -> smooth fade-in logo -> rest of content)
@@ -296,29 +215,6 @@ export default function App() {
     if (colorKey === 'green') return '#009246';
     return themeColor;
   };
-
-  const getDragPreviewColor = (): string => {
-    if (dragHoverInfo !== null) {
-      const targetRowIdx = dragHoverInfo.rIdx;
-      const targetRow = spelledRows[targetRowIdx];
-      if (targetRow && targetRow.length > 0) {
-        const existingBlock = targetRow.find(item => {
-          if (draggedTrayIndex !== null && draggedTrayIndex.rIdx === targetRowIdx && item.id === draggedBoardLetter?.id) {
-            return false;
-          }
-          return true;
-        });
-        if (existingBlock) {
-          return existingBlock.color || getRowColor(targetRowIdx);
-        }
-      }
-    }
-    if (draggedTrayIndex !== null && draggedBoardLetter !== null) {
-      return draggedBoardLetter.color || getRowColor(draggedTrayIndex.rIdx);
-    }
-    return themeColor;
-  };
-
 
   // Lock starting color when first letter is spelling
   useEffect(() => {
@@ -459,98 +355,9 @@ export default function App() {
   const [draggedBoardLetter, setDraggedBoardLetter] = useState<SpelledLetter | null>(null);
   const [trayDragStart, setTrayDragStart] = useState<{ index: number; x: number; y: number; letterObj: SpelledLetter; rowIdx: number; time: number } | null>(null);
 
-  // Synchronized refs for high-performance zero-rebound window pointer listeners
-  const draggedCubeRef = useRef<LetterCubeData | null>(draggedCube);
-  const draggedLetterRef = useRef<string | null>(draggedLetter);
-  const draggedTrayIndexRef = useRef<{ rIdx: number; lIdx: number } | null>(draggedTrayIndex);
-  const draggedBoardLetterRef = useRef<SpelledLetter | null>(draggedBoardLetter);
-  const draggedShelfIndexRef = useRef<number | null>(draggedShelfIndex);
-  const trayDragStartRef = useRef<{ index: number; x: number; y: number; letterObj: SpelledLetter; rowIdx: number; time: number } | null>(trayDragStart);
-  const activeRowIdxRef = useRef<number>(activeRowIdx);
-  const spelledRowsRef = useRef<SpelledLetter[][]>(spelledRows);
-  const themeColorRef = useRef<string>(themeColor);
-
-  useEffect(() => { draggedCubeRef.current = draggedCube; }, [draggedCube]);
-  useEffect(() => { draggedLetterRef.current = draggedLetter; }, [draggedLetter]);
-  useEffect(() => { draggedTrayIndexRef.current = draggedTrayIndex; }, [draggedTrayIndex]);
-  useEffect(() => { draggedBoardLetterRef.current = draggedBoardLetter; }, [draggedBoardLetter]);
-  useEffect(() => { draggedShelfIndexRef.current = draggedShelfIndex; }, [draggedShelfIndex]);
-  useEffect(() => { trayDragStartRef.current = trayDragStart; }, [trayDragStart]);
-  useEffect(() => { activeRowIdxRef.current = activeRowIdx; }, [activeRowIdx]);
-  useEffect(() => { spelledRowsRef.current = spelledRows; }, [spelledRows]);
-  useEffect(() => { themeColorRef.current = themeColor; }, [themeColor]);
-
-  // Keep spelling rows neat & automatically manage empty rows based on drag state
-  const isCurrentlyDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
-
-  useEffect(() => {
-    if (isCurrentlyDragging) {
-      // 1. DRAGGING STATE: Expand board dynamically so the user has plenty of space below to drop blocks
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
-
-      // Ensure we have at least 3 rows in total, and at least 2 empty rows below the last filled row
-      const desiredLength = Math.max(3, lastFilledRowIdx + 3);
-      if (spelledRows.length < desiredLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          while (copy.length < desiredLength) {
-            copy.push([]);
-          }
-          return copy;
-        });
-      }
-    } else {
-      // 2. IDLE STATE: Clean up trailing empty rows, but preserve intermediate empty rows to prevent layout shifting!
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
-
-      // We want to keep all rows up to lastFilledRowIdx, plus exactly one trailing empty row
-      const targetLength = Math.max(1, lastFilledRowIdx + 2);
-      
-      if (spelledRows.length !== targetLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          if (copy.length > targetLength) {
-            return copy.slice(0, targetLength);
-          } else {
-            while (copy.length < targetLength) {
-              copy.push([]);
-            }
-            return copy;
-          }
-        });
-      }
-    }
-  }, [spelledRows, isCurrentlyDragging]);
-
-  // Synchronize rowIds with spelledRows length for dynamic padding/trimming
-  useEffect(() => {
-    setRowIds(prev => {
-      if (prev.length === spelledRows.length) return prev;
-      if (spelledRows.length > prev.length) {
-        const next = [...prev];
-        while (next.length < spelledRows.length) {
-          next.push('row-' + Math.random().toString(36).substring(2, 11));
-        }
-        return next;
-      } else {
-        return prev.slice(0, spelledRows.length);
-      }
-    });
-  }, [spelledRows.length]);
-
   // Double tap handler refs
   const lastClicksRef = useRef<Record<string, number>>({});
-  const clickTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const clickTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   // Velocity-tracking and predictive cursor refs to ensure zero lag / high-speed tracking
   const dragVelocityRef = useRef({ x: 0, y: 0 });
@@ -566,21 +373,15 @@ export default function App() {
   const shelfRef = useRef<HTMLDivElement>(null);
 
   const isPointerInsideTray = (x?: number, y?: number) => {
-    const refEl = boardRef.current || trayRef.current;
-    if (!refEl) return false;
+    if (!boardRef.current) return false;
     const px = x !== undefined ? x : pointerPos.x;
     const py = y !== undefined ? y : pointerPos.y;
-    const rect = refEl.getBoundingClientRect();
-    
-    // Use a safety boundary of 35px so dragging outside makes it easy to delete.
-    const hPadding = 35;
-    const vPadding = 35;
-    
+    const rect = boardRef.current.getBoundingClientRect();
     return (
-      px >= rect.left - hPadding &&
-      px <= rect.right + hPadding &&
-      py >= rect.top - vPadding &&
-      py <= rect.bottom + vPadding
+      px >= rect.left &&
+      px <= rect.right &&
+      py >= rect.top &&
+      py <= rect.bottom
     );
   };
 
@@ -728,26 +529,6 @@ export default function App() {
     };
   }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex, updateElementPositions]);
 
-  // Run continuous tracking for 800ms after spelledRows changes,
-  // to ensure layout transitions (spring animations when blocks shift/are deleted) are tracked perfectly in real-time.
-  useEffect(() => {
-    let rAFId: number;
-    const startTime = Date.now();
-    const duration = 800; // 800ms covers spring layout transitions
-
-    const loop = () => {
-      updateElementPositions();
-      if (Date.now() - startTime < duration) {
-        rAFId = requestAnimationFrame(loop);
-      }
-    };
-
-    rAFId = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(rAFId);
-    };
-  }, [spelledRows, updateElementPositions]);
-
   // Lock document touch action when dragging to avoid page shifting on mobile
   useEffect(() => {
     const isDragging = (draggedCube !== null && draggedLetter !== null) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null);
@@ -813,17 +594,10 @@ export default function App() {
     const calculatePreciseDropInRow = (
       clientX: number,
       rowEl: Element,
-      rowIdx: number,
       excludeRowIdx?: number,
       excludeSlotIdx?: number
     ): { type: 'insert' | 'replace'; index: number } => {
-      const activeRowLetters = spelledRowsRef.current[rowIdx] || [];
-      const activeIds = new Set(activeRowLetters.map(l => l.id));
-
-      const slotElements = Array.from(rowEl.querySelectorAll('[data-slot-idx]')).filter(el => {
-        const id = el.getAttribute('id');
-        return id && activeIds.has(id);
-      });
+      const slotElements = Array.from(rowEl.querySelectorAll('[data-slot-idx]'));
       if (slotElements.length === 0) {
         return { type: 'insert', index: 0 };
       }
@@ -840,7 +614,7 @@ export default function App() {
 
       // Check replace first (exclude the currently dragged item to avoid self-replacement loop)
       const replaceCandidates = orderedSlots.filter(s => 
-         !(excludeRowIdx !== undefined && excludeSlotIdx !== undefined && s.rowIdx === excludeRowIdx && s.slotIdx === excludeSlotIdx)
+        !(excludeRowIdx !== undefined && excludeSlotIdx !== undefined && s.rowIdx === excludeRowIdx && s.slotIdx === excludeSlotIdx)
       );
 
       let replaceTarget = null;
@@ -892,49 +666,8 @@ export default function App() {
       }
     };
 
-    // Robust coordinates-based lookup that identifies the active spelling row under a pointer coordinate.
-    // Extremely reliable on mobile/tablets regardless of viewport scaling, pinch, or overlapping preview elements,
-    // using vertical center proximity of each row container to ensure zero bias and perfect selection.
-    const findRowAtCoords = (x: number, y: number): { element: Element; index: number } | null => {
-      const rowEls = document.querySelectorAll('[data-row-container-idx]');
-      if (rowEls.length === 0) return null;
-      
-      let closestRowEl: Element | null = null;
-      let minDistance = Infinity;
-      let closestIdx = -1;
-      
-      for (let i = 0; i < rowEls.length; i++) {
-        const el = rowEls[i];
-        const rect = el.getBoundingClientRect();
-        
-        // Use the vertical center of the spelling row container as the anchor.
-        // This is extremely robust and prevents first-match bias when rows are tightly packed or empty.
-        const centerY = rect.top + rect.height / 2;
-        const distY = Math.abs(y - centerY);
-        
-        if (distY < minDistance) {
-          minDistance = distY;
-          closestRowEl = el;
-          const rIdx = parseInt(el.getAttribute('data-row-container-idx') || '', 10);
-          if (!isNaN(rIdx)) {
-            closestIdx = rIdx;
-          }
-        }
-      }
-      
-      if (closestRowEl && closestIdx !== -1) {
-        return { element: closestRowEl, index: closestIdx };
-      }
-      
-      return null;
-    };
-
     const handlePointerMove = (e: PointerEvent) => {
-      // Map pointer coordinates directly and milimetrically to eliminate drag latency,
-      // ensuring the dragging cube coordinates align instantly with the finger.
-      setPointerPos({ x: e.clientX, y: e.clientY });
-
-      // Calculate velocity and time intervals
+      // Predictive LERP and velocity calculations to completely eliminate input/state tracking latency
       const now = performance.now();
       const dt = now - dragLastTimeRef.current;
       
@@ -945,6 +678,7 @@ export default function App() {
         vy = (e.clientY - dragLastMouseRef.current.y) / dt;
       }
       
+      // Store current velocity with sub-pixel low-pass filter to neutralize noise/hand-jitter
       dragVelocityRef.current = {
         x: dragVelocityRef.current.x * 0.7 + vx * 0.3,
         y: dragVelocityRef.current.y * 0.7 + vy * 0.3,
@@ -953,8 +687,15 @@ export default function App() {
       dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
       dragLastTimeRef.current = now;
 
+      // Predict cursor coordinates slightly ahead (approx 16ms) to neutralize display queues and render latency
+      const leadTime = 16;
+      const predictedX = e.clientX + dragVelocityRef.current.x * leadTime;
+      const predictedY = e.clientY + dragVelocityRef.current.y * leadTime;
+
+      setPointerPos({ x: predictedX, y: predictedY });
+
       // Free scroll up/down while dragging replacing cubes
-      const isDragging = (draggedCubeRef.current !== null && draggedLetterRef.current !== null) || (draggedTrayIndexRef.current !== null && draggedBoardLetterRef.current !== null) || (draggedShelfIndexRef.current !== null);
+      const isDragging = (draggedCube !== null && draggedLetter !== null) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null);
       if (isDragging) {
         const threshold = 180;
         let speed = 0;
@@ -966,7 +707,7 @@ export default function App() {
 
         if (speed !== 0) {
           // If we're dragging a shelf cube for reordering, restrict scroll trigger horizontal area to the container 
-          if (draggedShelfIndexRef.current !== null && shelfRef.current) {
+          if (draggedShelfIndex !== null && shelfRef.current) {
             const rect = shelfRef.current.getBoundingClientRect();
             // Delimit scroll trigger ONLY to the horizontal bounds of the un-moved cubes grid
             if (e.clientX >= rect.left - 20 && e.clientX <= rect.right + 20) {
@@ -979,9 +720,9 @@ export default function App() {
         }
       }
 
-      if (draggedShelfIndexRef.current !== null) {
+      if (draggedShelfIndex !== null) {
         // Just let it track pointerPos. Swap of elements in shelfCubes happens on pointerUp!
-      } else if (draggedCubeRef.current && draggedLetterRef.current) {
+      } else if (draggedCube && draggedLetter) {
         // Dragging from alphabet grid
         setDragScribblePoints(prev => {
           if (prev.length === 0) return [{ x: e.clientX, y: e.clientY }];
@@ -992,43 +733,45 @@ export default function App() {
           }
           return prev;
         });
-      } else if (trayDragStartRef.current !== null && draggedTrayIndexRef.current === null) {
+      } else if (trayDragStart !== null && draggedTrayIndex === null) {
         // Anti-jitter drag launch
-        const dist = Math.hypot(e.clientX - trayDragStartRef.current.x, e.clientY - trayDragStartRef.current.y);
+        const dist = Math.hypot(e.clientX - trayDragStart.x, e.clientY - trayDragStart.y);
         if (dist > 8) {
-          const deltaX = Math.abs(e.clientX - trayDragStartRef.current.x);
-          const deltaY = Math.abs(e.clientY - trayDragStartRef.current.y);
+          const deltaX = Math.abs(e.clientX - trayDragStart.x);
+          const deltaY = Math.abs(e.clientY - trayDragStart.y);
           
-          // Allow extremely fluid and immediate drag launches in any direction on touch and mobile!
+          // On mobile / touch, if deltaX is larger than deltaY, they are scrolling horizontally, let's not launch drag!
+          const isMobileDevice = window.matchMedia('(max-width: 1024px)').matches || 
+                                 ('ontouchstart' in window) || 
+                                 (navigator && navigator.maxTouchPoints > 0);
+          if (isMobileDevice && deltaX > deltaY * 1.2) {
+            // Let touch scroll happen naturally, do not drag
+            return;
+          }
 
           // Launch the drag!
           dragLastTimeRef.current = performance.now();
           dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
           dragVelocityRef.current = { x: 0, y: 0 };
-          const dragIdx = { rIdx: trayDragStartRef.current.rowIdx, lIdx: trayDragStartRef.current.index };
-          const dragLetterObj = trayDragStartRef.current.letterObj;
-          setDraggedTrayIndex(dragIdx);
-          draggedTrayIndexRef.current = dragIdx;
-          setDraggedBoardLetter(dragLetterObj);
-          draggedBoardLetterRef.current = dragLetterObj;
+          setDraggedTrayIndex({ rIdx: trayDragStart.rowIdx, lIdx: trayDragStart.index });
+          setDraggedBoardLetter(trayDragStart.letterObj);
           // Keep it in spelledRows to show clean empty dashed slot at the original position while dragging,
           // preventing jerky resizing or layout shifting in the scrolling row!
         }
       }
 
-      // Real-time hover tracking with coordinates-based lookup
-      if ((draggedCubeRef.current && draggedLetterRef.current) || (draggedTrayIndexRef.current && draggedBoardLetterRef.current)) {
-        if (isPointerInsideTray(e.clientX, e.clientY)) {
-          const rowMatch = findRowAtCoords(e.clientX, e.clientY);
-          if (rowMatch) {
-            const rowEl = rowMatch.element;
-            const targetRowIdx = rowMatch.index;
+      // Real-time hover tracking for millimeters-level precision
+      if ((draggedCube && draggedLetter) || (draggedTrayIndex && draggedBoardLetter)) {
+        const el = document.elementFromPoint(e.clientX, e.clientY);
+        const rowEl = el?.closest('[data-row-container-idx]');
+        if (rowEl && isPointerInsideTray(e.clientX, e.clientY)) {
+          const targetRowIdx = parseInt(rowEl.getAttribute('data-row-container-idx') || '', 10);
+          if (!isNaN(targetRowIdx)) {
             const dropResult = calculatePreciseDropInRow(
               e.clientX,
               rowEl,
-              targetRowIdx,
-              draggedTrayIndexRef.current?.rIdx,
-              draggedTrayIndexRef.current?.lIdx
+              draggedTrayIndex?.rIdx,
+              draggedTrayIndex?.lIdx
             );
             setDragHoverInfo({
               rIdx: targetRowIdx,
@@ -1064,115 +807,89 @@ export default function App() {
 
     const handlePointerUp = (e: PointerEvent) => {
       // 1. DRAG FROM ALPHABET GRID
-      if (draggedCubeRef.current && draggedLetterRef.current) {
+      if (draggedCube && draggedLetter) {
         if (boardRef.current) {
           let inserted = false;
           
           if (isPointerInsideTray(e.clientX, e.clientY)) {
-            // Find the closest row using exact/closest coordinates
-            const rowMatch = findRowAtCoords(e.clientX, e.clientY);
+            // Find the closest row
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const rowEl = el?.closest('[data-row-container-idx]');
             
-            if (rowMatch) {
-              const rowEl = rowMatch.element;
-              const targetRowIdx = rowMatch.index;
-              // Precision calculation
-              const dropResult = calculatePreciseDropInRow(e.clientX, rowEl, targetRowIdx);
-              if (dropResult.type === 'replace') {
-                handleReplaceLetter(draggedLetterRef.current, targetRowIdx, dropResult.index);
-                inserted = true;
-              } else {
-                handleSelectLetter(draggedLetterRef.current, targetRowIdx, dropResult.index);
-                inserted = true;
+            if (rowEl) {
+              const targetRowIdx = parseInt(rowEl.getAttribute('data-row-container-idx') || '', 10);
+              if (!isNaN(targetRowIdx)) {
+                // Precision calculation
+                const dropResult = calculatePreciseDropInRow(e.clientX, rowEl);
+                if (dropResult.type === 'replace') {
+                  handleReplaceLetter(draggedLetter, targetRowIdx, dropResult.index);
+                  inserted = true;
+                } else {
+                  handleSelectLetter(draggedLetter, targetRowIdx, dropResult.index);
+                  inserted = true;
+                }
               }
             } else {
               // Alternate lookup: if they drop anywhere in the board tray but not on a specific row element directly,
-              // let's use the activeRowIdxRef.current as a fallback and insert at the end.
-              handleSelectLetter(draggedLetterRef.current, activeRowIdxRef.current);
+              // let's use the activeRowIdx as a fallback and insert at the end.
+              handleSelectLetter(draggedLetter, activeRowIdx);
               inserted = true;
             }
           }
         }
         setDraggedCube(null);
-        draggedCubeRef.current = null;
         setDraggedLetter(null);
-        draggedLetterRef.current = null;
         setDragScribblePoints([]);
-      }      // 2. DRAG EXISTING BOARD CUBE
-      if (draggedTrayIndexRef.current !== null && draggedBoardLetterRef.current !== null) {
-        const sourceIdx = draggedTrayIndexRef.current; // Capture local ref value before asynchronous/batched state updates
+      }
+
+      // 2. DRAG EXISTING BOARD CUBE
+      if (draggedTrayIndex !== null && draggedBoardLetter !== null) {
         if (boardRef.current) {
           let dropSuccessful = false;
 
           if (isPointerInsideTray(e.clientX, e.clientY)) {
-            const rowMatch = findRowAtCoords(e.clientX, e.clientY);
-            if (rowMatch) {
-              const rowEl = rowMatch.element;
-              const targetRowIdx = rowMatch.index;
-              
-              // Calculate precise insertion/replacement index, excluding itself from measurement
-              const dropResult = calculatePreciseDropInRow(
-                e.clientX, 
-                rowEl, 
-                targetRowIdx,
-                sourceIdx.rIdx, 
-                sourceIdx.lIdx
-              );
+            const el = document.elementFromPoint(e.clientX, e.clientY);
+            const rowEl = el?.closest('[data-row-container-idx]');
+            if (rowEl) {
+              const targetRowIdx = parseInt(rowEl.getAttribute('data-row-container-idx') || '', 10);
+              if (!isNaN(targetRowIdx)) {
+                // Calculate precise insertion/replacement index, excluding itself from measurement
+                const dropResult = calculatePreciseDropInRow(
+                  e.clientX, 
+                  rowEl, 
+                  draggedTrayIndex.rIdx, 
+                  draggedTrayIndex.lIdx
+                );
                 
                 if (dropResult.type === 'replace') {
                   // REPLACE LOGIC
                   setSpelledRows(prev => {
                     const copy = prev.map(r => [...r]);
-                    const sourceRow = copy[sourceIdx.rIdx];
+                    const sourceRow = copy[draggedTrayIndex.rIdx];
                     const targetRow = copy[targetRowIdx];
- 
-                    const itemToMove = sourceRow[sourceIdx.lIdx];
+
+                    const itemToMove = sourceRow[draggedTrayIndex.lIdx];
                     if (itemToMove) {
                       // Remove from source row first
-                      sourceRow.splice(sourceIdx.lIdx, 1);
+                      sourceRow.splice(draggedTrayIndex.lIdx, 1);
                       
                       // Handle offset adjustment if replacing on the same row!
                       let finalReplaceIdx = dropResult.index;
-                      if (sourceIdx.rIdx === targetRowIdx) {
-                        if (sourceIdx.lIdx < dropResult.index) {
+                      if (draggedTrayIndex.rIdx === targetRowIdx) {
+                        if (draggedTrayIndex.lIdx < dropResult.index) {
                           finalReplaceIdx = Math.max(0, dropResult.index - 1);
                         }
                       }
- 
-                      const draggedColor = itemToMove.color || getRowColor(sourceIdx.rIdx);
-                      // NEW RULE: If target row already contains blocks (other than the item itself), adapt to their color!
-                      let finalColor = draggedColor;
-                      const remainingBlocksInTarget = targetRow.filter(item => item.id !== itemToMove.id);
-                      if (remainingBlocksInTarget.length > 0) {
-                        finalColor = remainingBlocksInTarget[0].color || getRowColor(targetRowIdx);
-                      }
-                      const colorName = finalColor === '#0000FF' || finalColor === 'blue' ? 'blue' :
-                                        finalColor === '#FF0000' || finalColor === 'red' ? 'red' :
-                                        finalColor === '#009246' || finalColor === 'green' ? 'green' : 'black';
-                      const hexColor = colorName === 'blue' ? '#0000FF' :
-                                       colorName === 'red' ? '#FF0000' :
-                                       colorName === 'green' ? '#009246' : '#000000';
 
                       // Create a new item to trigger React key replacement animation cleanly and fluidly
                       const cellId = `letter-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
                       const replacedItem: SpelledLetter = {
                         ...itemToMove,
                         id: cellId, // generate new id to trigger replacement animation!
-                        color: hexColor
+                        color: targetRow.length > 0 && targetRow[0].color ? targetRow[0].color : themeColor
                       };
                       
                       targetRow[finalReplaceIdx] = replacedItem;
-
-                      // Force all items in this target row to have the same color as the dropped block
-                      copy[targetRowIdx] = targetRow.map(item => ({
-                        ...item,
-                        color: hexColor
-                      }));
-
-                      // Update row colors state
-                      setRowColors(prevColors => ({
-                        ...prevColors,
-                        [targetRowIdx]: colorName
-                      }));
                     }
                     return copy;
                   });
@@ -1182,55 +899,30 @@ export default function App() {
                   // INSERT LOGIC
                   setSpelledRows(prev => {
                     const copy = prev.map(r => [...r]);
-                    const sourceRow = copy[sourceIdx.rIdx];
+                    const sourceRow = copy[draggedTrayIndex.rIdx];
                     const targetRow = copy[targetRowIdx];
- 
-                    const itemToMove = sourceRow[sourceIdx.lIdx];
+
+                    const itemToMove = sourceRow[draggedTrayIndex.lIdx];
                     if (itemToMove) {
                       // Remove from source row first
-                      sourceRow.splice(sourceIdx.lIdx, 1);
+                      sourceRow.splice(draggedTrayIndex.lIdx, 1);
                       
                       let finalInsertIdx = dropResult.index;
                       
                       // Handle offset adjustment if inserting in the same row
-                      if (sourceIdx.rIdx === targetRowIdx) {
-                        if (sourceIdx.lIdx < dropResult.index) {
+                      if (draggedTrayIndex.rIdx === targetRowIdx) {
+                        if (draggedTrayIndex.lIdx < dropResult.index) {
                           finalInsertIdx = Math.max(0, dropResult.index - 1);
                         }
                       }
- 
+
                       // Ensure insert index falls in valid range
                       if (finalInsertIdx > targetRow.length) {
                         finalInsertIdx = targetRow.length;
                       }
- 
-                      const draggedColor = itemToMove.color || getRowColor(sourceIdx.rIdx);
-                      // NEW RULE: If target row already contains blocks (other than the item itself), adapt to their color!
-                      let finalColor = draggedColor;
-                      const remainingBlocksInTarget = targetRow.filter(item => item.id !== itemToMove.id);
-                      if (remainingBlocksInTarget.length > 0) {
-                        finalColor = remainingBlocksInTarget[0].color || getRowColor(targetRowIdx);
-                      }
-                      const colorName = finalColor === '#0000FF' || finalColor === 'blue' ? 'blue' :
-                                        finalColor === '#FF0000' || finalColor === 'red' ? 'red' :
-                                        finalColor === '#009246' || finalColor === 'green' ? 'green' : 'black';
-                      const hexColor = colorName === 'blue' ? '#0000FF' :
-                                       colorName === 'red' ? '#FF0000' :
-                                       colorName === 'green' ? '#009246' : '#000000';
 
-                      targetRow.splice(finalInsertIdx, 0, { ...itemToMove, color: hexColor });
-
-                      // Force all items in this target row to have the same color as the dropped block
-                      copy[targetRowIdx] = targetRow.map(item => ({
-                        ...item,
-                        color: hexColor
-                      }));
-
-                      // Update row colors state
-                      setRowColors(prevColors => ({
-                        ...prevColors,
-                        [targetRowIdx]: colorName
-                      }));
+                      const targetColor = targetRow.length > 0 && targetRow[0].color ? targetRow[0].color : themeColor;
+                      targetRow.splice(finalInsertIdx, 0, { ...itemToMove, color: targetColor });
                     }
                     return copy;
                   });
@@ -1239,53 +931,56 @@ export default function App() {
                   dropSuccessful = true;
                 }
               }
+            }
           } else {
-            // Dragged outside: delete the letter on all devices (both mobile and desktop)
-            setSpelledRows(prev => {
-              const copy = prev.map(r => [...r]);
-              const sourceRow = copy[sourceIdx.rIdx];
-              if (sourceRow) {
-                sourceRow.splice(sourceIdx.lIdx, 1);
-              }
-              return copy;
-            });
+            // ALWAYS delete the letter if dragged outside of the spelling board area on desktop
+            const isMobileOrTouch = e.pointerType === 'touch' || 
+                                    e.pointerType === 'pen' ||
+                                    window.matchMedia('(max-width: 1024px)').matches || 
+                                    ('ontouchstart' in window) ||
+                                    (navigator && navigator.maxTouchPoints > 0);
+            if (!isMobileOrTouch) {
+              setSpelledRows(prev => {
+                const copy = prev.map(r => [...r]);
+                const sourceRow = copy[draggedTrayIndex.rIdx];
+                if (sourceRow) {
+                  sourceRow.splice(draggedTrayIndex.lIdx, 1);
+                }
+                return copy;
+              });
+            }
             dropSuccessful = true;
           }
         }
         setDraggedTrayIndex(null);
-        draggedTrayIndexRef.current = null;
         setDraggedBoardLetter(null);
-        draggedBoardLetterRef.current = null;
       }
 
       // 3. FREE SHELF REORDER DROP (SWAP/REPLACE POSITION ON DROP)
-      if (draggedShelfIndexRef.current !== null) {
-        const sourceShelfIdx = draggedShelfIndexRef.current; // Capture local ref value before asynchronous/batched state updates
+      if (draggedShelfIndex !== null) {
         const el = document.elementFromPoint(e.clientX, e.clientY);
         const shelfEl = el?.closest('[data-shelf-idx]');
         if (shelfEl) {
           const targetIdx = parseInt(shelfEl.getAttribute('data-shelf-idx') || '', 10);
-          if (!isNaN(targetIdx) && targetIdx !== sourceShelfIdx) {
+          if (!isNaN(targetIdx) && targetIdx !== draggedShelfIndex) {
             setShelfCubes(prev => {
               const copy = [...prev];
-              const temp = copy[sourceShelfIdx];
-              copy[sourceShelfIdx] = copy[targetIdx];
+              const temp = copy[draggedShelfIndex];
+              copy[draggedShelfIndex] = copy[targetIdx];
               copy[targetIdx] = temp;
               return copy;
             });
           }
         }
         setDraggedShelfIndex(null);
-        draggedShelfIndexRef.current = null;
       }
 
-      if (trayDragStartRef.current !== null && draggedTrayIndexRef.current === null) {
-        const startRef = trayDragStartRef.current; // Capture local ref value before asynchronous/batched state updates
-        const dist = Math.hypot(e.clientX - startRef.x, e.clientY - startRef.y);
-        const timeElapsed = Date.now() - startRef.time;
+      if (trayDragStart !== null && draggedTrayIndex === null) {
+        const dist = Math.hypot(e.clientX - trayDragStart.x, e.clientY - trayDragStart.y);
+        const timeElapsed = Date.now() - trayDragStart.time;
         // Only trigger color cycle if it was a quick click, not a long press
         if (dist < 10 && timeElapsed < 300) {
-          const letterId = startRef.letterObj.id;
+          const letterId = trayDragStart.letterObj.id;
           const now = Date.now();
           const lastTime = lastClicksRef.current[letterId] || 0;
 
@@ -1299,8 +994,8 @@ export default function App() {
             // Remove the letter
             setSpelledRows(prev => {
               const copy = prev.map(r => [...r]);
-              if (copy[startRef.rowIdx]) {
-                 copy[startRef.rowIdx].splice(startRef.index, 1);
+              if (copy[trayDragStart.rowIdx]) {
+                 copy[trayDragStart.rowIdx].splice(trayDragStart.index, 1);
               }
               return copy;
             });
@@ -1309,7 +1004,7 @@ export default function App() {
             // Single click: wait to see if it becomes a double click before cycling color
             lastClicksRef.current[letterId] = now;
             clickTimeoutsRef.current[letterId] = setTimeout(() => {
-              cycleRowColor(startRef.rowIdx);
+              cycleRowColor(trayDragStart.rowIdx);
               delete clickTimeoutsRef.current[letterId];
               delete lastClicksRef.current[letterId];
             }, 300);
@@ -1323,15 +1018,10 @@ export default function App() {
 
     const handlePointerCancel = (e: PointerEvent) => {
       setDraggedCube(null);
-      draggedCubeRef.current = null;
       setDraggedLetter(null);
-      draggedLetterRef.current = null;
       setDraggedTrayIndex(null);
-      draggedTrayIndexRef.current = null;
       setDraggedBoardLetter(null);
-      draggedBoardLetterRef.current = null;
       setDraggedShelfIndex(null);
-      draggedShelfIndexRef.current = null;
       setTrayDragStart(null);
       setDragHoverInfo(null);
       setDragScribblePoints([]);
@@ -1341,42 +1031,30 @@ export default function App() {
     window.addEventListener('pointerup', handlePointerUp);
     window.addEventListener('pointercancel', handlePointerCancel);
 
-    const handleGlobalTouch = (e: TouchEvent) => {
-      const target = e.target as HTMLElement;
-      const isDraggable = target.closest('[data-shelf-idx]') || target.closest('[data-slot-idx]') || target.closest('.cursor-grab');
-      if (isDraggable && e.cancelable) {
-        e.preventDefault();
-      }
-    };
-
-    window.addEventListener('touchstart', handleGlobalTouch, { passive: false });
-    window.addEventListener('touchmove', handleGlobalTouch, { passive: false });
-
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
       window.removeEventListener('pointercancel', handlePointerCancel);
-      window.removeEventListener('touchstart', handleGlobalTouch);
-      window.removeEventListener('touchmove', handleGlobalTouch);
     };
-  }, []);
+  }, [draggedCube, draggedLetter, dragScribblePoints, draggedTrayIndex, draggedBoardLetter, trayDragStart, activeRowIdx, spelledRows, draggedShelfIndex, shelfCubes, themeColor]);
 
   // Insert a letter onto a specific row and optional slot index
-  const handleSelectLetter = (letter: string, targetRowIdx: number = activeRowIdxRef.current, insertIdx?: number) => {
-    const currentSpelledRows = spelledRowsRef.current;
-    if (!currentSpelledRows[targetRowIdx]) {
+  const handleSelectLetter = (letter: string, targetRowIdx: number = activeRowIdx, insertIdx?: number) => {
+    if (!spelledRows[targetRowIdx]) {
       targetRowIdx = 0;
     }
 
-    if (currentSpelledRows[targetRowIdx].length >= 36) { 
+    if (spelledRows[targetRowIdx].length >= 36) { 
       return;
     }
 
     const cellId = `letter-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const matchedCubeId = draggedCubeRef.current ? `cube-${draggedCubeRef.current.id}` : getShelfCubeIdForLetter(letter);
+    const matchCompCube = shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
+    const fallbackId = matchCompCube ? `cube-${matchCompCube.id}` : `cube-cube-${letter.toLowerCase()}`;
+    const matchedCubeId = draggedCube ? `cube-${draggedCube.id}` : fallbackId;
 
     let originalOrdinal = "1°";
-    const cubeToUse = draggedCubeRef.current || shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
+    const cubeToUse = draggedCube || shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
     if (cubeToUse) {
       if (cubeToUse.secondaryLetter === letter) {
         originalOrdinal = cubeToUse.secondaryOrdinal || cubeToUse.primaryOrdinal;
@@ -1385,20 +1063,12 @@ export default function App() {
       }
     }
 
-    // NEW RULE: If target row already contains blocks, the new block adopts their color!
-    let targetColor = themeColorRef.current;
-    const existingRow = currentSpelledRows[targetRowIdx];
-    if (existingRow && existingRow.length > 0) {
-      targetColor = existingRow[0].color || getRowColor(targetRowIdx);
-    }
-    const colorName = targetColor === '#0000FF' ? 'blue' : targetColor === '#FF0000' ? 'red' : targetColor === '#009246' ? 'green' : 'black';
-
     const newLetter: SpelledLetter = {
       id: cellId,
       letter,
       originCubeId: matchedCubeId,
       originalOrdinal,
-      color: targetColor
+      color: (spelledRows[targetRowIdx] && spelledRows[targetRowIdx].length > 0 && spelledRows[targetRowIdx][0].color) ? spelledRows[targetRowIdx][0].color : themeColor
     };
 
     setSpelledRows(prev => {
@@ -1408,32 +1078,23 @@ export default function App() {
       } else {
         copy[targetRowIdx].push(newLetter);
       }
-      // Force all items in this target row to have the same color as the dropped block
-      copy[targetRowIdx] = copy[targetRowIdx].map(item => ({
-        ...item,
-        color: targetColor
-      }));
       return copy;
     });
-
-    setRowColors(prevColors => ({
-      ...prevColors,
-      [targetRowIdx]: colorName
-    }));
     
     setActiveRowIdx(targetRowIdx);
   };
 
   // Replace a letter on a specific row at a target slot index
   const handleReplaceLetter = (letter: string, targetRowIdx: number, targetSlotIdx: number) => {
-    const currentSpelledRows = spelledRowsRef.current;
-    if (!currentSpelledRows[targetRowIdx]) return;
+    if (!spelledRows[targetRowIdx]) return;
 
     const cellId = `letter-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
-    const matchedCubeId = draggedCubeRef.current ? `cube-${draggedCubeRef.current.id}` : getShelfCubeIdForLetter(letter);
+    const matchCompCube = shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
+    const fallbackId = matchCompCube ? `cube-${matchCompCube.id}` : `cube-cube-${letter.toLowerCase()}`;
+    const matchedCubeId = draggedCube ? `cube-${draggedCube.id}` : fallbackId;
 
     let originalOrdinal = "1°";
-    const cubeToUse = draggedCubeRef.current || shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
+    const cubeToUse = draggedCube || shelfCubes.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
     if (cubeToUse) {
       if (cubeToUse.secondaryLetter === letter) {
         originalOrdinal = cubeToUse.secondaryOrdinal || cubeToUse.primaryOrdinal;
@@ -1442,20 +1103,12 @@ export default function App() {
       }
     }
 
-    // NEW RULE: If target row already contains blocks, the new block adopts their color!
-    let targetColor = themeColorRef.current;
-    const existingRow = currentSpelledRows[targetRowIdx];
-    if (existingRow && existingRow.length > 0) {
-      targetColor = existingRow[0].color || getRowColor(targetRowIdx);
-    }
-    const colorName = targetColor === '#0000FF' ? 'blue' : targetColor === '#FF0000' ? 'red' : targetColor === '#009246' ? 'green' : 'black';
-
     const newLetter: SpelledLetter = {
       id: cellId,
       letter,
       originCubeId: matchedCubeId,
       originalOrdinal,
-      color: targetColor
+      color: (spelledRows[targetRowIdx] && spelledRows[targetRowIdx].length > 0 && spelledRows[targetRowIdx][0].color) ? spelledRows[targetRowIdx][0].color : themeColor
     };
 
     setSpelledRows(prev => {
@@ -1463,18 +1116,8 @@ export default function App() {
       if (copy[targetRowIdx] && copy[targetRowIdx][targetSlotIdx] !== undefined) {
         copy[targetRowIdx][targetSlotIdx] = newLetter;
       }
-      // Force all items in this target row to have the same color as the dropped block
-      copy[targetRowIdx] = copy[targetRowIdx].map(item => ({
-        ...item,
-        color: targetColor
-      }));
       return copy;
     });
-
-    setRowColors(prevColors => ({
-      ...prevColors,
-      [targetRowIdx]: colorName
-    }));
 
     setActiveRowIdx(targetRowIdx);
   };
@@ -1489,50 +1132,20 @@ export default function App() {
   };
 
   const handleAddNewRow = () => {
-    setSpelledRows(prev => {
-      setActiveRowIdx(prev.length);
-      return [...prev, []];
-    });
+    setSpelledRows(prev => [...prev, []]);
+    setActiveRowIdx(spelledRows.length);
   };
 
   const handleRemoveRow = (rIdx: number) => {
     if (spelledRows.length === 1) {
       setSpelledRows([[]]);
       setRowColors({});
-      setRowActiveModes({});
-      setCutWiresRows({});
       setActiveRowIdx(0);
-      setRowIds(['row-initial-' + Math.random().toString(36).substring(2, 11)]);
       return;
     }
-    setRowIds(prev => prev.filter((_, idx) => idx !== rIdx));
     setSpelledRows(prev => prev.filter((_, idx) => idx !== rIdx));
     setRowColors(prev => {
       const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
-      Object.keys(prev).forEach(k => {
-        const idx = parseInt(k, 10);
-        if (idx < rIdx) {
-          next[idx] = prev[idx];
-        } else if (idx > rIdx) {
-          next[idx - 1] = prev[idx];
-        }
-      });
-      return next;
-    });
-    setRowActiveModes(prev => {
-      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
-      Object.keys(prev).forEach(k => {
-        const idx = parseInt(k, 10);
-        if (idx < rIdx) {
-          next[idx] = prev[idx];
-        } else if (idx > rIdx) {
-          next[idx - 1] = prev[idx];
-        }
-      });
-      return next;
-    });
-    setCutWiresRows(prev => {
-      const next: Record<number, boolean> = {};
       Object.keys(prev).forEach(k => {
         const idx = parseInt(k, 10);
         if (idx < rIdx) {
@@ -1549,21 +1162,11 @@ export default function App() {
   const handleDeleteRowWithHistory = (rIdx: number) => {
     const rowToSave = spelledRows[rIdx];
     const colorToSave = rowColors[rIdx];
-    const rowIdToSave = rowIds[rIdx];
-    const cutWiresToSave = cutWiresRows[rIdx];
-    const activeModeToSave = rowActiveModes[rIdx];
     
     // Save to history stack
     setDeletedRowsHistory(prev => [
       ...prev,
-      { 
-        row: rowToSave, 
-        index: rIdx, 
-        color: colorToSave, 
-        rowId: rowIdToSave,
-        cutWires: cutWiresToSave,
-        activeMode: activeModeToSave
-      }
+      { row: rowToSave, index: rIdx, color: colorToSave }
     ]);
     
     handleRemoveRow(rIdx);
@@ -1574,13 +1177,6 @@ export default function App() {
     
     const lastDeleted = deletedRowsHistory[deletedRowsHistory.length - 1];
     
-    setRowIds(prev => {
-      const copy = [...prev];
-      const insertIdx = Math.min(lastDeleted.index, copy.length);
-      copy.splice(insertIdx, 0, lastDeleted.rowId || ('row-' + Math.random().toString(36).substring(2, 11)));
-      return copy;
-    });
-
     setSpelledRows(prev => {
       const copy = [...prev];
       if (copy.length === 1 && copy[0].length === 0) {
@@ -1608,52 +1204,13 @@ export default function App() {
       });
     }
 
-    setRowActiveModes(prev => {
-      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
-      Object.entries(prev).forEach(([k, val]) => {
-        const idx = parseInt(k, 10);
-        if (idx < lastDeleted.index) {
-          next[idx] = val;
-        } else {
-          next[idx + 1] = val;
-        }
-      });
-      if (lastDeleted.activeMode) {
-        next[lastDeleted.index] = lastDeleted.activeMode;
-      }
-      return next;
-    });
-
-    setCutWiresRows(prev => {
-      const next: Record<number, boolean> = {};
-      Object.entries(prev).forEach(([k, val]) => {
-        const idx = parseInt(k, 10);
-        if (idx < lastDeleted.index) {
-          next[idx] = val;
-        } else {
-          next[idx + 1] = val;
-        }
-      });
-      if (lastDeleted.cutWires !== undefined) {
-        next[lastDeleted.index] = lastDeleted.cutWires;
-      }
-      return next;
-    });
-
     setDeletedRowsHistory(prev => prev.slice(0, -1));
   };
 
   const handleClearAllRows = () => {
     // Collect all rows that actually contain cubes
     const nonKeys = spelledRows
-      .map((row, idx) => ({ 
-        row, 
-        index: idx, 
-        color: rowColors[idx], 
-        rowId: rowIds[idx],
-        cutWires: cutWiresRows[idx],
-        activeMode: rowActiveModes[idx]
-      }))
+      .map((row, idx) => ({ row, index: idx, color: rowColors[idx] }))
       .filter(item => item.row.length > 0);
     
     if (nonKeys.length > 0) {
@@ -1665,10 +1222,7 @@ export default function App() {
 
     setSpelledRows([[]]);
     setRowColors({});
-    setRowActiveModes({});
-    setCutWiresRows({});
     setActiveRowIdx(0);
-    setRowIds(['row-initial-' + Math.random().toString(36).substring(2, 11)]);
   };
 
   const cycleRowColor = (rIdx: number) => {
@@ -1690,17 +1244,12 @@ export default function App() {
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
     e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {}
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = rect.left + rect.width / 2 + window.scrollX;
     const startY = rect.top + rect.height / 2 + window.scrollY;
 
     setDraggedCube(cube);
-    draggedCubeRef.current = cube;
     setDraggedLetter(letter);
-    draggedLetterRef.current = letter;
     setDragStartPosCenter({ x: startX, y: startY });
     
     // Initialize predictive drag tracking variables
@@ -1716,8 +1265,78 @@ export default function App() {
     }
   };
 
+  if (activeTab === 'about') {
+    return (
+      <AboutSection 
+        onBack={() => {
+          setActiveTab('app');
+          window.scrollTo({ top: 0, behavior: 'instant' });
+        }} 
+      />
+    );
+  }
+
   return (
     <div className="relative min-h-screen bg-gray-50 flex flex-col font-sans select-none pb-16">
+      
+      {/* ARTICLE LOAD TRANSITION SCREEN OVERLAY */}
+      <AnimatePresence>
+        {isAboutLoading && (
+          <motion.div
+            key="about-loading-transition"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.3 } }}
+            className="fixed inset-0 bg-white/98 backdrop-blur-xl z-[10000] flex flex-col items-center justify-center select-none"
+          >
+            <div className="h-28 flex items-center justify-center scale-110">
+              <div className="boxes">
+                <div className="box">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+                <div className="box">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+                <div className="box">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+                <div className="box">
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                  <div></div>
+                </div>
+              </div>
+            </div>
+            
+            <motion.h4 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="text-gray-900 font-display font-extrabold text-xl tracking-tight leading-tight mt-10 text-center"
+            >
+              Navegando para o Saiba Mais
+            </motion.h4>
+            <motion.p 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.7 }}
+              transition={{ delay: 0.6 }}
+              className="text-xs sm:text-sm text-gray-500 font-medium font-sans mt-2 text-center max-w-xs leading-relaxed"
+            >
+              Aguarde enquanto preparamos a matéria completa do Ábaco Brasileiro de Alfabetização.
+            </motion.p>
+          </motion.div>
+        )}
+      </AnimatePresence>
       
       {/* LANDING / SPLASH SCREEN OVERLAY */}
       <AnimatePresence>
@@ -1758,7 +1377,7 @@ export default function App() {
                 className="w-48 h-48 sm:w-56 sm:h-56 md:w-64 md:h-64 lg:w-72 lg:h-72 flex items-center justify-center z-20"
               >
                 <img
-                  src="/logo_splash.svg"
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779389284/logo_abba_bmgx5y.svg"
                   alt="ABBA Logo"
                   className="w-full h-full object-contain pointer-events-none"
                 />
@@ -1928,47 +1547,69 @@ export default function App() {
         <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
           
           <div className="flex items-center gap-2.5">
-            <img src="/logo_favicon.svg" alt="ABBA Logo" className="w-10 h-10" />
+            {/* Morphing Hamburger Button - Icon Only */}
+            <button
+              onClick={() => setIsMenuOpen(prev => !prev)}
+              className="p-2 -ml-1 rounded-full text-gray-700 hover:text-gray-950 hover:bg-gray-100 active:scale-95 transition-all cursor-pointer flex items-center justify-center border border-gray-200 shadow-3xs bg-white relative z-50 select-none w-10 h-10"
+              title="Menu ABBA"
+            >
+              <div className="w-4.5 h-4 flex flex-col justify-center items-center relative">
+                <span className={`w-4.5 h-0.5 bg-gray-700 rounded-full transition-all duration-300 absolute ${isMenuOpen ? 'rotate-45' : '-translate-y-1'}`} />
+                <span className={`w-4.5 h-0.5 bg-gray-700 rounded-full transition-all duration-250 absolute ${isMenuOpen ? 'opacity-0 scale-50' : 'opacity-100'}`} />
+                <span className={`w-4.5 h-0.5 bg-gray-700 rounded-full transition-all duration-300 absolute ${isMenuOpen ? '-rotate-45' : 'translate-y-1'}`} />
+              </div>
+            </button>
+
+            <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
             <div>
               <h1 className="font-display font-extrabold text-xl tracking-tight text-gray-950 flex items-center gap-1.5">
                 ABBA DIGITAL
               </h1>
-              <p className="text-[10px] font-medium text-gray-500">Ábaco Brasileiro de Alfabetização Bilingue</p>
+              <p className="text-[10px] font-medium text-gray-500 h-[15px] flex items-center">Ábaco Brasileiro de Alfabetização Bilingue</p>
             </div>
           </div>
-
-          {/* Hamburger menu button */}
-          <button
-            onClick={() => setIsMenuOpen(prev => !prev)}
-            className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all text-slate-700 cursor-pointer"
-            aria-label="Toggle menu"
-          >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              {isMenuOpen ? (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              ) : (
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-              )}
-            </svg>
-          </button>
-
         </div>
       </header>
 
-      <AnimatePresence mode="wait">
-        {showAbout ? (
-          <AboutSection key="abba-about" onBack={() => setShowAbout(false)} />
-        ) : (
+      {/* APPLE-STYLE FLUID NAV OVERLAY */}
+      <AnimatePresence>
+        {isMenuOpen && (
           <motion.div
-            key="abba-dashboard"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3 }}
-            className="flex-1 flex flex-col w-full"
+            className="fixed top-[71.5px] inset-x-0 bottom-0 bg-white/98 backdrop-blur-xl z-50 overflow-y-auto"
           >
-            {/* BODY CONTENT AREA */}
-            <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
+            <div className="max-w-7xl mx-auto w-full px-4 sm:px-6 md:px-8 py-8 md:py-10 text-left">
+              <div className="flex flex-col gap-3">
+                <button
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    setIsAboutLoading(true);
+                    window.scrollTo({ top: 0, behavior: 'instant' });
+                    setTimeout(() => {
+                      setIsAboutLoading(false);
+                      setActiveTab('about');
+                    }, 2500);
+                  }}
+                  className="text-left group cursor-pointer border-none bg-transparent p-0 focus:outline-none max-w-xl"
+                >
+                  <h3 className="font-display font-black text-2xl sm:text-3xl text-gray-900 group-hover:text-[#005ba4] transition-colors tracking-tight leading-tight">
+                    Saiba mais
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-2 font-medium leading-relaxed font-sans max-w-md font-semibold">
+                    Clique aqui para acessar a matéria completa sobre o Ábaco Brasileiro de Alfabetização Bilingue por José Décio de Alencar.
+                  </p>
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* BODY CONTENT AREA */}
+      <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
         
         <div className="text-left">
           <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
@@ -2016,20 +1657,10 @@ export default function App() {
                       ? 'opacity-30 scale-95 border-2 border-dashed border-gray-300 rounded-2xl' 
                       : 'active:scale-95 cursor-grab'
                   }`}
-                  onTouchStart={(e) => {
-                    if (e.cancelable) e.preventDefault();
-                  }}
-                  onTouchMove={(e) => {
-                    if (e.cancelable) e.preventDefault();
-                  }}
                   onPointerDown={(e) => {
                     e.preventDefault();
-                    try {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                    } catch (err) {}
                     if (isReorderCubesActive) {
                       setDraggedShelfIndex(cubeIdx);
-                      draggedShelfIndexRef.current = cubeIdx;
                       dragLastTimeRef.current = performance.now();
                       dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
                       dragVelocityRef.current = { x: 0, y: 0 };
@@ -2068,6 +1699,12 @@ export default function App() {
 
             {/* SINGLE BOARD CONTAINER (Original style matching the grey dashed card, growing internally) */}
             <motion.div 
+              layout
+              transition={{
+                type: "spring",
+                stiffness: 300,
+                damping: 30
+              }}
               ref={boardRef}
               className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5"
             >
@@ -2076,25 +1713,19 @@ export default function App() {
                 {spelledRows.map((row, rIdx) => {
                   const isActiveRow = activeRowIdx === rIdx;
                   const isLastRow = rIdx === spelledRows.length - 1;
-                  const rowKey = rowIds[rIdx] || `row-box-fallback-${rIdx}`;
 
                   return (
                     <motion.div
                       layout
-                      initial={{ opacity: 0, y: -15, scale: 0.96 }}
-                      animate={{ opacity: 1, y: 0, scale: 1 }}
-                      exit={{ 
-                        opacity: 0, 
-                        y: 15, 
-                        scale: 0.96,
-                        transition: { duration: 0.15 }
-                      }}
+                      initial={{ opacity: 0, scale: 0.98 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.98 }}
                       transition={{ 
                         type: "spring",
-                        stiffness: 450,
-                        damping: 32
+                        stiffness: 350,
+                        damping: 30
                       }}
-                      key={rowKey}
+                      key={`row-box-${rIdx}`}
                       onClick={() => setActiveRowIdx(rIdx)}
                       onPointerDown={(e) => {
                         // Do not trigger scrollbar activation on touch if tapping buttons (like scissors)
@@ -2158,102 +1789,84 @@ export default function App() {
                               }}
                             />
 
-                             {/* Top Option: Bookmark (ACTIVE when wires are shown / not hidden) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (rowActiveModes[rIdx] === 'save') {
-                                   handleOpenSaveModal(rIdx);
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'save'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 handleOpenSaveModal(rIdx);
-                                }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para salvar esta palavra"
-                             >
-                               <Bookmark 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'save' ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
+                            {/* Top Option: Bookmark (ACTIVE when wires are shown / not hidden) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowActiveModes(prev => ({
+                                  ...prev,
+                                  [rIdx]: prev[rIdx] === 'save' ? null : 'save'
+                                }));
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenSaveModal(rIdx);
+                              }}
+                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                              title="Clique uma vez para focar; 2 cliques rápidos para salvar no histórico!"
+                            >
+                              <Bookmark 
+                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                  rowActiveModes[rIdx] === 'save' ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
+                                }`} 
+                              />
+                            </button>
 
-                             {/* Middle Option: Scissors (ACTIVE when wires are hidden) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (rowActiveModes[rIdx] === 'scissors') {
-                                   setCutWiresRows(prev => ({
-                                     ...prev,
-                                     [rIdx]: !prev[rIdx]
-                                   }));
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'scissors'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 setCutWiresRows(prev => ({
-                                   ...prev,
-                                   [rIdx]: !prev[rIdx]
-                                 }));
-                                 setRowActiveModes(prev => ({
-                                   ...prev,
-                                   [rIdx]: 'scissors'
-                                 }));
-                               }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para cortar/mostrar conexões"
-                             >
-                               <Scissors 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'scissors' || cutWiresRows[rIdx] ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
+                            {/* Middle Option: Scissors (ACTIVE when wires are hidden) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowActiveModes(prev => ({
+                                  ...prev,
+                                  [rIdx]: prev[rIdx] === 'scissors' ? null : 'scissors'
+                                }));
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                setCutWiresRows(prev => ({
+                                  ...prev,
+                                  [rIdx]: !prev[rIdx]
+                                }));
+                                setRowActiveModes(prev => ({
+                                  ...prev,
+                                  [rIdx]: 'scissors'
+                                }));
+                              }}
+                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                              title="Clique uma vez para focar; 2 cliques rápidos para cortar/mostrar as linhas desta palavra"
+                            >
+                              <Scissors 
+                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                  rowActiveModes[rIdx] === 'scissors' || cutWiresRows[rIdx] ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
+                                }`} 
+                              />
+                            </button>
 
-                             {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (rowActiveModes[rIdx] === 'trash') {
-                                   handleDeleteRowWithHistory(rIdx);
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'trash'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 handleDeleteRowWithHistory(rIdx);
-                               }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra"
-                             >
-                               <Trash2 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
+                            {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setRowActiveModes(prev => ({
+                                  ...prev,
+                                  [rIdx]: prev[rIdx] === 'trash' ? null : 'trash'
+                                }));
+                              }}
+                              onDoubleClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteRowWithHistory(rIdx);
+                              }}
+                              className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                              title="Clique uma vez para focar; 2 cliques rápidos para excluir esta palavra"
+                            >
+                              <Trash2 
+                                className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                  rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
+                                }`} 
+                              />
+                            </button>
                           </div>
                         </div>
 
@@ -2302,192 +1915,140 @@ export default function App() {
                           </AnimatePresence>
 
                           <AnimatePresence mode="popLayout">
-                            {(() => {
-                              const elements: React.ReactNode[] = [];
-                              
-                              row.forEach((filledLetterObj, slotIdx) => {
-                                if (!filledLetterObj || !filledLetterObj.letter) return;
-                                
-                                const isHoveredRow = dragHoverInfo !== null && dragHoverInfo.rIdx === rIdx;
-                                const isBeingDragged = draggedTrayIndex && draggedTrayIndex.rIdx === rIdx && draggedTrayIndex.lIdx === slotIdx;
-                                const isBeingReplaced = isHoveredRow && dragHoverInfo!.type === 'replace' && dragHoverInfo!.index === slotIdx;
-                                
-                                const matchedCubeData: LetterCubeData = {
-                                  id: filledLetterObj.id,
-                                  primaryLetter: filledLetterObj.letter,
-                                  primaryOrdinal: filledLetterObj.originalOrdinal || `${slotIdx + 1}°`,
-                                };
-                                
-                                // Insert indicator before this item if matched
-                                if (isHoveredRow && dragHoverInfo!.type === 'insert' && dragHoverInfo!.index === slotIdx) {
-                                  elements.push(
+                            {row.length > 0 && (
+                              (() => {
+                                const renderedItems: React.ReactNode[] = [];
+                                row.forEach((filledLetterObj, slotIdx) => {
+                                  if (!filledLetterObj || !filledLetterObj.letter) return;
+ 
+                                  const isHoveredRow = dragHoverInfo !== null && dragHoverInfo.rIdx === rIdx;
+                                  const showInsertIndicatorBefore = isHoveredRow && dragHoverInfo!.type === 'insert' && dragHoverInfo!.index === slotIdx;
+                                  const showInsertIndicatorAfterLast = isHoveredRow && dragHoverInfo!.type === 'insert' && dragHoverInfo!.index === row.length && slotIdx === row.length - 1;
+ 
+                                  const matchedCubeData: LetterCubeData = {
+                                    id: filledLetterObj.id,
+                                    primaryLetter: filledLetterObj.letter,
+                                    primaryOrdinal: filledLetterObj.originalOrdinal || `${slotIdx + 1}°`,
+                                  };
+ 
+                                  const isBeingDragged = draggedTrayIndex && draggedTrayIndex.rIdx === rIdx && draggedTrayIndex.lIdx === slotIdx;
+                                  const isBeingReplaced = isHoveredRow && dragHoverInfo!.type === 'replace' && dragHoverInfo!.index === slotIdx;
+ 
+                                  if (showInsertIndicatorBefore) {
+                                    renderedItems.push(
+                                      <motion.div 
+                                        layout
+                                        key={`insert-indicator-before-${filledLetterObj.id}`}
+                                        initial={{ scaleY: 0, opacity: 0, width: 0 }}
+                                        animate={{ scaleY: 1, opacity: 1, width: "auto" }}
+                                        exit={{ scaleY: 0, opacity: 0, width: 0 }}
+                                        transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                                        className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      >
+                                        <motion.div 
+                                          initial={{ scaleY: 0, opacity: 0 }}
+                                          animate={{ scaleY: 1, opacity: 1 }}
+                                          exit={{ scaleY: 0, opacity: 0 }}
+                                          transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                                          className="absolute w-[3px] h-4/5 rounded-full shadow-lg border"
+                                          style={{ backgroundColor: getRowColor(rIdx), borderColor: getRowColor(rIdx) }}
+                                        />
+                                      </motion.div>
+                                    );
+                                  }
+ 
+                                  renderedItems.push(
                                     <motion.div 
                                       layout
-                                      key="row-insert-indicator"
-                                      initial={{ scaleY: 0, opacity: 0, width: 0 }}
-                                      animate={{ scaleY: 1, opacity: 1, width: "auto" }}
-                                      exit={{ 
-                                        scaleY: 0, 
-                                        opacity: 0, 
-                                        width: 0,
-                                        transition: { duration: 0.05 }
+                                      transition={{
+                                        type: "spring",
+                                        stiffness: 380,
+                                        damping: 32
                                       }}
-                                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      key={filledLetterObj.id}
+                                      id={filledLetterObj.id}
+                                      data-row-idx={rIdx}
+                                      data-slot-idx={slotIdx}
+                                      initial={{ opacity: 0, scale: 0.5, y: -15, rotate: 5 }}
+                                      animate={{ 
+                                        opacity: isBeingDragged ? 0.35 : 1, 
+                                        scale: isBeingReplaced ? 1.08 : (isBeingDragged ? 0.95 : 1), 
+                                        y: 0, 
+                                        rotate: 0,
+                                        boxShadow: isBeingReplaced ? "0px 10px 25px -5px rgba(0,0,0,0.15)" : "0px 2px 8px -3px rgba(0,0,0,0.05)"
+                                      }}
+                                      exit={{ 
+                                        opacity: 0, 
+                                        scale: 0.1, 
+                                        y: 35,
+                                        rotate: -12,
+                                        filter: "blur(4px)",
+                                        transition: { 
+                                          duration: 0.3, 
+                                          ease: [0.16, 1, 0.3, 1]
+                                        } 
+                                      }}
+                                      className={`relative z-20 min-w-[calc((100vw-6rem)/5)] w-[calc((100vw-6rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
+                                        isBeingReplaced 
+                                          ? 'ring-4 ring-offset-2' 
+                                          : ''
+                                      }`}
+                                      style={isBeingReplaced ? { ringColor: themeColor } as any : undefined}
+                                      onPointerDown={(e) => {
+                                        if (isBeingDragged) return;
+                                        e.preventDefault();
+                                        e.stopPropagation(); // Stop bubbling to prevent showing the scrollbar when grabbing a letter
+                                        setTrayDragStart({ 
+                                          index: slotIdx, 
+                                          x: e.clientX, 
+                                          y: e.clientY, 
+                                          letterObj: filledLetterObj, 
+                                          rowIdx: rIdx,
+                                          time: Date.now()
+                                        });
+                                      }}
                                     >
-                                      <motion.div 
-                                        initial={{ scaleY: 0, opacity: 0 }}
-                                        animate={{ scaleY: 1, opacity: 1 }}
-                                        exit={{ scaleY: 0, opacity: 0 }}
-                                        transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                        className="absolute w-[3px] h-4/5 rounded-full shadow-lg border"
-                                        style={{ 
-                                          backgroundColor: row.length > 0 ? (row[0].color || getRowColor(rIdx)) : getRowColor(rIdx), 
-                                          borderColor: row.length > 0 ? (row[0].color || getRowColor(rIdx)) : getRowColor(rIdx) 
-                                        }}
-                                      />
+                                      <motion.div
+                                        className="w-full h-full relative"
+                                        whileHover={isBeingDragged ? undefined : { scale: 1.05 }}
+                                      >
+                                        <LetterCube 
+                                          data={matchedCubeData}
+                                          variant="square"
+                                          interactive={false}
+                                          sizeClassName="w-full h-full"
+                                          themeColor={filledLetterObj.color || getRowColor(rIdx)}
+                                        />
+                                      </motion.div>
                                     </motion.div>
                                   );
-                                }
-                                
-                                elements.push(
-                                  <motion.div 
-                                     layout
-                                     transition={{
-                                       type: "spring",
-                                       stiffness: 550,
-                                       damping: 38
-                                     }}
-                                     key={filledLetterObj.id}
-                                     id={filledLetterObj.id}
-                                     data-row-idx={rIdx}
-                                     data-slot-idx={slotIdx}
-                                     initial={{ opacity: 0, scale: 1, y: 0, rotate: 0 }}
-                                     animate={{ 
-                                       opacity: isBeingDragged ? 0.35 : 1, 
-                                       scale: isBeingReplaced ? 1.08 : (isBeingDragged ? 0.95 : 1), 
-                                       y: 0, 
-                                       rotate: 0,
-                                       boxShadow: isBeingReplaced ? "0px 10px 25px -5px rgba(0,0,0,0.15)" : "0px 2px 8px -3px rgba(0,0,0,0.05)"
-                                     }}
-                                     exit={{ 
-                                       opacity: 0, 
-                                       scale: 0.8, 
-                                       transition: { 
-                                         duration: 0.01 
-                                       } 
-                                     }}
-                                    className={`relative z-20 min-w-[calc((100vw-6rem)/5)] w-[calc((100vw-6rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
-                                      isBeingReplaced 
-                                        ? 'ring-4 ring-offset-2' 
-                                        : ''
-                                    }`}
-                                    style={isBeingReplaced ? undefined : undefined}
-                                    onTouchStart={(e) => {
-                                      if (e.cancelable) e.preventDefault();
-                                    }}
-                                    onTouchMove={(e) => {
-                                      if (e.cancelable) e.preventDefault();
-                                    }}
-                                    onPointerDown={(e) => {
-                                      if (isBeingDragged) return;
-                                      e.preventDefault();
-                                      e.stopPropagation(); // Stop bubbling to prevent showing the scrollbar when grabbing a letter
-                                      try {
-                                        e.currentTarget.setPointerCapture(e.pointerId);
-                                      } catch (err) {}
-                                      setTrayDragStart({ 
-                                        index: slotIdx, 
-                                        x: e.clientX, 
-                                        y: e.clientY, 
-                                        letterObj: filledLetterObj, 
-                                        rowIdx: rIdx,
-                                        time: Date.now()
-                                      });
-                                    }}
-                                  >
-                                    <motion.div
-                                      className="w-full h-full relative"
-                                      whileHover={isBeingDragged ? undefined : { scale: 1.05 }}
-                                    >
-                                      <LetterCube 
-                                        data={matchedCubeData}
-                                        variant="square"
-                                        interactive={false}
-                                        sizeClassName="w-full h-full"
-                                        themeColor={filledLetterObj.color || getRowColor(rIdx)}
-                                      />
-                                    </motion.div>
-                                  </motion.div>
-                                );
-                                
-                                // Insert indicator after if it's the last item and matched
-                                if (isHoveredRow && dragHoverInfo!.type === 'insert' && dragHoverInfo!.index === slotIdx + 1 && slotIdx === row.length - 1) {
-                                  elements.push(
-                                    <motion.div 
-                                      layout
-                                      key="row-insert-indicator"
-                                      initial={{ scaleY: 0, opacity: 0, width: 0 }}
-                                      animate={{ scaleY: 1, opacity: 1, width: "auto" }}
-                                      exit={{ 
-                                        scaleY: 0, 
-                                        opacity: 0, 
-                                        width: 0,
-                                        transition: { duration: 0.05 }
-                                      }}
-                                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
-                                    >
+ 
+                                  if (showInsertIndicatorAfterLast) {
+                                    renderedItems.push(
                                       <motion.div 
-                                        initial={{ scaleY: 0, opacity: 0 }}
-                                        animate={{ scaleY: 1, opacity: 1 }}
-                                        exit={{ scaleY: 0, opacity: 0 }}
+                                        layout
+                                        key={`insert-indicator-after-last-${filledLetterObj.id}`}
+                                        initial={{ scaleY: 0, opacity: 0, width: 0 }}
+                                        animate={{ scaleY: 1, opacity: 1, width: "auto" }}
+                                        exit={{ scaleY: 0, opacity: 0, width: 0 }}
                                         transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                        className="absolute w-[3px] h-4/5 rounded-full shadow-lg border"
-                                        style={{ 
-                                          backgroundColor: row.length > 0 ? (row[0].color || getRowColor(rIdx)) : getRowColor(rIdx), 
-                                          borderColor: row.length > 0 ? (row[0].color || getRowColor(rIdx)) : getRowColor(rIdx) 
-                                        }}
-                                      />
-                                    </motion.div>
-                                  );
-                                }
-                              });
-                              
-                              // If row is completely empty, and dragHoverInfo is matched to insert
-                              if (row.length === 0) {
-                                const isHoveredRow = dragHoverInfo !== null && dragHoverInfo.rIdx === rIdx;
-                                if (isHoveredRow && dragHoverInfo!.type === 'insert') {
-                                  elements.push(
-                                    <motion.div 
-                                      layout
-                                      key="row-insert-indicator"
-                                      initial={{ scaleY: 0, opacity: 0, width: 0 }}
-                                      animate={{ scaleY: 1, opacity: 1, width: "auto" }}
-                                      exit={{ 
-                                        scaleY: 0, 
-                                        opacity: 0, 
-                                        width: 0,
-                                        transition: { duration: 0.05 }
-                                      }}
-                                      transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
-                                    >
-                                      <motion.div 
-                                        initial={{ scaleY: 0, opacity: 0 }}
-                                        animate={{ scaleY: 1, opacity: 1 }}
-                                        exit={{ scaleY: 0, opacity: 0 }}
-                                        transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                        className="absolute w-[3px] h-4/5 rounded-full shadow-lg border"
-                                        style={{ backgroundColor: getRowColor(rIdx), borderColor: getRowColor(rIdx) }}
-                                      />
-                                    </motion.div>
-                                  );
-                                }
-                              }
-                              
-                              return elements;
-                            })()}
+                                        className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      >
+                                        <motion.div 
+                                          initial={{ scaleY: 0, opacity: 0 }}
+                                          animate={{ scaleY: 1, opacity: 1 }}
+                                          exit={{ scaleY: 0, opacity: 0 }}
+                                          transition={{ type: "spring", stiffness: 450, damping: 25 }}
+                                          className="absolute w-[3px] h-4/5 rounded-full shadow-lg border"
+                                          style={{ backgroundColor: getRowColor(rIdx), borderColor: getRowColor(rIdx) }}
+                                        />
+                                      </motion.div>
+                                    );
+                                  }
+                                });
+                                return renderedItems;
+                              })()
+                            )}
                           </AnimatePresence>
                         </div>
                       </div>
@@ -2670,7 +2231,7 @@ export default function App() {
           if (isReorderCubesActive) return null;
 
           // Collect visible wires
-          const visibleWires: { letter: SpelledLetter; rIdx: number; lIdx: number }[] = [];
+          const visibleWires: { letter: any; rIdx: number; lIdx: number }[] = [];
           spelledRows.forEach((row, rIdx) => {
             if (cutWiresRows[rIdx]) return;
             row.forEach((letter, lIdx) => {
@@ -2719,48 +2280,36 @@ export default function App() {
             const endW = end.width ?? 66;
             const endH = end.height ?? 66;
 
-            // start is a 3D shelf cube (variant="cube"), adjust center and sizes
-            const startCenterX = start.x + 0.1244 * startW;
-            const startCenterY = start.y + 0.1244 * startH;
-            const startFaceW = 0.720 * startW;
-            const startFaceH = 0.720 * startH;
-
-            // end is a 2D board square (variant="square"), perfectly centered
-            const endCenterX = end.x;
-            const endCenterY = end.y;
-            const endFaceW = endW;
-            const endFaceH = endH;
-
-            const dx = endCenterX - startCenterX;
-            const dy = endCenterY - startCenterY;
+            const dx = end.x - start.x;
+            const dy = end.y - start.y;
             const dist = Math.hypot(dx, dy) || 1;
             const ux = dx / dist;
             const uy = dy / dist;
 
             // Base position on the cube boundary
-            let baseX = startCenterX + ux * (startFaceW / 2);
-            let baseY = startCenterY + uy * (startFaceH / 2);
+            let baseX = start.x + ux * (startW / 2);
+            let baseY = start.y + uy * (startH / 2);
             
             // Add spreading offset based on peers
             if (totalPeers > 1) {
                 // If it's mainly going downwards, spread horizontally
                 if (Math.abs(uy) > Math.abs(ux)) {
-                   const spreadSpan = startFaceW * 0.7; // use 70% of the front face width
+                   const spreadSpan = startW * 0.7; // use 70% of width
                    const offset = ((peerIndex / (totalPeers - 1)) - 0.5) * spreadSpan;
-                   baseX = startCenterX + offset;
-                   baseY = startCenterY + (Math.sign(uy) * startFaceH / 2);
+                   baseX = start.x + offset;
+                   baseY = start.y + (Math.sign(uy) * startH / 2);
                 } else {
-                   const spreadSpan = startFaceH * 0.7;
+                   const spreadSpan = startH * 0.7;
                    const offset = ((peerIndex / (totalPeers - 1)) - 0.5) * spreadSpan;
-                   baseX = startCenterX + (Math.sign(ux) * startFaceW / 2);
-                   baseY = startCenterY + offset;
+                   baseX = start.x + (Math.sign(ux) * startW / 2);
+                   baseY = start.y + offset;
                 }
             }
 
             const wireStartX = baseX;
             const wireStartY = baseY;
-            let wireEndX = endCenterX - ux * (endFaceW / 2);
-            let wireEndY = endCenterY - uy * (endFaceH / 2);
+            let wireEndX = end.x - ux * (endW / 2);
+            let wireEndY = end.y - uy * (endH / 2);
 
             if (clip) {
               const buffer = 18;
@@ -2803,7 +2352,6 @@ export default function App() {
                   stroke={currentWireColor}
                   className="stroke-[3px] opacity-10"
                   strokeLinecap="round"
-                  style={{ transition: 'stroke 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                 />
                 <path
                   d={pathData}
@@ -2813,10 +2361,9 @@ export default function App() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   opacity="0.85"
-                  style={{ transition: 'stroke 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                 />
-                <circle cx={wireStartX} cy={wireStartY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
-                <circle cx={wireEndX} cy={wireEndY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                <circle cx={wireStartX} cy={wireStartY} r="3" fill={currentWireColor} opacity="0.9" />
+                <circle cx={wireEndX} cy={wireEndY} r="3" fill={currentWireColor} opacity="0.9" />
               </g>
             );
           });
@@ -2837,27 +2384,14 @@ export default function App() {
             const endW = 66;
             const endH = 66;
 
-            const isStart3D = startKey.startsWith('cube-');
-            let startCenterX = start.x;
-            let startCenterY = start.y;
-            let startFaceW = startW;
-            let startFaceH = startH;
-
-            if (isStart3D) {
-              startCenterX = start.x + 0.1244 * startW;
-              startCenterY = start.y + 0.1244 * startH;
-              startFaceW = 0.720 * startW;
-              startFaceH = 0.720 * startH;
-            }
-
-            const dx = currentDragPageX - startCenterX;
-            const dy = currentDragPageY - startCenterY;
+            const dx = currentDragPageX - start.x;
+            const dy = currentDragPageY - start.y;
             const dist = Math.hypot(dx, dy) || 1;
             const ux = dx / dist;
             const uy = dy / dist;
 
-            const wireStartX = startCenterX + ux * (startFaceW / 2);
-            const wireStartY = startCenterY + uy * (startFaceH / 2);
+            const wireStartX = start.x + ux * (startW / 2);
+            const wireStartY = start.y + uy * (startH / 2);
             const wireEndX = currentDragPageX - ux * (endW / 2);
             const wireEndY = currentDragPageY - uy * (endH / 2);
 
@@ -2903,35 +2437,26 @@ export default function App() {
             const startX = startCubePos?.x ?? dragStartPosCenter.x;
             const startY = startCubePos?.y ?? dragStartPosCenter.y;
 
-            // startCubePos represents a 3D shelf cube
-            const startCenterX = startX + 0.1244 * startW;
-            const startCenterY = startY + 0.1244 * startH;
-            const startFaceW = 0.720 * startW;
-            const startFaceH = 0.720 * startH;
-
-            const dx = currentDragPageX - startCenterX;
-            const dy = currentDragPageY - startCenterY;
+            const dx = currentDragPageX - startX;
+            const dy = currentDragPageY - startY;
             const dist = Math.hypot(dx, dy) || 1;
             const ux = dx / dist;
             const uy = dy / dist;
 
-            const edgeStartX = startCenterX + ux * (startFaceW / 2);
-            const edgeStartY = startCenterY + uy * (startFaceH / 2);
+            const edgeStartX = startX + ux * (startW / 2);
+            const edgeStartY = startY + uy * (startH / 2);
             const edgeEndX = currentDragPageX - ux * (startW / 2);
             const edgeEndY = currentDragPageY - uy * (startH / 2);
 
             const dragMidY = edgeStartY + (edgeEndY - edgeStartY) * 0.45;
             const livePathData = `M ${edgeStartX} ${edgeStartY} C ${edgeStartX} ${dragMidY}, ${edgeEndX} ${edgeStartY + (edgeEndY - edgeStartY) * 0.55}, ${edgeEndX} ${edgeEndY}`;
 
-            // Adapte a cor do fio reativamente se pairado sobre uma linha com blocos
-            const wireColor = getDragPreviewColor();
-
             return (
               <g>
                 <path
                   d={livePathData}
                   fill="none"
-                  stroke={wireColor}
+                  stroke={themeColor}
                   strokeWidth="4"
                   strokeLinecap="round"
                   opacity="0.12"
@@ -2939,14 +2464,14 @@ export default function App() {
                 <path
                   d={livePathData}
                   fill="none"
-                  stroke={wireColor}
+                  stroke={themeColor}
                   strokeWidth="1.6"
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   opacity="0.9"
                 />
-                <circle cx={edgeStartX} cy={edgeStartY} r="3.5" fill={wireColor} />
-                <circle cx={edgeEndX} cy={edgeEndY} r="3.5" fill={wireColor} />
+                <circle cx={edgeStartX} cy={edgeStartY} r="3.5" fill={themeColor} />
+                <circle cx={edgeEndX} cy={edgeEndY} r="3.5" fill={themeColor} />
               </g>
             );
           })()
@@ -2985,7 +2510,7 @@ export default function App() {
                   variant="square"
                   interactive={false}
                   sizeClassName="w-full h-full text-red-650"
-                  themeColor={getDragPreviewColor()}
+                  themeColor={draggedBoardLetter.color || getRowColor(draggedTrayIndex.rIdx)}
                 />
                 {!isPointerInsideTray() && (
                   <div className="absolute inset-0 flex items-center justify-center bg-red-500/15 rounded-2xl border border-red-500/35 backdrop-blur-[1px] animate-pulse">
@@ -3002,7 +2527,7 @@ export default function App() {
                 variant="cube"
                 interactive={false}
                 sizeClassName="w-full h-full text-red-650"
-                themeColor={getDragPreviewColor()}
+                themeColor={themeColor}
               />
             ) : null}
           </div>
@@ -3345,74 +2870,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-          </motion.div>
-        )}
-      </AnimatePresence>
 
-      {/* Navigation Menu Overlay */}
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: -30 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -30 }}
-            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
-            className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col justify-between p-6 sm:p-10 select-none text-white bottom-0"
-          >
-            {/* Header of overlay */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <img src="/logo_favicon.svg" alt="ABBA Logo" className="w-10 h-10 brightness-0 invert" />
-                <div>
-                  <h1 className="font-display font-extrabold text-xl tracking-tight text-white">
-                    ABBA DIGITAL
-                  </h1>
-                  <p className="text-[10px] font-medium text-slate-400">Ábaco Brasileiro de Alfabetização Bilingue</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setIsMenuOpen(false)}
-                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white cursor-pointer"
-              >
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Menu items list */}
-            <div className="flex flex-col gap-6 my-auto max-w-md mx-auto w-full text-center">
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  setShowAbout(false);
-                  setIsMenuOpen(false);
-                }}
-                className="text-2xl sm:text-3xl font-display font-extrabold text-white hover:text-sky-400 transition-colors py-3 border-b border-white/10 cursor-pointer bg-transparent border-none outline-none"
-              >
-                Início / Dashboard
-              </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => {
-                  setShowAbout(true);
-                  setIsMenuOpen(false);
-                }}
-                className="text-2xl sm:text-3xl font-display font-extrabold text-white hover:text-sky-400 transition-colors py-3 border-b border-white/10 cursor-pointer bg-transparent border-none outline-none"
-              >
-                Artigo Científico & Sobre
-              </motion.button>
-            </div>
-
-            {/* Footer of overlay */}
-            <div className="text-center text-xs text-slate-500 mt-auto font-medium">
-              Desenvolvido por José Décio de Alencar © {new Date().getFullYear()} • Todos os direitos reservados.
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
     </div>
   );
