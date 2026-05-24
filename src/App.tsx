@@ -111,6 +111,7 @@ const Undo2: React.FC<SVGProps<SVGSVGElement>> = (props) => (
 import { ALPHABET_CUBES } from './data';
 import { LetterCube } from './components/LetterCube';
 import { SpelledLetter, LetterCubeData, SavedWord } from './types';
+import { AboutSection } from './components/AboutSection';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -120,6 +121,10 @@ const getShelfCubeIdForLetter = (letter: string): string => {
 export default function App() {
   // Ref for scrolling to the enter button on landing page
   const enterButtonRef = useRef<HTMLDivElement>(null);
+
+  // States for navigation menu overlay and about/scientific article section
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
 
   const handleScrollToButton = (e: MouseEvent<HTMLDivElement>) => {
     e.stopPropagation();
@@ -1932,11 +1937,38 @@ export default function App() {
             </div>
           </div>
 
+          {/* Hamburger menu button */}
+          <button
+            onClick={() => setIsMenuOpen(prev => !prev)}
+            className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all text-slate-700 cursor-pointer"
+            aria-label="Toggle menu"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              {isMenuOpen ? (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              ) : (
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              )}
+            </svg>
+          </button>
+
         </div>
       </header>
 
-      {/* BODY CONTENT AREA */}
-      <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
+      <AnimatePresence mode="wait">
+        {showAbout ? (
+          <AboutSection key="abba-about" onBack={() => setShowAbout(false)} />
+        ) : (
+          <motion.div
+            key="abba-dashboard"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className="flex-1 flex flex-col w-full"
+          >
+            {/* BODY CONTENT AREA */}
+            <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
         
         <div className="text-left">
           <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
@@ -3309,6 +3341,75 @@ export default function App() {
                 </>
               )}
             </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Navigation Menu Overlay */}
+      <AnimatePresence>
+        {isMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: -30 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -30 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+            className="fixed inset-0 z-50 bg-slate-950/95 backdrop-blur-xl flex flex-col justify-between p-6 sm:p-10 select-none text-white bottom-0"
+          >
+            {/* Header of overlay */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <img src="/logo_favicon.svg" alt="ABBA Logo" className="w-10 h-10 brightness-0 invert" />
+                <div>
+                  <h1 className="font-display font-extrabold text-xl tracking-tight text-white">
+                    ABBA DIGITAL
+                  </h1>
+                  <p className="text-[10px] font-medium text-slate-400">Ábaco Brasileiro de Alfabetização Bilingue</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsMenuOpen(false)}
+                className="p-2 rounded-xl bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white cursor-pointer"
+              >
+                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Menu items list */}
+            <div className="flex flex-col gap-6 my-auto max-w-md mx-auto w-full text-center">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setShowAbout(false);
+                  setIsMenuOpen(false);
+                }}
+                className="text-2xl sm:text-3xl font-display font-extrabold text-white hover:text-sky-400 transition-colors py-3 border-b border-white/10 cursor-pointer bg-transparent border-none outline-none"
+              >
+                Início / Dashboard
+              </motion.button>
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => {
+                  setShowAbout(true);
+                  setIsMenuOpen(false);
+                }}
+                className="text-2xl sm:text-3xl font-display font-extrabold text-white hover:text-sky-400 transition-colors py-3 border-b border-white/10 cursor-pointer bg-transparent border-none outline-none"
+              >
+                Artigo Científico & Sobre
+              </motion.button>
+            </div>
+
+            {/* Footer of overlay */}
+            <div className="text-center text-xs text-slate-500 mt-auto font-medium">
+              Desenvolvido por José Décio de Alencar © {new Date().getFullYear()} • Todos os direitos reservados.
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
