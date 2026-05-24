@@ -2931,10 +2931,14 @@ export default function App() {
               }
             }
 
-            const start = elementPositions[letter.originCubeId];
-            const end = elementPositions[letter.id];
+            // Get live coordinates directly from the DOM to ensure 100% lag-free tracking during slide animations!
+            const startEl = document.getElementById(`cube-${letter.originCubeId}`);
+            const endEl = document.getElementById(letter.id);
 
-            if (!start || !end) return null;
+            if (!startEl || !endEl) return null;
+
+            const startRect = startEl.getBoundingClientRect();
+            const endRect = endEl.getBoundingClientRect();
 
             const peers = originsMap[letter.originCubeId];
             const peerIndex = peers.indexOf(w);
@@ -2944,20 +2948,23 @@ export default function App() {
             const trayBounds = elementPositions['tray-bounds'];
 
             // Compute outside boundary connection coordinates
-            const startW = start.width ?? 66;
-            const startH = start.height ?? 66;
-            const endW = end.width ?? 66;
-            const endH = end.height ?? 66;
+            const startW = startRect.width;
+            const startH = startRect.height;
+            const endW = endRect.width;
+            const endH = endRect.height;
+
+            const startX = startRect.left + startW / 2 + window.scrollX;
+            const startY = startRect.top + startH / 2 + window.scrollY;
 
             // start is a 3D shelf cube (variant="cube"), adjust center and sizes
-            const startCenterX = start.x + 0.1244 * startW;
-            const startCenterY = start.y + 0.1244 * startH;
+            const startCenterX = startX + 0.1244 * startW;
+            const startCenterY = startY + 0.1244 * startH;
             const startFaceW = 0.720 * startW;
             const startFaceH = 0.720 * startH;
 
             // end is a 2D board square (variant="square"), perfectly centered
-            const endCenterX = end.x;
-            const endCenterY = end.y;
+            const endCenterX = endRect.left + endW / 2 + window.scrollX;
+            const endCenterY = endRect.top + endH / 2 + window.scrollY;
             const endFaceW = endW;
             const endFaceH = endH;
 
