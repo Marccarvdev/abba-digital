@@ -766,8 +766,73 @@ export default function App() {
   useEffect(() => { spelledRowsRef.current = spelledRows; }, [spelledRows]);
   useEffect(() => { themeColorRef.current = themeColor; }, [themeColor]);
 
-  // Keeping spelling rows neat & automatically manage empty rows based on drag state
+  // Keep spelling rows neat & automatically manage empty rows based on drag state
   const isCurrentlyDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
+
+  useEffect(() => {
+    if (isCurrentlyDragging) {
+      // 1. DRAGGING STATE: Expand board dynamically so the user has plenty of space below to drop blocks
+      let lastFilledRowIdx = -1;
+      spelledRows.forEach((row, idx) => {
+        if (row.length > 0) {
+          lastFilledRowIdx = idx;
+        }
+      });
+
+      // Ensure we have at least 9 rows in total, and at least 4 empty rows below the last filled row
+      const desiredLength = Math.max(9, lastFilledRowIdx + 5);
+      if (spelledRows.length < desiredLength) {
+        setSpelledRows(prev => {
+          const copy = prev.map(r => [...r]);
+          while (copy.length < desiredLength) {
+            copy.push([]);
+          }
+          return copy;
+        });
+      }
+    } else {
+      // 2. IDLE STATE: Clean up trailing empty rows, but preserve intermediate empty rows to prevent layout shifting!
+      let lastFilledRowIdx = -1;
+      spelledRows.forEach((row, idx) => {
+        if (row.length > 0) {
+          lastFilledRowIdx = idx;
+        }
+      });
+
+      // We want to keep all rows up to lastFilledRowIdx, plus at least 4 empty rows, with a minimum of 6 rows in total
+      const targetLength = Math.max(6, lastFilledRowIdx + 4);
+      
+      if (spelledRows.length !== targetLength) {
+        setSpelledRows(prev => {
+          const copy = prev.map(r => [...r]);
+          if (copy.length > targetLength) {
+            return copy.slice(0, targetLength);
+          } else {
+            while (copy.length < targetLength) {
+              copy.push([]);
+            }
+            return copy;
+          }
+        });
+      }
+    }
+  }, [spelledRows, isCurrentlyDragging]);
+
+  // Synchronize rowIds with spelledRows length for dynamic padding/trimming
+  useEffect(() => {
+    setRowIds(prev => {
+      if (prev.length === spelledRows.length) return prev;
+      if (spelledRows.length > prev.length) {
+        const next = [...prev];
+        while (next.length < spelledRows.length) {
+          next.push('row-' + Math.random().toString(36).substring(2, 11));
+        }
+        return next;
+      } else {
+        return prev.slice(0, spelledRows.length);
+      }
+    });
+  }, [spelledRows.length]);
 
   // Double tap handler refs
   const lastClicksRef = useRef<Record<string, number>>({});
@@ -915,11 +980,10 @@ export default function App() {
 
   // Continuous smooth hardware-accelerated auto-scrolling loop during active drag-and-drop
   useEffect(() => {
-    const isDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null || draggedBoardLetter !== null;
+    const isDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
     if (!isDragging) return;
 
     let animFrameId: number;
-    let isAdding = false; // Safety flag to prevent duplicate state updates during animation frames
 
     const tick = () => {
       const eX = dragLastMouseRef.current.x;
@@ -929,45 +993,36 @@ export default function App() {
         return;
       }
 
-      // 1. Scroll the Board container vertically if dragging inside/near the board
+      // 1. Scroll the Board container vertically if dragging inside the board
       if (boardRef.current) {
         const boardRect = boardRef.current.getBoundingClientRect();
-        // Check horizontal bounds with an extremely generous 400px safety margin
-        if (eX >= boardRect.left - 400 && eX <= boardRect.right + 400) {
-          const bottomThreshold = boardRect.bottom - 110;
-          const topThreshold = boardRect.top + 110;
+        // Check horizontal bounds with 35px safety margin
+        if (eX >= boardRect.left - 35 && eX <= boardRect.right + 35) {
+          const bottomThreshold = boardRect.bottom - 75;
+          const topThreshold = boardRect.top + 75;
 
-          if (eY > bottomThreshold) {
-            // Smoothly calculate scroll intensity based on proximity to bottom, without vertical cap
-            const intensity = Math.min(24, Math.max(4, (eY - bottomThreshold) / 2));
+          if (eY > bottomThreshold && eY < boardRect.bottom + 50) {
+            // Smoothly calculate scroll intensity based on proximity to bottom
+            const intensity = Math.min(16, Math.max(2, (eY - bottomThreshold) / 3));
             boardRef.current.scrollBy({ top: intensity });
-
-            // Check if we are near the bottom of the scroll container to load 3 more empty drop areas
-            const el = boardRef.current;
-            const remainingScroll = el.scrollHeight - el.scrollTop - el.clientHeight;
-            if (remainingScroll < 120 && !isAdding) {
-              isAdding = true;
-              setSpelledRows(prev => [...prev, [], [], []]);
-              setRowIds(prev => [
-                ...prev,
-                'row-dyn-' + Math.random().toString(36).substring(2, 11),
-                'row-dyn-' + Math.random().toString(36).substring(2, 11),
-                'row-dyn-' + Math.random().toString(36).substring(2, 11)
-              ]);
-              setTimeout(() => {
-                isAdding = false;
-              }, 300);
-            }
-          } else if (eY < topThreshold) {
-            // Smoothly calculate scroll intensity based on proximity to top, without vertical cap
-            const intensity = Math.min(24, Math.max(4, (topThreshold - eY) / 2));
+          } else if (eY < topThreshold && eY > boardRect.top - 50) {
+            // Smoothly calculate scroll intensity based on proximity to top
+            const intensity = Math.min(16, Math.max(2, (topThreshold - eY) / 3));
             boardRef.current.scrollBy({ top: -intensity });
           }
         }
       }
 
-      // 2. Scroll the Window page vertically is completely disabled to keep the outer layout 100% stable:
-      // "o container não devia se mexer por fora, por dentro ele deve correr livremente e fluidamente"
+      // 2. Scroll the Window page vertically if dragging near viewport edges
+      const winHeight = window.innerHeight;
+      const winThreshold = 140;
+      if (eY < winThreshold) {
+        const winIntensity = Math.min(20, Math.max(3, (winThreshold - eY) / 2.5));
+        window.scrollBy({ top: -winIntensity });
+      } else if (eY > winHeight - winThreshold) {
+        const winIntensity = Math.min(20, Math.max(3, (eY - (winHeight - winThreshold)) / 2.5));
+        window.scrollBy({ top: winIntensity });
+      }
 
       animFrameId = requestAnimationFrame(tick);
     };
@@ -976,7 +1031,7 @@ export default function App() {
     return () => {
       cancelAnimationFrame(animFrameId);
     };
-  }, [draggedCube, draggedTrayIndex, draggedShelfIndex, draggedBoardLetter]);
+  }, [draggedCube, draggedTrayIndex, draggedShelfIndex]);
 
   // Siga fluidamente e instantaneamente o último bloco adicionado
   useEffect(() => {
@@ -2617,14 +2672,14 @@ export default function App() {
             {/* SINGLE BOARD CONTAINER (Original style matching the grey dashed card, growing internally) */}
             <motion.div 
               ref={boardRef}
-              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5 max-h-[580px] overflow-y-auto no-scrollbar"
+              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5 max-h-[460px] overflow-y-auto md:max-h-none"
             >
+              
               <AnimatePresence mode="popLayout">
                 {spelledRows.map((row, rIdx) => {
                   const isActiveRow = activeRowIdx === rIdx;
                   const isLastRow = rIdx === spelledRows.length - 1;
                   const rowKey = rowIds[rIdx] || `row-box-fallback-${rIdx}`;
-                  const hasRowBlocks = row.length > 0;
 
                   return (
                     <motion.div
@@ -2677,7 +2732,7 @@ export default function App() {
                           : 'hover:bg-white/30'
                       }`}
                     >
-                      <div className="w-full flex items-center gap-3 relative">
+                      <div className="w-full flex items-center gap-3">
                         {/* Row Left Controls (Pill Capsule Toggle: Save/Bookmark vs Scissors vs Trash) */}
                         <div className="flex flex-col gap-2 shrink-0">
                           <div 
@@ -2776,40 +2831,37 @@ export default function App() {
 
                              {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
                              <button
-                                type="button"
-                                disabled={!hasRowBlocks}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (rowActiveModes[rIdx] === 'trash') {
-                                    handleDeleteRowWithHistory(rIdx);
-                                  } else {
-                                    setRowActiveModes(prev => ({
-                                      ...prev,
-                                      [rIdx]: 'trash'
-                                    }));
-                                  }
-                                }}
-                                onDoubleClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteRowWithHistory(rIdx);
-                                }}
-                                style={{ touchAction: 'manipulation' }}
-                                className={`z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full focus:outline-none transition-all ${
-                                  hasRowBlocks
-                                    ? 'cursor-pointer hover:scale-105 active:scale-95'
-                                    : 'cursor-not-allowed opacity-40'
-                                }`}
-                                title={hasRowBlocks ? "Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra" : "Nenhum bloco nesta linha"}
-                              >
-                                <Trash2 
-                                  className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                    rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
-                                  }`} 
-                                />
-                              </button>
+                               type="button"
+                               onClick={(e) => {
+                                 e.stopPropagation();
+                                 if (rowActiveModes[rIdx] === 'trash') {
+                                   handleDeleteRowWithHistory(rIdx);
+                                 } else {
+                                   setRowActiveModes(prev => ({
+                                     ...prev,
+                                     [rIdx]: 'trash'
+                                   }));
+                                 }
+                               }}
+                               onDoubleClick={(e) => {
+                                 e.stopPropagation();
+                                 handleDeleteRowWithHistory(rIdx);
+                               }}
+                               style={{ touchAction: 'manipulation' }}
+                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
+                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra"
+                             >
+                               <Trash2 
+                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                   rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
+                                 }`} 
+                               />
+                             </button>
                           </div>
                         </div>
 
+                        
+                        
                         {/* Horizontal Scroller Container */}
                         <div 
                           id={`row-scroll-${rIdx}`}
@@ -2837,9 +2889,23 @@ export default function App() {
 
                             updateElementPositions();
                           }}
-                          // COLE ISSO NO LUGAR:
                           className="spelling-scroll-container w-full h-[calc((100vw-6rem)/5+8px)] min-h-[calc((100vw-6rem)/5+8px)] max-h-[calc((100vw-6rem)/5+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-1 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
+                          <AnimatePresence>
+                            {row.length === 0 && isLastRow && (
+                              <motion.div 
+                                key={`placeholder-tip-${rIdx}`}
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                transition={{ duration: 0.1, ease: "easeOut" }}
+                                className="absolute inset-0 text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center select-none pointer-events-none z-10"
+                              >
+                                <span>arraste e solte aqui</span>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+
                           <AnimatePresence mode="popLayout">
                             {(() => {
                               const elements: React.ReactNode[] = [];
@@ -3031,22 +3097,6 @@ export default function App() {
                             })()}
                           </AnimatePresence>
                         </div>
-
-                        {/* Completely static, absolute overlay for the placeholder tip, aligned to the right side where the scroll container resides */}
-                        <AnimatePresence>
-                          {row.length === 0 && (
-                            <motion.div 
-                              key={`placeholder-tip-${rIdx}`}
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              transition={{ duration: 0.1, ease: "easeOut" }}
-                              className="absolute right-0 top-0 left-[52px] bottom-0 text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center select-none pointer-events-none z-10"
-                            >
-                              <span>arraste e solte aqui</span>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
                       </div>
                         {/* Small modern custom scrollbar for mobile and desktop views */}
                       {rowOverflows[rIdx] && (
@@ -3206,15 +3256,9 @@ export default function App() {
                 </button>
 
                 <button
-                  type="button"
                   onClick={handleClearAllRows}
-                  disabled={!hasAnyBlocks}
-                  className={`p-2 sm:p-2.5 border rounded-xl transition-all shadow-2xs ${
-                    hasAnyBlocks
-                      ? 'bg-white hover:bg-red-50 border-red-200 hover:border-red-300 text-red-500 cursor-pointer active:scale-95'
-                      : 'bg-gray-50 border-gray-150 text-gray-300 cursor-not-allowed opacity-50'
-                  }`}
-                  title={hasAnyBlocks ? "Limpar todas as palavras do tabuleiro" : "Nenhum bloco para limpar"}
+                  className="p-2 sm:p-2.5 bg-white hover:bg-red-50 border border-red-200 hover:border-red-300 text-red-500 rounded-xl transition-all cursor-pointer shadow-2xs animate-feed"
+                  title="Limpar todas as palavras do tabuleiro"
                 >
                   <Trash2 className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                 </button>
