@@ -194,10 +194,18 @@ export default function App() {
   });
 
   const [currentScreen, setCurrentScreen] = useState<'login' | 'signup' | 'student-dashboard' | 'teacher-dashboard' | 'abacus'>(() => {
+    // 1. Check URL hash first
+    const hash = window.location.hash.replace('#/', '').replace('#', '');
+    if (hash === 'login') return 'login';
+    if (hash === 'professor') return 'teacher-dashboard';
+    if (hash === 'aluno') return 'student-dashboard';
+    
+    // 2. Check query params
     const params = new URLSearchParams(window.location.search);
     if (params.has('import')) {
       return 'teacher-dashboard';
     }
+    // 3. Check saved session
     const saved = localStorage.getItem('abba_logged_in_user');
     if (saved) {
       try {
@@ -236,6 +244,39 @@ export default function App() {
     rowIds: string[];
     cutWiresRows: Record<number, boolean>;
   } | null>(null);
+
+  // Sync URL hash with current screen
+  useEffect(() => {
+    const screenToHash: Record<string, string> = {
+      'login': 'login',
+      'signup': 'login',
+      'teacher-dashboard': 'professor',
+      'student-dashboard': 'aluno',
+      'abacus': '',
+    };
+    const newHash = screenToHash[currentScreen] || '';
+    const currentHash = window.location.hash.replace('#/', '').replace('#', '');
+    if (newHash !== currentHash) {
+      if (newHash) {
+        window.history.replaceState(null, '', `#/${newHash}`);
+      } else {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+  }, [currentScreen]);
+
+  // Listen for browser back/forward hash changes
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#/', '').replace('#', '');
+      if (hash === 'login') setCurrentScreen('login');
+      else if (hash === 'professor') setCurrentScreen('teacher-dashboard');
+      else if (hash === 'aluno') setCurrentScreen('student-dashboard');
+      else setCurrentScreen('abacus');
+    };
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('abba_completed_spelled_words', JSON.stringify(completedSpelledWords));
