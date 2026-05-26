@@ -171,6 +171,7 @@ const INITIAL_SUBMISSIONS: StudentSubmission[] = [
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [students, setStudents] = useState<any[]>(() => {
     const local = localStorage.getItem('abba_students_list');
     return local ? JSON.parse(local) : INITIAL_STUDENTS;
@@ -1347,20 +1348,38 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   return (
     <div className="min-h-screen bg-surface text-on-background flex flex-col font-sans">
       
+      {/* SideNavBar Backdrop for mobile */}
+      {mobileSidebarOpen && (
+        <div 
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 z-50 lg:hidden"
+        />
+      )}
+      
       {/* Side Navigation Bar */}
-      <aside className="fixed left-0 top-0 bottom-0 flex flex-col p-md z-40 bg-surface-container-low border-r border-outline-variant h-screen w-64">
-        <div className="flex items-center gap-sm mb-xl px-sm">
-          <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
-          <div>
-            <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
-            <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+      <aside className={`fixed left-0 top-0 bottom-0 flex flex-col p-md z-50 h-screen w-64 bg-surface-container-low border-r border-outline-variant transition-transform duration-300 ${
+        mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0`}>
+        <div className="flex items-center gap-sm mb-xl px-sm justify-between">
+          <div className="flex items-center gap-sm">
+            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
+            <div>
+              <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
+              <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+            </div>
           </div>
+          <button 
+            onClick={() => setMobileSidebarOpen(false)}
+            className="lg:hidden p-1 rounded-full hover:bg-surface-container-high border-none bg-transparent cursor-pointer flex items-center justify-center"
+          >
+            <span className="material-symbols-outlined text-slate-500">close</span>
+          </button>
         </div>
         
         <nav className="flex-1 space-y-xs">
           <button
-            onClick={() => { setActiveTab('home'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+            onClick={() => { setMobileSidebarOpen(false); setActiveTab('home'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
               activeTab === 'home'
                 ? 'bg-primary-container text-on-primary-container font-bold'
                 : 'text-on-surface-variant hover:bg-surface-container-high'
@@ -1370,8 +1389,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
           </button>
           
           <button
-            onClick={() => { setActiveTab('students'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+            onClick={() => { setMobileSidebarOpen(false); setActiveTab('students'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
               activeTab === 'students'
                 ? 'bg-primary-container text-on-primary-container font-bold'
                 : 'text-on-surface-variant hover:bg-surface-container-high'
@@ -1381,8 +1400,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
           </button>
 
           <button
-            onClick={() => { setActiveTab('tasks'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+            onClick={() => { setMobileSidebarOpen(false); setActiveTab('tasks'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
               activeTab === 'tasks'
                 ? 'bg-primary-container text-on-primary-container font-bold'
                 : 'text-on-surface-variant hover:bg-surface-container-high'
@@ -1392,8 +1411,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
           </button>
 
           <button
-            onClick={() => { setActiveTab('access'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+            onClick={() => { setMobileSidebarOpen(false); setActiveTab('access'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
               activeTab === 'access'
                 ? 'bg-primary-container text-on-primary-container font-bold'
                 : 'text-on-surface-variant hover:bg-surface-container-high'
@@ -1406,14 +1425,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         <div className="mt-auto space-y-xs">
           <button
             onClick={() => alert('Para obter ajuda, entre em contato em suporte@abbadigital.com')}
-            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer"
+            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-transparent"
           >
             <span className="material-symbols-outlined">help</span>
             Ajuda
           </button>
           <button 
             onClick={onLogout}
-            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer"
+            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-transparent"
           >
             <span className="material-symbols-outlined">logout</span>
             Sair
@@ -1422,11 +1441,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       </aside>
 
       {/* Main Content Area */}
-      <main className="ml-64 min-h-screen flex flex-col">
+      <main className="lg:ml-64 min-h-screen flex flex-col w-full overflow-x-hidden">
         {/* Top App Bar - Identical to Student Dashboard */}
         <header className="flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-surface/80 backdrop-blur-md h-16 border-b border-outline-variant">
           <div className="flex items-center gap-md flex-1">
-            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold md:block hidden">Área do Professor</h2>
+            <button 
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 border-none bg-transparent cursor-pointer flex items-center justify-center mr-2"
+              aria-label="Open sidebar"
+            >
+              <span className="material-symbols-outlined text-slate-800">menu</span>
+            </button>
+            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold">Área do Professor</h2>
             {activeTab === 'students' && (
               <div className="flex items-center gap-2 ml-4">
                 <button 

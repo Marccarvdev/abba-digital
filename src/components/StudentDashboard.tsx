@@ -82,6 +82,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [filterLanguage, setFilterLanguage] = useState<'all' | 'pt' | 'en' | 'de'>('all');
   const [showShareModal, setShowShareModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const [showSpellingLoader, setShowSpellingLoader] = useState(false);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
@@ -723,18 +724,37 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   return (
     <div className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans">
       
+      {/* SideNavBar Backdrop for mobile */}
+      {mobileSidebarOpen && (
+        <div 
+          onClick={() => setMobileSidebarOpen(false)}
+          className="fixed inset-0 bg-black/40 z-50 lg:hidden"
+        />
+      )}
+      
       {/* SideNavBar */}
-      <aside className="fixed left-0 top-0 bottom-0 flex flex-col p-md z-40 h-screen w-64 bg-surface-container-low border-r border-outline-variant">
-        <div className="flex items-center gap-sm mb-xl px-sm">
-          <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
-          <div>
-            <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
-            <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+      <aside className={`fixed left-0 top-0 bottom-0 flex flex-col p-md z-50 h-screen w-64 bg-surface-container-low border-r border-outline-variant transition-transform duration-300 ${
+        mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+      } lg:translate-x-0`}>
+        <div className="flex items-center gap-sm mb-xl px-sm justify-between">
+          <div className="flex items-center gap-sm">
+            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
+            <div>
+              <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
+              <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+            </div>
           </div>
+          <button 
+            onClick={() => setMobileSidebarOpen(false)}
+            className="lg:hidden p-1 rounded-full hover:bg-surface-container-high border-none bg-transparent cursor-pointer flex items-center justify-center"
+          >
+            <span className="material-symbols-outlined text-slate-500">close</span>
+          </button>
         </div>
         <nav className="flex-grow flex flex-col gap-xs">
           <button
             onClick={() => {
+              setMobileSidebarOpen(false);
               setShowSpellingLoader(true);
               setTimeout(() => {
                 setShowSpellingLoader(false);
@@ -749,7 +769,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </button>
           
           <button
-            onClick={() => setStudentView('tasks-list')}
+            onClick={() => {
+              setMobileSidebarOpen(false);
+              setStudentView('tasks-list');
+            }}
             className={`flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-primary-container text-on-primary-container font-bold shadow-sm`}
           >
             <span className="material-symbols-outlined">assignment</span> Tarefas
@@ -773,11 +796,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </aside>
 
       {/* Main Content Shell */}
-      <div className="ml-64 flex flex-col min-h-screen">
+      <div className="lg:ml-64 flex flex-col min-h-screen w-full overflow-x-hidden">
         {/* TopAppBar */}
         <header className="flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-surface/80 backdrop-blur-md h-16 border-b border-outline-variant">
           <div className="flex items-center gap-md flex-1">
-            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold md:block hidden">Área do Aluno</h2>
+            <button 
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 border-none bg-transparent cursor-pointer flex items-center justify-center mr-2"
+              aria-label="Open sidebar"
+            >
+              <span className="material-symbols-outlined text-slate-800">menu</span>
+            </button>
+            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold">Área do Aluno</h2>
           </div>
           
           <div className="flex items-center gap-md relative">
