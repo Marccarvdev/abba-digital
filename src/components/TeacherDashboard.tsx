@@ -759,40 +759,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     }
   }, [editingTask]);
 
-  // Lock body scroll when any modal is open
+  // Ensure body scroll is unlocked when dashboard mounts
   useEffect(() => {
-    const isAnyModalOpen = !!(
-      isAddStudentOpen ||
-      isAssigningStudentsDetails ||
-      editingTask ||
-      assignedStudentsResult ||
-      isAddTaskOpen ||
-      isDuplicateModalOpen ||
-      isBatchAssignModalOpen ||
-      isSaveModalOpen ||
-      isDeleteModalOpen
-    );
-
-    if (isAnyModalOpen) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-
+    document.body.style.overflow = '';
     return () => {
       document.body.style.overflow = '';
     };
-  }, [
-    isAddStudentOpen,
-    isAssigningStudentsDetails,
-    editingTask,
-    assignedStudentsResult,
-    isAddTaskOpen,
-    isDuplicateModalOpen,
-    isBatchAssignModalOpen,
-    isSaveModalOpen,
-    isDeleteModalOpen
-  ]);
+  }, []);
 
   // Stateful Bento Grid & Details parameters
   const [tasksFilter, setTasksFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
