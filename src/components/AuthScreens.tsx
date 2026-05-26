@@ -18,6 +18,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [accessCode, setAccessCode] = useState('');
+  const [studentEmailInput, setStudentEmailInput] = useState('');
   const [alphanumericCode, setAlphanumericCode] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -45,6 +46,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       setActiveTab('code');
     }
   }, [isOnline]);
+
+  // Pre-fill access code from URL parameters (join/code)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinParam = params.get('join') || params.get('code');
+    if (joinParam) {
+      const cleanParam = joinParam.trim().toUpperCase().replace('ABBA-', '');
+      const registryKey = 'abba_invite_codes_registry';
+      let matchedRecord = null;
+      try {
+        const localRegistry = localStorage.getItem(registryKey);
+        const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+        matchedRecord = registryList.find((item: any) => item.code === cleanParam);
+      } catch (err) {
+        console.error('Error looking up code registry:', err);
+      }
+
+      if (matchedRecord) {
+        setAccessCode(matchedRecord.code);
+        setActiveTab('code');
+      } else {
+        setAccessCode(joinParam);
+        setActiveTab('code');
+      }
+    }
+  }, []);
 
   // Check active Supabase session on mount (handles OAuth redirect success)
   useEffect(() => {
@@ -127,7 +154,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     }
   };
 
-  const handleCodeLogin = (e: React.FormEvent) => {
+  const handleCodeLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
     setSuccessMsg(null);
@@ -137,9 +164,120 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       return;
     }
 
-    const trimmedCode = accessCode.trim();
+    const trimmedCode = accessCode.trim().toUpperCase();
+    const cleanCode = trimmedCode.replace('ABBA-', '');
+
+    // 1. Validate student email input (must be Gmail or Outlook format)
+    if (!studentEmailInput.trim()) {
+      setErrorMsg('Por favor, informe seu e-mail (Gmail ou Outlook) para acessar.');
+      return;
+    }
+    const emailLower = studentEmailInput.trim().toLowerCase();
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@(?:gmail|outlook)\.com$/;
+    if (!emailRegex.test(emailLower)) {
+      setErrorMsg('E-mail inválido. O e-mail deve ser do formato @gmail.com ou @outlook.com.');
+      return;
+    }
+
+    // 2. First, check if this matches our 6-char alphanumeric registry!
+    const registryKey = 'abba_invite_codes_registry';
+    let matchedRecord = null;
+    try {
+      const localRegistry = localStorage.getItem(registryKey);
+      const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+      matchedRecord = registryList.find((item: any) => item.code === cleanCode);
+    } catch (err) {
+      console.error('Error looking up registry code:', err);
+    }
+
+    if (matchedRecord) {
+      if (Date.now() > matchedRecord.expiresAt) {
+        setErrorMsg('Este código de acesso expirou. Solicite um novo ao professor.');
+        return;
+      }
+
+      // Update or add student record in abba_students_list
+      try {
+        const studentListLocal = localStorage.getItem('abba_students_list');
+        const studentsList = studentListLocal ? JSON.parse(studentListLocal) : [];
+        const index = studentsList.findIndex((s: any) => s.id === matchedRecord.codeId || s.name.toLowerCase() === matchedRecord.name.toLowerCase());
+        if (index !== -1) {
+          studentsList[index].email = emailLower;
+          studentsList[index].lastAccessAt = new Date().toISOString();
+          studentsList[index].loginMethod = 'code';
+          localStorage.setItem('abba_students_list', JSON.stringify(studentsList));
+        } else {
+          const newStudent = {
+            id: matchedRecord.codeId || `st-${Date.now()}`,
+            name: matchedRecord.name,
+            class: "Turma A - 3º Ano",
+            img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+            progress: 0,
+            matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+            gender: 'M',
+            email: emailLower,
+            lastAccessAt: new Date().toISOString(),
+            loginMethod: 'code'
+          };
+          studentsList.push(newStudent);
+          localStorage.setItem('abba_students_list', JSON.stringify(studentsList));
+        }
+      } catch (err) {
+        console.error('Error updating student list in login:', err);
+      }
+
+      const studentUser: User = {
+        name: matchedRecord.name,
+        email: emailLower,
+        role: 'student',
+        codeSession: {
+          code: matchedRecord.code,
+          expiresAt: matchedRecord.expiresAt,
+          codeId: matchedRecord.codeId
+        }
+      };
+
+      // Record access in localStorage for Teacher's dashboard to see!
+      const accessRecord = {
+        id: matchedRecord.codeId || `st-${Date.now()}`,
+        studentName: matchedRecord.name,
+        accessedAt: new Date().toISOString(),
+        code: matchedRecord.code
+      };
+      try {
+        const local = localStorage.getItem('abba_students_logged_by_code');
+        const list = local ? JSON.parse(local) : [];
+        const filtered = list.filter((item: any) => item.studentName.toLowerCase() !== matchedRecord.name.toLowerCase());
+        localStorage.setItem('abba_students_logged_by_code', JSON.stringify([accessRecord, ...filtered]));
+      } catch (err) {
+        console.error(err);
+      }
+
+      // Supabase database capture integration
+      try {
+        await supabase.from('student_logins').insert([
+          {
+            student_name: matchedRecord.name,
+            student_email: emailLower,
+            access_code: matchedRecord.code,
+            logged_at: new Date().toISOString(),
+            login_method: 'code'
+          }
+        ]);
+      } catch (dbErr) {
+        console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
+      }
+
+      setSuccessMsg(`Bem-vindo, ${matchedRecord.name}! Carregando atividades...`);
+      setTimeout(() => {
+        onLoginSuccess(studentUser);
+      }, 1000);
+      return;
+    }
+
+    // 2. Legacy Base64 fallback (must start with ABBA-)
     if (!trimmedCode.startsWith('ABBA-')) {
-      setErrorMsg('Formato de código inválido. Deve começar com "ABBA-".');
+      setErrorMsg('Código de acesso inválido. Verifique o código e tente novamente.');
       return;
     }
 
@@ -159,6 +297,36 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         return;
       }
 
+      // Update or add student record in abba_students_list
+      try {
+        const studentListLocal = localStorage.getItem('abba_students_list');
+        const studentsList = studentListLocal ? JSON.parse(studentListLocal) : [];
+        const index = studentsList.findIndex((s: any) => s.id === sessionData.codeId || s.name.toLowerCase() === sessionData.name.toLowerCase());
+        if (index !== -1) {
+          studentsList[index].email = `student-${sessionData.codeId}@abba.com`;
+          studentsList[index].lastAccessAt = new Date().toISOString();
+          studentsList[index].loginMethod = 'link';
+          localStorage.setItem('abba_students_list', JSON.stringify(studentsList));
+        } else {
+          const newStudent = {
+            id: sessionData.codeId,
+            name: sessionData.name,
+            class: "Turma A - 3º Ano",
+            img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+            progress: 0,
+            matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+            gender: 'M',
+            email: `student-${sessionData.codeId}@abba.com`,
+            lastAccessAt: new Date().toISOString(),
+            loginMethod: 'link'
+          };
+          studentsList.push(newStudent);
+          localStorage.setItem('abba_students_list', JSON.stringify(studentsList));
+        }
+      } catch (err) {
+        console.error('Error updating student list in login:', err);
+      }
+
       // Active session successful
       const studentUser: User = {
         name: sessionData.name,
@@ -170,6 +338,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
           codeId: sessionData.codeId
         }
       };
+
+      // Record access in localStorage for Teacher's dashboard to see!
+      const accessRecord = {
+        id: sessionData.codeId,
+        studentName: sessionData.name,
+        accessedAt: new Date().toISOString(),
+        code: trimmedCode
+      };
+      try {
+        const local = localStorage.getItem('abba_students_logged_by_code');
+        const list = local ? JSON.parse(local) : [];
+        const filtered = list.filter((item: any) => item.studentName.toLowerCase() !== sessionData.name.toLowerCase());
+        localStorage.setItem('abba_students_logged_by_code', JSON.stringify([accessRecord, ...filtered]));
+      } catch (err) {
+        console.error(err);
+      }
+
+      // Supabase database capture integration
+      try {
+        await supabase.from('student_logins').insert([
+          {
+            student_name: sessionData.name,
+            student_email: `student-${sessionData.codeId}@abba.com`,
+            access_code: trimmedCode,
+            logged_at: new Date().toISOString(),
+            login_method: 'link'
+          }
+        ]);
+      } catch (dbErr) {
+        console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
+      }
 
       setSuccessMsg(`Bem-vindo, ${sessionData.name}! Carregando atividades...`);
       setTimeout(() => {
@@ -421,25 +620,47 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                   </>
                 ) : (
                   // TAB: STUDENT CODE FIELDS
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="access-code">
-                      Código de Acesso
-                    </label>
-                    <div className="relative group">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                        key
-                      </span>
-                      <input 
-                        className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60 font-mono" 
-                        id="access-code" 
-                        placeholder="Digite seu código de acesso" 
-                        type="text"
-                        value={accessCode}
-                        onChange={(e) => setAccessCode(e.target.value)}
-                      />
+                  <div className="space-y-4">
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="access-code">
+                        Código de Acesso
+                      </label>
+                      <div className="relative group">
+                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
+                          key
+                        </span>
+                        <input 
+                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60 font-mono" 
+                          id="access-code" 
+                          placeholder="Digite seu código (ex: NKOHML)" 
+                          type="text"
+                          value={accessCode}
+                          onChange={(e) => setAccessCode(e.target.value)}
+                        />
+                      </div>
                     </div>
+
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="student-email">
+                        E-mail de Acesso (Gmail ou Outlook)
+                      </label>
+                      <div className="relative group">
+                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
+                          mail
+                        </span>
+                        <input 
+                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
+                          id="student-email" 
+                          placeholder="Ex: seu.nome@gmail.com" 
+                          type="email"
+                          value={studentEmailInput}
+                          onChange={(e) => setStudentEmailInput(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    
                     <p className="text-[11px] text-[#414754] px-1 leading-normal">
-                      O código foi enviado pela seu Professor.
+                      Insira o seu código de acesso simples de 6 dígitos e seu e-mail do Gmail ou Outlook para autenticar instantaneamente!
                     </p>
                   </div>
                 )}

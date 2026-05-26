@@ -110,10 +110,14 @@ const Undo2: React.FC<SVGProps<SVGSVGElement>> = (props) => (
 
 import { ALPHABET_CUBES } from './data';
 import { LetterCube } from './components/LetterCube';
-import { SpelledLetter, LetterCubeData, SavedWord } from './types';
+import { SpelledLetter, LetterCubeData, SavedWord, User, TaskItem, StudentSubmission } from './types';
 import { AboutSection } from './components/AboutSection';
 import Loader from './components/Loader';
 import styled from 'styled-components';
+import { LoginScreen, SignupScreen } from './components/AuthScreens';
+import { TeacherDashboard } from './components/TeacherDashboard';
+import { StudentDashboard } from './components/StudentDashboard';
+import { Confetti } from './components/Confetti';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -170,6 +174,194 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'app' | 'about'>('app');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutLoading, setIsAboutLoading] = useState(false);
+
+  // NEW USER PORTAL ROUTING STATES
+  const [user, setUser] = useState<User | null>(() => {
+    const saved = localStorage.getItem('abba_logged_in_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as User;
+        if (parsed.codeSession && Date.now() > parsed.codeSession.expiresAt) {
+          localStorage.removeItem('abba_logged_in_user');
+          return null;
+        }
+        return parsed;
+      } catch {
+        return null;
+      }
+    }
+    return null;
+  });
+
+  const [currentScreen, setCurrentScreen] = useState<'login' | 'signup' | 'student-dashboard' | 'teacher-dashboard' | 'abacus'>(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has('import')) {
+      return 'teacher-dashboard';
+    }
+    const saved = localStorage.getItem('abba_logged_in_user');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as User;
+        if (parsed.role === 'teacher') return 'teacher-dashboard';
+        if (parsed.role === 'student') return 'student-dashboard';
+      } catch {}
+    }
+    return 'abacus';
+  });
+
+  // State for student task spelling target
+  const [activeSpellingTarget, setActiveSpellingTarget] = useState<{ word: string; language: 'pt' | 'en' | 'de'; color: string } | null>(null);
+  
+  // State for active task title and summary on abacus header
+  const [activeTaskInfo, setActiveTaskInfo] = useState<{ title: string; summary: string } | null>(null);
+  
+  // State for teacher reviewing a submission
+  const [activeReviewSubmission, setActiveReviewSubmission] = useState<StudentSubmission | null>(null);
+  
+  // State for show Session Expired modal
+  const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false);
+
+  // Spelled words list completed by student
+  const [completedSpelledWords, setCompletedSpelledWords] = useState<SavedWord[]>(() => {
+    const saved = localStorage.getItem('abba_completed_spelled_words');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [showConfetti, setShowConfetti] = useState(false);
+
+  // Review mode board state backup
+  const [savedBoardState, setSavedBoardState] = useState<{
+    spelledRows: SpelledLetter[][];
+    rowColors: Record<number, 'black' | 'blue' | 'red' | 'green'>;
+    rowIds: string[];
+    cutWiresRows: Record<number, boolean>;
+  } | null>(null);
+
+  useEffect(() => {
+    localStorage.setItem('abba_completed_spelled_words', JSON.stringify(completedSpelledWords));
+  }, [completedSpelledWords]);
+
+  // Session validation interval for offline unique access code
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (user && user.codeSession) {
+        if (Date.now() > user.codeSession.expiresAt) {
+          setUser(null);
+          localStorage.removeItem('abba_logged_in_user');
+          setIsSessionExpiredOpen(true);
+          setCurrentScreen('login');
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  // Process import link query parameter on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const importParam = params.get('import');
+    if (importParam) {
+      try {
+        const decodedJson = decodeURIComponent(escape(atob(importParam)));
+        const submission = JSON.parse(decodedJson) as StudentSubmission;
+        if (submission.studentName && submission.spelledWords) {
+          if (!user) {
+            const reviewProf: User = {
+              name: 'Prof. Revisor Importado',
+              email: 'revisor@abba.com',
+              role: 'teacher'
+            };
+            setUser(reviewProf);
+            localStorage.setItem('abba_logged_in_user', JSON.stringify(reviewProf));
+          }
+          
+          // Load submission spelled words into spelledRows
+          const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
+          const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+          
+          submission.spelledWords.forEach((wordObj, idx) => {
+            if (idx < 6) {
+              newSpelledRows[idx] = wordObj.letters;
+              const col = wordObj.themeColor || '#1e293b';
+              if (col === '#3b82f6') newRowColors[idx] = 'blue';
+              else if (col === '#ef4444') newRowColors[idx] = 'red';
+              else if (col === '#10b981') newRowColors[idx] = 'green';
+              else newRowColors[idx] = 'black';
+            }
+          });
+          
+          setSpelledRows(newSpelledRows);
+          setRowColors(newRowColors);
+          setActiveReviewSubmission(submission);
+          setCurrentScreen('abacus');
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (err) {
+        console.error('Error importing magic link:', err);
+      }
+    }
+  }, []);
+
+  const handleLaunchReviewMode = (submission: StudentSubmission) => {
+    setSavedBoardState({
+      spelledRows,
+      rowColors,
+      rowIds,
+      cutWiresRows
+    });
+    
+    const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
+    const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+    
+    submission.spelledWords.forEach((wordObj, idx) => {
+      if (idx < 6) {
+        newSpelledRows[idx] = wordObj.letters;
+        const col = wordObj.themeColor || '#1e293b';
+        if (col === '#3b82f6') newRowColors[idx] = 'blue';
+        else if (col === '#ef4444') newRowColors[idx] = 'red';
+        else if (col === '#10b981') newRowColors[idx] = 'green';
+        else newRowColors[idx] = 'black';
+      }
+    });
+    
+    setSpelledRows(newSpelledRows);
+    setRowColors(newRowColors);
+    setActiveReviewSubmission(submission);
+    setCurrentScreen('abacus');
+  };
+
+  const handleCloseReviewMode = () => {
+    if (savedBoardState) {
+      setSpelledRows(savedBoardState.spelledRows);
+      setRowColors(savedBoardState.rowColors);
+      setRowIds(savedBoardState.rowIds);
+      setCutWiresRows(savedBoardState.cutWiresRows);
+    }
+    setActiveReviewSubmission(null);
+    setCurrentScreen('teacher-dashboard');
+  };
+
+  const handleLaunchSpellingTask = (word: string, language: 'pt' | 'en' | 'de', color: string) => {
+    setActiveSpellingTarget({ word, language, color });
+    
+    // Auto-setup active row and thread color
+    let targetRowIdx = activeRowIdx;
+    for (let i = 0; i < spelledRows.length; i++) {
+      if (spelledRows[i].length === 0) {
+        targetRowIdx = i;
+        break;
+      }
+    }
+    
+    setActiveRowIdx(targetRowIdx);
+    const colKey = color === '#3b82f6' ? 'blue' : color === '#ef4444' ? 'red' : color === '#10b981' ? 'green' : 'black';
+    setRowColors(prev => ({
+      ...prev,
+      [targetRowIdx]: colKey
+    }));
+    
+    setCurrentScreen('abacus');
+  };
 
   // Ref for scrolling to the enter button on landing page
   const enterButtonRef = useRef<HTMLDivElement>(null);
@@ -533,73 +725,8 @@ export default function App() {
   useEffect(() => { spelledRowsRef.current = spelledRows; }, [spelledRows]);
   useEffect(() => { themeColorRef.current = themeColor; }, [themeColor]);
 
-  // Keep spelling rows neat & automatically manage empty rows based on drag state
+  // Keeping spelling rows neat & automatically manage empty rows based on drag state
   const isCurrentlyDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
-
-  useEffect(() => {
-    if (isCurrentlyDragging) {
-      // 1. DRAGGING STATE: Expand board dynamically so the user has plenty of space below to drop blocks
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
-
-      // Ensure we have at least 9 rows in total, and at least 4 empty rows below the last filled row
-      const desiredLength = Math.max(9, lastFilledRowIdx + 5);
-      if (spelledRows.length < desiredLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          while (copy.length < desiredLength) {
-            copy.push([]);
-          }
-          return copy;
-        });
-      }
-    } else {
-      // 2. IDLE STATE: Clean up trailing empty rows, but preserve intermediate empty rows to prevent layout shifting!
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
-
-      // We want to keep all rows up to lastFilledRowIdx, plus at least 4 empty rows, with a minimum of 6 rows in total
-      const targetLength = Math.max(6, lastFilledRowIdx + 4);
-      
-      if (spelledRows.length !== targetLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          if (copy.length > targetLength) {
-            return copy.slice(0, targetLength);
-          } else {
-            while (copy.length < targetLength) {
-              copy.push([]);
-            }
-            return copy;
-          }
-        });
-      }
-    }
-  }, [spelledRows, isCurrentlyDragging]);
-
-  // Synchronize rowIds with spelledRows length for dynamic padding/trimming
-  useEffect(() => {
-    setRowIds(prev => {
-      if (prev.length === spelledRows.length) return prev;
-      if (spelledRows.length > prev.length) {
-        const next = [...prev];
-        while (next.length < spelledRows.length) {
-          next.push('row-' + Math.random().toString(36).substring(2, 11));
-        }
-        return next;
-      } else {
-        return prev.slice(0, spelledRows.length);
-      }
-    });
-  }, [spelledRows.length]);
 
   // Double tap handler refs
   const lastClicksRef = useRef<Record<string, number>>({});
@@ -747,10 +874,11 @@ export default function App() {
 
   // Continuous smooth hardware-accelerated auto-scrolling loop during active drag-and-drop
   useEffect(() => {
-    const isDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
+    const isDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null || draggedBoardLetter !== null;
     if (!isDragging) return;
 
     let animFrameId: number;
+    let isAdding = false; // Safety flag to prevent duplicate state updates during animation frames
 
     const tick = () => {
       const eX = dragLastMouseRef.current.x;
@@ -760,36 +888,45 @@ export default function App() {
         return;
       }
 
-      // 1. Scroll the Board container vertically if dragging inside the board
+      // 1. Scroll the Board container vertically if dragging inside/near the board
       if (boardRef.current) {
         const boardRect = boardRef.current.getBoundingClientRect();
-        // Check horizontal bounds with 35px safety margin
-        if (eX >= boardRect.left - 35 && eX <= boardRect.right + 35) {
-          const bottomThreshold = boardRect.bottom - 75;
-          const topThreshold = boardRect.top + 75;
+        // Check horizontal bounds with an extremely generous 400px safety margin
+        if (eX >= boardRect.left - 400 && eX <= boardRect.right + 400) {
+          const bottomThreshold = boardRect.bottom - 110;
+          const topThreshold = boardRect.top + 110;
 
-          if (eY > bottomThreshold && eY < boardRect.bottom + 50) {
-            // Smoothly calculate scroll intensity based on proximity to bottom
-            const intensity = Math.min(16, Math.max(2, (eY - bottomThreshold) / 3));
+          if (eY > bottomThreshold) {
+            // Smoothly calculate scroll intensity based on proximity to bottom, without vertical cap
+            const intensity = Math.min(24, Math.max(4, (eY - bottomThreshold) / 2));
             boardRef.current.scrollBy({ top: intensity });
-          } else if (eY < topThreshold && eY > boardRect.top - 50) {
-            // Smoothly calculate scroll intensity based on proximity to top
-            const intensity = Math.min(16, Math.max(2, (topThreshold - eY) / 3));
+
+            // Check if we are near the bottom of the scroll container to load 3 more empty drop areas
+            const el = boardRef.current;
+            const remainingScroll = el.scrollHeight - el.scrollTop - el.clientHeight;
+            if (remainingScroll < 120 && !isAdding) {
+              isAdding = true;
+              setSpelledRows(prev => [...prev, [], [], []]);
+              setRowIds(prev => [
+                ...prev,
+                'row-dyn-' + Math.random().toString(36).substring(2, 11),
+                'row-dyn-' + Math.random().toString(36).substring(2, 11),
+                'row-dyn-' + Math.random().toString(36).substring(2, 11)
+              ]);
+              setTimeout(() => {
+                isAdding = false;
+              }, 300);
+            }
+          } else if (eY < topThreshold) {
+            // Smoothly calculate scroll intensity based on proximity to top, without vertical cap
+            const intensity = Math.min(24, Math.max(4, (topThreshold - eY) / 2));
             boardRef.current.scrollBy({ top: -intensity });
           }
         }
       }
 
-      // 2. Scroll the Window page vertically if dragging near viewport edges
-      const winHeight = window.innerHeight;
-      const winThreshold = 140;
-      if (eY < winThreshold) {
-        const winIntensity = Math.min(20, Math.max(3, (winThreshold - eY) / 2.5));
-        window.scrollBy({ top: -winIntensity });
-      } else if (eY > winHeight - winThreshold) {
-        const winIntensity = Math.min(20, Math.max(3, (eY - (winHeight - winThreshold)) / 2.5));
-        window.scrollBy({ top: winIntensity });
-      }
+      // 2. Scroll the Window page vertically is completely disabled to keep the outer layout 100% stable:
+      // "o container não devia se mexer por fora, por dentro ele deve correr livremente e fluidamente"
 
       animFrameId = requestAnimationFrame(tick);
     };
@@ -798,7 +935,7 @@ export default function App() {
     return () => {
       cancelAnimationFrame(animFrameId);
     };
-  }, [draggedCube, draggedTrayIndex, draggedShelfIndex]);
+  }, [draggedCube, draggedTrayIndex, draggedShelfIndex, draggedBoardLetter]);
 
   // Siga fluidamente e instantaneamente o último bloco adicionado
   useEffect(() => {
@@ -1875,6 +2012,108 @@ export default function App() {
     }
   };
 
+  const hasAnyBlocks = spelledRows.some(row => row.length > 0);
+
+  // Session Expired Modal
+  const renderSessionExpiredModal = () => (
+    <AnimatePresence>
+      {isSessionExpiredOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
+          <div className="bg-white p-6 rounded-3xl border border-red-200 max-w-sm w-full text-center space-y-4 shadow-2xl">
+            <span className="material-symbols-outlined text-red-500 text-5xl">lock_clock</span>
+            <h3 className="text-lg font-extrabold text-slate-800">Sessão Expirada!</h3>
+            <p className="text-xs text-slate-500 leading-relaxed">
+              O tempo limite de segurança do seu Código de Acesso Único expirou. Por favor, solicite um novo código ao seu professor.
+            </p>
+            <button
+              onClick={() => setIsSessionExpiredOpen(false)}
+              className="w-full py-3 bg-[#005bb3] text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-95"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+
+  // Render routing screens
+  if (currentScreen === 'login') {
+    return (
+      <>
+        {renderSessionExpiredModal()}
+        <LoginScreen
+          onLoginSuccess={(loggedUser) => {
+            setUser(loggedUser);
+            localStorage.setItem('abba_logged_in_user', JSON.stringify(loggedUser));
+            setShowLanding(false); // Skip landing once logged in
+            if (loggedUser.role === 'teacher') {
+              setCurrentScreen('teacher-dashboard');
+            } else {
+              setCurrentScreen('student-dashboard');
+            }
+          }}
+          onGoToSignup={() => setCurrentScreen('signup')}
+        />
+      </>
+    );
+  }
+
+  if (currentScreen === 'signup') {
+    return (
+      <SignupScreen
+        onSignupSuccess={() => setCurrentScreen('login')}
+        onGoToLogin={() => setCurrentScreen('login')}
+      />
+    );
+  }
+
+  if (currentScreen === 'teacher-dashboard' && user) {
+    return (
+      <TeacherDashboard
+        user={user}
+        onLogout={() => {
+          setUser(null);
+          localStorage.removeItem('abba_logged_in_user');
+          setCurrentScreen('abacus');
+          setShowLanding(true);
+        }}
+        onLaunchReviewMode={handleLaunchReviewMode}
+      />
+    );
+  }
+
+  if (currentScreen === 'student-dashboard' && user) {
+    return (
+      <StudentDashboard
+        user={user}
+        onLogout={() => {
+          setUser(null);
+          localStorage.removeItem('abba_logged_in_user');
+          setCurrentScreen('abacus');
+          setShowLanding(true);
+        }}
+        onLaunchSpellingTask={handleLaunchSpellingTask}
+        completedSpelledWords={completedSpelledWords}
+        onGoToAbacus={(title, summary) => {
+          if (title && summary) {
+            setActiveTaskInfo({ title, summary });
+          } else {
+            setActiveTaskInfo(null);
+          }
+          setActiveSpellingTarget(null);
+          setCurrentScreen('abacus');
+        }}
+        onRemoveCompletedWord={(idx) => {
+          setCompletedSpelledWords(prev => prev.filter((_, i) => i !== idx));
+        }}
+        onClearCompletedWords={() => {
+          setCompletedSpelledWords([]);
+        }}
+      />
+    );
+  }
+
   if (activeTab === 'about') {
     return (
       <AboutSection 
@@ -2175,6 +2414,60 @@ export default function App() {
                     Clique aqui para acessar a matéria completa sobre o Ábaco Brasileiro de Alfabetização Bilingue por José Décio de Alencar.
                   </p>
                 </button>
+
+                {/* Profile/Login Section inside Menu */}
+                {user ? (
+                  <div className="border-t border-gray-150 mt-6 pt-6 flex flex-col gap-5">
+                    <div className="flex items-center gap-4 bg-slate-50 p-4 rounded-2xl border border-gray-100 max-w-md">
+                      <div className="w-12 h-12 rounded-full bg-[#005ba4] text-white flex items-center justify-center font-display font-extrabold text-lg shadow-xs shrink-0">
+                        {user.name ? user.name.charAt(0).toUpperCase() : 'U'}
+                      </div>
+                      <div>
+                        <h4 className="font-display font-black text-gray-950 text-base leading-tight">{user.name}</h4>
+                        <p className="text-xs text-gray-500 font-medium font-sans mt-0.5">{user.email}</p>
+                      </div>
+                    </div>
+                    
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        if (user.role === 'teacher') {
+                          setCurrentScreen('teacher-dashboard');
+                        } else {
+                          setCurrentScreen('student-dashboard');
+                        }
+                      }}
+                      className="text-left font-display font-black text-2xl sm:text-3xl text-[#005ba3] hover:text-[#00468c] transition-colors tracking-tight leading-tight cursor-pointer border-none bg-transparent p-0 focus:outline-none"
+                    >
+                      Voltar ao Painel Geral
+                    </button>
+                    
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setUser(null);
+                        localStorage.removeItem('abba_logged_in_user');
+                        setCurrentScreen('abacus');
+                        setShowLanding(true);
+                      }}
+                      className="text-left font-display font-black text-2xl sm:text-3xl text-red-600 hover:text-red-800 transition-colors tracking-tight leading-tight cursor-pointer border-none bg-transparent p-0 focus:outline-none"
+                    >
+                      Sair da Conta
+                    </button>
+                  </div>
+                ) : (
+                  <div className="border-t border-gray-150 mt-6 pt-6 flex flex-col gap-4">
+                    <button
+                      onClick={() => {
+                        setIsMenuOpen(false);
+                        setCurrentScreen('login');
+                      }}
+                      className="text-left font-display font-black text-2xl sm:text-3xl text-gray-950 hover:text-[#005ba4] transition-colors tracking-tight leading-tight cursor-pointer border-none bg-transparent p-0 focus:outline-none"
+                    >
+                      Minha Conta
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -2283,14 +2576,14 @@ export default function App() {
             {/* SINGLE BOARD CONTAINER (Original style matching the grey dashed card, growing internally) */}
             <motion.div 
               ref={boardRef}
-              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5 max-h-[460px] overflow-y-auto md:max-h-none"
+              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5 max-h-[580px] overflow-y-auto no-scrollbar"
             >
-              
               <AnimatePresence mode="popLayout">
                 {spelledRows.map((row, rIdx) => {
                   const isActiveRow = activeRowIdx === rIdx;
                   const isLastRow = rIdx === spelledRows.length - 1;
                   const rowKey = rowIds[rIdx] || `row-box-fallback-${rIdx}`;
+                  const hasRowBlocks = row.length > 0;
 
                   return (
                     <motion.div
@@ -2343,7 +2636,7 @@ export default function App() {
                           : 'hover:bg-white/30'
                       }`}
                     >
-                      <div className="w-full flex items-center gap-3">
+                      <div className="w-full flex items-center gap-3 relative">
                         {/* Row Left Controls (Pill Capsule Toggle: Save/Bookmark vs Scissors vs Trash) */}
                         <div className="flex flex-col gap-2 shrink-0">
                           <div 
@@ -2442,32 +2735,37 @@ export default function App() {
 
                              {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
                              <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (rowActiveModes[rIdx] === 'trash') {
-                                   handleDeleteRowWithHistory(rIdx);
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'trash'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 handleDeleteRowWithHistory(rIdx);
-                               }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra"
-                             >
-                               <Trash2 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
+                                type="button"
+                                disabled={!hasRowBlocks}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (rowActiveModes[rIdx] === 'trash') {
+                                    handleDeleteRowWithHistory(rIdx);
+                                  } else {
+                                    setRowActiveModes(prev => ({
+                                      ...prev,
+                                      [rIdx]: 'trash'
+                                    }));
+                                  }
+                                }}
+                                onDoubleClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteRowWithHistory(rIdx);
+                                }}
+                                style={{ touchAction: 'manipulation' }}
+                                className={`z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full focus:outline-none transition-all ${
+                                  hasRowBlocks
+                                    ? 'cursor-pointer hover:scale-105 active:scale-95'
+                                    : 'cursor-not-allowed opacity-40'
+                                }`}
+                                title={hasRowBlocks ? "Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra" : "Nenhum bloco nesta linha"}
+                              >
+                                <Trash2 
+                                  className={`w-[18px] h-[18px] transition-colors duration-200 ${
+                                    rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
+                                  }`} 
+                                />
+                              </button>
                           </div>
                         </div>
 
@@ -2498,23 +2796,9 @@ export default function App() {
 
                             updateElementPositions();
                           }}
+                          // COLE ISSO NO LUGAR:
                           className="spelling-scroll-container w-full h-[calc((100vw-6rem)/5+8px)] min-h-[calc((100vw-6rem)/5+8px)] max-h-[calc((100vw-6rem)/5+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-1 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
-                          <AnimatePresence>
-                            {row.length === 0 && isLastRow && (
-                              <motion.div 
-                                key={`placeholder-tip-${rIdx}`}
-                                initial={{ opacity: 0 }}
-                                animate={{ opacity: 1 }}
-                                exit={{ opacity: 0 }}
-                                transition={{ duration: 0.1, ease: "easeOut" }}
-                                className="absolute inset-0 text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center select-none pointer-events-none z-10"
-                              >
-                                <span>arraste e solte aqui</span>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-
                           <AnimatePresence mode="popLayout">
                             {(() => {
                               const elements: React.ReactNode[] = [];
@@ -2706,6 +2990,22 @@ export default function App() {
                             })()}
                           </AnimatePresence>
                         </div>
+
+                        {/* Completely static, absolute overlay for the placeholder tip, aligned to the right side where the scroll container resides */}
+                        <AnimatePresence>
+                          {row.length === 0 && (
+                            <motion.div 
+                              key={`placeholder-tip-${rIdx}`}
+                              initial={{ opacity: 0 }}
+                              animate={{ opacity: 1 }}
+                              exit={{ opacity: 0 }}
+                              transition={{ duration: 0.1, ease: "easeOut" }}
+                              className="absolute right-0 top-0 left-[52px] bottom-0 text-xs text-gray-400 font-bold uppercase tracking-widest flex items-center justify-center select-none pointer-events-none z-10"
+                            >
+                              <span>arraste e solte aqui</span>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
                       </div>
                         {/* Small modern custom scrollbar for mobile and desktop views */}
                       {rowOverflows[rIdx] && (
@@ -2865,9 +3165,15 @@ export default function App() {
                 </button>
 
                 <button
+                  type="button"
                   onClick={handleClearAllRows}
-                  className="p-2 sm:p-2.5 bg-white hover:bg-red-50 border border-red-200 hover:border-red-300 text-red-500 rounded-xl transition-all cursor-pointer shadow-2xs animate-feed"
-                  title="Limpar todas as palavras do tabuleiro"
+                  disabled={!hasAnyBlocks}
+                  className={`p-2 sm:p-2.5 border rounded-xl transition-all shadow-2xs ${
+                    hasAnyBlocks
+                      ? 'bg-white hover:bg-red-50 border-red-200 hover:border-red-300 text-red-500 cursor-pointer active:scale-95'
+                      : 'bg-gray-50 border-gray-150 text-gray-300 cursor-not-allowed opacity-50'
+                  }`}
+                  title={hasAnyBlocks ? "Limpar todas as palavras do tabuleiro" : "Nenhum bloco para limpar"}
                 >
                   <Trash2 className="w-5 h-5 sm:w-5.5 sm:h-5.5" />
                 </button>

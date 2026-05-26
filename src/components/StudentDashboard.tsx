@@ -1,10 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, TaskItem, SavedWord } from '../types';
 import abbaLogo from '../assets/logo abba.svg';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 import Loader from './Loader';
+import { supabase } from '../supabaseClient';
 
+const parseTeacherNoteAndFiles = (rawNote: string) => {
+  if (!rawNote) return { note: '', files: [] };
+  const marker = '__SUPPORT_FILES_JSON__:';
+  const index = rawNote.indexOf(marker);
+  if (index !== -1) {
+    const note = rawNote.substring(0, index);
+    const filesJson = rawNote.substring(index + marker.length);
+    try {
+      return { note, files: JSON.parse(filesJson) };
+    } catch {
+      return { note, files: [] };
+    }
+  }
+  return { note: rawNote, files: [] };
+};
+
+const serializeTeacherNoteAndFiles = (note: string, files: any[]) => {
+  if (!files || files.length === 0) return note;
+  return `${note}__SUPPORT_FILES_JSON__:${JSON.stringify(files)}`;
+};
 
 interface StudentDashboardProps {
   user: User;
@@ -84,8 +105,436 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [uploadLink, setUploadLink] = useState('');
   const [searchExpanded, setSearchExpanded] = useState(false);
-  
+  const [excludedSearchTaskIds, setExcludedSearchTaskIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_excluded_search_tasks');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('abba_excluded_search_tasks', JSON.stringify(excludedSearchTaskIds));
+  }, [excludedSearchTaskIds]);
+
+  // --- Smart Teacher Link Validation States ---
+  type ValidatedTaskLink = {
+    id: string;
+    studentName: string;
+    taskId: string;
+    taskTitle: string;
+    createdAt: string;
+    link: string;
+  };
+
+  const [validatedLink, setValidatedLink] = useState<ValidatedTaskLink | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+  const [isValidatingLink, setIsValidatingLink] = useState(false);
+
+  // Stored accepted task links (localStorage + Supabase sync)
+  const [acceptedTaskLinks, setAcceptedTaskLinks] = useState<ValidatedTaskLink[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_student_accepted_links');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  // Dynamic filter tab labels above cards
+  const [activeTabLabel, setActiveTabLabel] = useState<'recebidas' | 'enviadas'>('recebidas');
+
+  // Stored sent/submitted activities
+  const [sentActivities, setSentActivities] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_student_sent_activities');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  // Persist accepted links to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('abba_student_accepted_links', JSON.stringify(acceptedTaskLinks));
+  }, [acceptedTaskLinks]);
+
+  // Prevenção de duplicidades e notificações
+  const [showAlreadyAssignedModal, setShowAlreadyAssignedModal] = useState(false);
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+
+  // Refs for click outside detection on header dropdowns
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (showNotificationsDropdown) {
+        if (
+          notificationsRef.current && 
+          !notificationsRef.current.contains(event.target as Node) &&
+          bellButtonRef.current && 
+          !bellButtonRef.current.contains(event.target as Node)
+        ) {
+          setShowNotificationsDropdown(false);
+        }
+      }
+      if (showProfileMenu) {
+        if (
+          profileMenuRef.current && 
+          !profileMenuRef.current.contains(event.target as Node) &&
+          avatarButtonRef.current && 
+          !avatarButtonRef.current.contains(event.target as Node)
+        ) {
+          setShowProfileMenu(false);
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotificationsDropdown, showProfileMenu]);
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all');
+  const [readNotifications, setReadNotifications] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_read_notifications');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  const [teacherTasks, setTeacherTasks] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_teacher_tasks');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  const getStudentId = () => {
+    if (user.codeSession?.codeId) return user.codeSession.codeId;
+    try {
+      const studentsList = JSON.parse(localStorage.getItem('abba_students_list') || '[]');
+      const matched = studentsList.find((s: any) => 
+        s.email?.toLowerCase() === user.email?.toLowerCase() || 
+        s.name?.toLowerCase() === user.name?.toLowerCase()
+      );
+      if (matched) return matched.id;
+    } catch (e) {
+      console.error(e);
+    }
+    return user.email || 'st-unknown';
+  };
+  const studentId = getStudentId();
+
+  const fetchTasksFromSupabase = async () => {
+    try {
+      const { data: dbTasks, error } = await supabase
+        .from('tasks')
+        .select('*');
+      
+      if (dbTasks && !error) {
+        const mappedTasks = dbTasks.map((t: any) => ({
+          id: t.id || t.task_id,
+          title: t.title || t.task_title || '',
+          description: t.description || t.task_description || '',
+          dueDate: t.due_date || t.dueDate || '',
+          status: t.status || 'active',
+          targetWords: typeof t.target_words === 'string' 
+            ? JSON.parse(t.target_words) 
+            : t.target_words || typeof t.targetWords === 'string' 
+            ? JSON.parse(t.targetWords) 
+            : t.targetWords || [],
+          priority: t.priority || 'Alta',
+          assignedStudentIds: typeof t.assigned_student_ids === 'string'
+            ? JSON.parse(t.assigned_student_ids)
+            : t.assigned_student_ids || typeof t.assignedStudentIds === 'string'
+            ? JSON.parse(t.assignedStudentIds)
+            : t.assignedStudentIds || [],
+          startDate: t.start_date || t.startDate || '',
+          teacherNote: t.teacher_note || t.teacherNote || '',
+          submissionsCount: t.submissions_count || t.submissionsCount || 0
+        }));
+
+        setTeacherTasks(prev => {
+          const merged = [...prev];
+          mappedTasks.forEach(mt => {
+            const index = merged.findIndex(x => x.id === mt.id);
+            if (index !== -1) {
+              merged[index] = { ...merged[index], ...mt };
+            } else {
+              merged.push(mt);
+            }
+          });
+          localStorage.setItem('abba_teacher_tasks', JSON.stringify(merged));
+          return merged;
+        });
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar tarefas do Supabase:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchTasksFromSupabase();
+    window.addEventListener('online', fetchTasksFromSupabase);
+    const interval = setInterval(fetchTasksFromSupabase, 15000);
+    return () => {
+      window.removeEventListener('online', fetchTasksFromSupabase);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem('abba_read_notifications', JSON.stringify(readNotifications));
+  }, [readNotifications]);
+
+  // Persist sent activities to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('abba_student_sent_activities', JSON.stringify(sentActivities));
+  }, [sentActivities]);
+
+  // Auto-capture task links from URL query parameters on mount or user change
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const joinParam = params.get('join') || params.get('code');
+    if (joinParam) {
+      // 1. Try to decode as legacy Base64 task link
+      try {
+        const decoded = atob(joinParam);
+        const data = JSON.parse(decoded);
+        if (data.taskId && data.taskTitle) {
+          const newLinkItem = {
+            id: data.id || `LINK-${Date.now()}`,
+            studentName: data.studentName || user?.name || 'Estudante',
+            taskId: data.taskId,
+            taskTitle: data.taskTitle,
+            createdAt: data.createdAt || new Date().toISOString(),
+            link: window.location.href
+          };
+          setAcceptedTaskLinks(prev => {
+            if (prev.some(l => l.taskId === data.taskId)) return prev;
+            return [newLinkItem, ...prev];
+          });
+          // Clean search params to avoid duplicate runs
+          window.history.replaceState({}, document.title, window.location.pathname);
+        }
+      } catch (err) {
+        // 2. Try to lookup in the db registry
+        const cleanCode = joinParam.trim().toUpperCase().replace('ABBA-', '');
+        const registryKey = 'abba_invite_codes_registry';
+        try {
+          const localRegistry = localStorage.getItem(registryKey);
+          const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+          const matchedRecord = registryList.find((item: any) => item.code === cleanCode);
+          if (matchedRecord && matchedRecord.taskId) {
+            const newLinkItem = {
+              id: matchedRecord.codeId || `LINK-${Date.now()}`,
+              studentName: matchedRecord.name || user?.name || 'Estudante',
+              taskId: matchedRecord.taskId,
+              taskTitle: matchedRecord.taskTitle,
+              createdAt: new Date().toISOString(),
+              link: window.location.href
+            };
+            setAcceptedTaskLinks(prev => {
+              if (prev.some(l => l.taskId === matchedRecord.taskId)) return prev;
+              return [newLinkItem, ...prev];
+            });
+            window.history.replaceState({}, document.title, window.location.pathname);
+          }
+        } catch (dbErr) {
+          console.error(dbErr);
+        }
+      }
+    }
+  }, [user]);
+
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
+
+  // ---------- validate link typed in the input ----------
+  const validateAndPreviewLink = async (raw: string) => {
+    setLinkError(null);
+    setValidatedLink(null);
+
+    const rawTrimmed = raw.trim();
+    if (!rawTrimmed) return;
+
+    // 1. Inappropriate / offensive words filter
+    const offensiveWords = [
+      'bosta', 'merda', 'caralho', 'puta', 'viado', 'fdp', 'filho da puta', 'cu', 'cuzao',
+      'shit', 'fuck', 'bitch', 'asshole', 'dick', 'pussy', 'bastard', 'crap', 'pqp'
+    ];
+    const hasOffensive = offensiveWords.some(word => 
+      new RegExp(`\\b${word}\\b`, 'i').test(rawTrimmed)
+    );
+    if (hasOffensive) {
+      setLinkError('Link inválido. Conteúdo inadequado ou ofensivo detectado. Cole apenas o link válido gerado pelo professor.');
+      return;
+    }
+
+    // 2. Determine if it's a URL or direct 6-char code
+    let code: string | null = null;
+    let isUrl = false;
+    let urlObj: URL | null = null;
+
+    // Check if it matches a 6-character alphanumeric code directly (e.g., NKOHML)
+    if (/^[a-zA-Z0-9]{6}$/.test(rawTrimmed)) {
+      code = rawTrimmed.toUpperCase();
+    } else {
+      try {
+        urlObj = new URL(rawTrimmed);
+        isUrl = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
+      } catch {
+        isUrl = false;
+      }
+
+      if (isUrl && urlObj) {
+        code = urlObj.searchParams.get('code');
+      }
+    }
+
+    if (!code) {
+      setLinkError('Entrada inválida. Insira o link completo (ex: http://...) ou o código de 6 dígitos gerado pelo professor.');
+      return;
+    }
+
+    // 4. Resolve the short code (6-char alphanumeric key)
+    // First, look up locally
+    const generatedLinks = JSON.parse(localStorage.getItem('abba_generated_task_links') || '[]');
+    let matchedLink = generatedLinks.find((l: any) => l.id === code);
+
+    // If not found locally, query Supabase database
+    if (!matchedLink) {
+      setIsValidatingLink(true);
+      try {
+        const { data, error } = await supabase
+          .from('teacher_generated_links')
+          .select('*')
+          .eq('link_id', code)
+          .maybeSingle();
+        
+        if (data && !error) {
+          matchedLink = {
+            id: data.link_id,
+            studentName: data.student_name,
+            taskId: data.task_id,
+            taskTitle: data.task_title,
+            createdAt: data.created_at,
+            link: data.link_url
+          };
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar Supabase para código encurtado:', err);
+      } finally {
+        setIsValidatingLink(false);
+      }
+    }
+
+    if (!matchedLink) {
+      setLinkError('Link ou código não reconhecido. Esse link não pertence a nenhuma tarefa ativa gerada pelo professor.');
+      return;
+    }
+
+    // Proactive duplication validation
+    const autoAssignedTasks = teacherTasks.filter((task: any) => 
+      task.status === 'active' && 
+      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
+    );
+    if (autoAssignedTasks.some((t: any) => t.id === matchedLink.taskId)) {
+      setShowAlreadyAssignedModal(true);
+      setUploadLink('');
+      return;
+    }
+
+    setValidatedLink({
+      id: matchedLink.id,
+      studentName: matchedLink.studentName,
+      taskId: matchedLink.taskId,
+      taskTitle: matchedLink.taskTitle,
+      createdAt: matchedLink.createdAt || new Date().toISOString(),
+      link: matchedLink.link || rawTrimmed,
+    });
+  };
+
+  // ---------- sync manager for student ----------
+  const syncStudentLinks = async () => {
+    try {
+      const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_links') || '[]');
+      if (unsynced.length === 0) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const remaining: any[] = [];
+      for (const item of unsynced) {
+        const { error } = await supabase
+          .from('student_received_task_links')
+          .insert([{
+            link_id: item.id,
+            student_name: item.studentName,
+            task_id: item.taskId,
+            task_title: item.taskTitle,
+            link_url: item.link,
+            student_user_id: session.user.id,
+            accepted_at: item.createdAt || new Date().toISOString(),
+          }]);
+        if (error) {
+          console.warn('Erro ao sincronizar link do aluno:', error);
+          remaining.push(item);
+        }
+      }
+      localStorage.setItem('abba_unsynced_student_links', JSON.stringify(remaining));
+      if (remaining.length === 0) {
+        console.log('⚡ Todos os links do aluno pendentes foram sincronizados com o Supabase!');
+      }
+    } catch (err) {
+      console.warn('Erro na sincronização de links do aluno com o Supabase:', err);
+    }
+  };
+
+  useEffect(() => {
+    syncStudentLinks();
+    window.addEventListener('online', syncStudentLinks);
+    const interval = setInterval(syncStudentLinks, 15000);
+    return () => {
+      window.removeEventListener('online', syncStudentLinks);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // ---------- accept the link (store + sync) ----------
+  const handleAcceptTaskLink = async () => {
+    if (!validatedLink) return;
+
+    // Check if task is already automatically assigned by the professor
+    const autoAssignedTasks = teacherTasks.filter((task: any) => 
+      task.status === 'active' && 
+      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
+    );
+    const isAlreadyAutoAssigned = autoAssignedTasks.some((t: any) => t.id === validatedLink.taskId);
+    if (isAlreadyAutoAssigned) {
+      setShowAlreadyAssignedModal(true);
+      setValidatedLink(null);
+      setUploadLink('');
+      return;
+    }
+
+    // Prevent duplicates
+    if (acceptedTaskLinks.some(l => l.id === validatedLink.id)) {
+      setLinkError('Este link já foi adicionado anteriormente.');
+      return;
+    }
+
+    const enriched: ValidatedTaskLink = { ...validatedLink };
+    setAcceptedTaskLinks(prev => [enriched, ...prev]);
+    setUploadLink('');
+    setValidatedLink(null);
+    setLinkError(null);
+
+    // Save in unsynced queue for background synchronization
+    const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_links') || '[]');
+    localStorage.setItem('abba_unsynced_student_links', JSON.stringify([enriched, ...unsynced]));
+    
+    // Attempt sync
+    syncStudentLinks();
+  };
 
   useEffect(() => {
     localStorage.setItem('abba_student_view', studentView);
@@ -94,6 +543,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
+      const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+      const fileName = file.name.toLowerCase();
+      const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+      if (!isAllowed) {
+        alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
+        return;
+      }
+
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        alert('O tamanho do arquivo excede o limite máximo de 5MB!');
+        return;
+      }
+
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
       alert(`Arquivo "${file.name}" anexado com sucesso!`);
@@ -163,23 +627,62 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return `${window.location.origin}?import=${b64}`;
   };
 
+  const registerSentActivity = async (taskTitle: string) => {
+    const newSentItem = {
+      id: `SUB-${Date.now()}`,
+      studentName: user.name,
+      studentEmail: user.email || `${user.name.toLowerCase().replace(/\s+/g, '.')}@email.com`,
+      taskTitle: taskTitle || 'Exercício de Numerais Multilingue',
+      submittedAt: new Date().toISOString(),
+      spelledWordsCount: completedSpelledWords.length
+    };
+    
+    setSentActivities(prev => {
+      if (prev.some(a => a.taskTitle === newSentItem.taskTitle && Math.abs(new Date(a.submittedAt).getTime() - new Date(newSentItem.submittedAt).getTime()) < 10000)) {
+        return prev;
+      }
+      return [newSentItem, ...prev];
+    });
+
+    try {
+      await supabase.from('student_submissions').insert([
+        {
+          student_name: user.name,
+          student_email: newSentItem.studentEmail,
+          task_title: newSentItem.taskTitle,
+          submitted_at: newSentItem.submittedAt,
+          spelled_words_count: newSentItem.spelledWordsCount
+        }
+      ]);
+      console.log('⚡ Submission synced with Supabase!');
+    } catch (err) {
+      console.warn('Erro ao salvar submissão no Supabase:', err);
+    }
+  };
+
   const handleShareWhatsApp = () => {
     const link = generateMagicLink();
-    const text = `*Nome:* ${user.name}\n*Tarefa:* Exercício de Numerais Multilingue\n*Progresso:* ${completedCount}/${NUMERAL_ITEMS.length} palavras concluídas\n\n*Relatório de Atividades:* Clique no link abaixo para importar meu ábaco digital:\n${link}`;
+    const taskTitle = 'Exercício de Numerais Multilingue';
+    const text = `*Nome:* ${user.name}\n*Tarefa:* ${taskTitle}\n*Progresso:* ${completedCount}/${NUMERAL_ITEMS.length} palavras concluídas\n\n*Relatório de Atividades:* Clique no link abaixo para importar meu ábaco digital:\n${link}`;
     window.open(`https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`, '_blank');
+    registerSentActivity(taskTitle);
   };
 
   const handleShareGmail = () => {
     const link = generateMagicLink();
+    const taskTitle = 'Exercício de Numerais Multilingue';
     const subject = `ABBA DIGITAL - Entrega de Tarefa - ${user.name}`;
-    const body = `Nome: ${user.name}\nTarefa: Exercício de Numerais Multilingue\nProgresso: ${completedCount}/${NUMERAL_ITEMS.length} palavras concluídas\n\nLink do ábaco digital do aluno:\n${link}`;
+    const body = `Nome: ${user.name}\nTarefa: ${taskTitle}\nProgresso: ${completedCount}/${NUMERAL_ITEMS.length} palavras concluídas\n\nLink do ábaco digital do aluno:\n${link}`;
     window.open(`mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, '_blank');
+    registerSentActivity(taskTitle);
   };
 
   const handleCopyLink = () => {
+    const taskTitle = 'Exercício de Numerais Multilingue';
     navigator.clipboard.writeText(generateMagicLink());
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+    registerSentActivity(taskTitle);
   };
 
   const filteredItems = NUMERAL_ITEMS.filter(item => {
@@ -188,6 +691,34 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           item.langLabel.toLowerCase().includes(taskSearchQuery.toLowerCase());
     return matchesLanguage && matchesSearch;
   });
+
+  const autoAssignedTasks = teacherTasks.filter((task: any) => 
+    task.status === 'active' && 
+    (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
+  );
+
+  const formatTimeAgo = (dateStr: string) => {
+    const diffMs = Date.now() - new Date(dateStr).getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (isNaN(diffMins)) return 'algum tempo';
+    if (diffMins < 1) return 'agora';
+    if (diffMins < 60) return `${diffMins}m atrás`;
+    if (diffHours < 24) return `${diffHours}h atrás`;
+    return `${diffDays}d atrás`;
+  };
+
+  const derivedNotifications = autoAssignedTasks.map((task: any) => ({
+    id: `notif-${task.id}`,
+    title: 'Nova tarefa atribuída!',
+    message: `O professor enviou a tarefa: "${task.title}".`,
+    taskTitle: task.title,
+    taskDescription: task.description,
+    createdAt: task.startDate || new Date().toISOString(),
+    isRead: readNotifications.includes(`notif-${task.id}`)
+  }));
 
   return (
     <div className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans">
@@ -249,32 +780,43 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <h2 className="font-title-md text-title-md text-slate-800 font-extrabold md:block hidden">Área do Aluno</h2>
           </div>
           
-          <div className="flex items-center gap-md">
-            <button 
-              onClick={() => alert('Notificação: Sua tarefa "Exercício de Numerais Multilingue" está em andamento. Prazo final: 15 de Junho de 2026.')}
-              className="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors relative cursor-pointer bg-transparent border-none"
-              title="Notificações"
-            >
-              <span className="material-symbols-outlined">notifications</span>
-              <span className="absolute top-2 right-2 w-2 h-2 bg-tertiary rounded-full"></span>
-            </button>
+          <div className="flex items-center gap-md relative">
+            {/* Notifications Bell Button */}
+            <div className="relative">
+              <button 
+                ref={bellButtonRef}
+                onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                className={`relative w-10 h-10 flex items-center justify-center rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                  showNotificationsDropdown 
+                    ? 'bg-slate-100 border-slate-300 text-slate-900' 
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                }`}
+                title="Notificações"
+              >
+                <span className="material-symbols-outlined font-semibold text-[20px]">notifications</span>
+                {derivedNotifications.filter(n => !n.isRead).length > 0 && (
+                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#10B981] rounded-full animate-pulse border-2 border-white"></span>
+                )}
+              </button>
+            </div>
             
-            {/* Search Lupa Button replacing Gear Settings */}
+            {/* Search Lupa Button (Style Matched) */}
             <button 
               onClick={() => setSearchExpanded(true)}
-              className="w-10 h-10 flex items-center justify-center rounded-full text-on-surface-variant hover:bg-surface-container-low transition-colors cursor-pointer bg-transparent border-none"
+              className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-2.5 rounded-xl font-bold border-none transition-all active:scale-95 cursor-pointer flex items-center justify-center shadow-xs"
               title="Pesquisar Atividades (Lupa)"
             >
-              <span className="material-symbols-outlined">search</span>
+              <span className="material-symbols-outlined font-black text-[20px]">search</span>
             </button>
             
             <div className="w-px h-6 bg-outline-variant mx-xs"></div>
-
-            {/* Profile Avatar + Dropdown */}
+ 
+            {/* Profile Avatar & Dropdowns */}
             <div className="relative">
               <button
+                ref={avatarButtonRef}
                 onClick={() => setShowProfileMenu(prev => !prev)}
-                className="w-9 h-9 rounded-full overflow-hidden border-2 border-transparent hover:border-primary transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none"
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none"
                 title="Perfil"
               >
                 <img
@@ -283,88 +825,261 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   src="src/assets/Imagens/perfil aluno/alunoexemplo.avif"
                 />
               </button>
-
-              {showProfileMenu && (
-                <>
-                  {/* Click-away backdrop */}
-                  <div
-                    className="fixed inset-0 z-[200]"
-                    onClick={() => setShowProfileMenu(false)}
-                  />
-
-                  {/* Dropdown panel — Light Theme */}
-                  <div className="absolute right-0 top-[calc(100%+10px)] z-[300] w-72 bg-white rounded-2xl shadow-xl overflow-hidden animate-fade-in border border-slate-200">
-
-                    {/* Header strip */}
-                    <div className="bg-slate-50 px-5 py-4 flex items-center gap-3 border-b border-slate-100">
-                      <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-primary shrink-0">
-                        <img
-                          src="src/assets/Imagens/perfil aluno/alunoexemplo.avif"
-                          alt="Avatar"
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-slate-800 leading-tight">{user.name}</p>
-                        <p className="text-xs text-slate-400 leading-tight">{user.email || 'aluno@abbadigital.com'}</p>
-                      </div>
-                    </div>
-
-                    {/* Info section label */}
-                    <div className="px-5 pt-4 pb-1 flex items-center gap-2">
-                      <img src={abbaLogo} alt="ABBA" className="w-4 h-4 object-contain" />
-                      <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">ABBA DIGITAL</p>
-                    </div>
-
-                    {/* Info card */}
-                    <div className="mx-4 mb-4 mt-2 bg-slate-50 rounded-xl p-3 border border-slate-200">
-                      <div className="flex items-start justify-between">
-                        <div>
-                          <p className="text-xs font-bold text-slate-700">Progresso do Ábaco Digital</p>
-                          <p className="text-[11px] text-slate-400 mt-0.5">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
-                        </div>
-                        <button
-                          onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
-                          className="text-slate-400 hover:text-primary transition-colors bg-transparent border-none cursor-pointer p-0"
+ 
+              {/* Notifications Dropdown (Aligned perfectly with the right edge of the profile photo) */}
+              <AnimatePresence>
+                {showNotificationsDropdown && (
+                  <motion.div
+                    ref={notificationsRef}
+                    initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.99 }}
+                    transition={{ 
+                      type: "spring", 
+                      damping: 30, 
+                      stiffness: 400
+                    }}
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right"
+                  >
+                    {/* Dropdown Header */}
+                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        Notificações
+                        {derivedNotifications.filter(n => !n.isRead).length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black">
+                            {derivedNotifications.filter(n => !n.isRead).length}
+                          </span>
+                        )}
+                      </h2>
+                      
+                      <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
+                        <button 
+                          onClick={() => setNotificationFilter('all')}
+                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
+                            notificationFilter === 'all' 
+                              ? 'bg-white shadow-sm text-slate-900' 
+                              : 'bg-transparent text-slate-500 hover:text-slate-700'
+                          }`}
                         >
-                          <span className="material-symbols-outlined text-[18px]">open_in_new</span>
+                          Todas
+                        </button>
+                        <button 
+                          onClick={() => setNotificationFilter('unread')}
+                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
+                            notificationFilter === 'unread' 
+                              ? 'bg-white shadow-sm text-slate-900' 
+                              : 'bg-transparent text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Não lidas
                         </button>
                       </div>
-                      {completedCount > 0 && (
-                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                          Continue praticando para dominar os numerais em três idiomas!
-                        </p>
-                      )}
-                      {completedCount === 0 && (
-                        <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
-                          Você ainda não soletrou nenhuma palavra. Comece agora no ábaco!
-                        </p>
-                      )}
                     </div>
-
-                    {/* Divider */}
-                    <div className="border-t border-slate-100" />
-
-                    {/* Actions */}
-                    <div className="px-4 py-3 flex flex-col gap-1">
-                      <button
-                        onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer bg-transparent border-none text-left"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">manage_accounts</span>
-                        Editar Perfil
-                      </button>
-                      <button
-                        onClick={() => { setShowProfileMenu(false); onLogout(); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-red-500 hover:bg-red-50 transition-colors cursor-pointer bg-transparent border-none text-left"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">logout</span>
-                        Sair da conta
-                      </button>
+ 
+                    {/* Dropdown Content with smooth height animation */}
+                    <motion.div 
+                      animate={{ height: 'auto' }}
+                      transition={{ 
+                        type: "spring", 
+                        damping: 30, 
+                        stiffness: 400 
+                      }}
+                      style={{ overflow: 'hidden' }}
+                      className="bg-white"
+                    >
+                      <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
+                        {(() => {
+                          const displayed = derivedNotifications.filter(n => {
+                            if (notificationFilter === 'unread') return !n.isRead;
+                            return true;
+                          });
+ 
+                          if (displayed.length === 0) {
+                            return (
+                              <div className="px-5 py-8 text-center text-slate-400 text-xs font-semibold">
+                                Nenhuma notificação por enquanto.
+                              </div>
+                            );
+                          }
+ 
+                          return displayed.map((notif) => (
+                            <div 
+                              key={notif.id}
+                              onClick={() => {
+                                // Mark as read
+                                if (!notif.isRead) {
+                                    setReadNotifications(prev => [...prev, notif.id]);
+                                }
+                                setShowNotificationsDropdown(false);
+                                // Go to abacus directly
+                                if (onGoToAbacus) {
+                                  onGoToAbacus(notif.taskTitle, notif.taskDescription);
+                                }
+                              }}
+                              className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${
+                                !notif.isRead ? 'bg-indigo-50/10' : ''
+                              }`}
+                            >
+                              {/* Avatar section with badge */}
+                              <div className="relative flex-shrink-0 select-none">
+                                <img 
+                                  alt="Teacher avatar" 
+                                  className="w-12 h-12 rounded-full object-cover border border-slate-100" 
+                                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N" 
+                                />
+                                <div className="absolute -right-1 -bottom-1 bg-purple-600 text-white p-0.5 rounded-full border-2 border-white flex items-center justify-center">
+                                  <span className="material-symbols-outlined text-[10px] block font-black">assignment</span>
+                                </div>
+                              </div>
+ 
+                              {/* Notification details */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-start">
+                                  <p className="text-sm font-semibold text-slate-900">
+                                    Prof. Marcos 
+                                    <span className="text-slate-400 font-normal ml-2 text-xs">
+                                      {formatTimeAgo(notif.createdAt)}
+                                    </span>
+                                  </p>
+                                  {!notif.isRead && (
+                                    <div className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0 mt-[6px]"></div>
+                                  )}
+                                </div>
+                                <p className="text-sm mt-0.5 text-slate-900">
+                                  Enviou a tarefa: <span className="font-semibold">{notif.taskTitle}</span>
+                                </p>
+                                <p 
+                                  className="text-xs mt-1.5 text-slate-500 leading-relaxed"
+                                  style={{
+                                    display: '-webkit-box',
+                                    WebkitLineClamp: 2,
+                                    WebkitBoxOrient: 'vertical',
+                                    overflow: 'hidden'
+                                  }}
+                                >
+                                  {notif.taskDescription || "Pratique soletração no ábaco digital em três idiomas."}
+                                </p>
+                              </div>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </motion.div>
+ 
+                    {/* Dropdown Footer */}
+                    {derivedNotifications.filter(n => !n.isRead).length > 0 && (
+                      <div className="p-3 border-t border-slate-100 text-center bg-slate-50/50 select-none">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const allIds = derivedNotifications.map(n => n.id);
+                            setReadNotifications(prev => [...new Set([...prev, ...allIds])]);
+                          }}
+                          className="text-xs text-indigo-600 hover:text-indigo-800 font-bold bg-transparent border-none cursor-pointer"
+                        >
+                          Marcar todas como lidas
+                        </button>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+ 
+              {/* Profile Dropdown (Symmetric and right-aligned to the profile photo) */}
+              <AnimatePresence>
+                {showProfileMenu && (
+                  <motion.div
+                    ref={profileMenuRef}
+                    initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.99 }}
+                    transition={{ 
+                      type: "spring", 
+                      damping: 30, 
+                      stiffness: 400
+                    }}
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right"
+                  >
+                    {/* Header */}
+                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                      <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
+                      <span className="material-symbols-outlined text-slate-400">person</span>
                     </div>
-                  </div>
-                </>
-              )}
+ 
+                    {/* Scrollable Content */}
+                    <div className="overflow-y-auto bg-white">
+                      {/* User info details */}
+                      <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                        <div className="relative shrink-0">
+                          <img 
+                            alt="Avatar" 
+                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                            src="src/assets/Imagens/perfil aluno/alunoexemplo.avif" 
+                          />
+                          <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
+                            <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
+                          </div>
+                        </div>
+                        <div className="text-left min-w-0">
+                          <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
+                          <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'aluno@abbadigital.com'}</p>
+                        </div>
+                      </div>
+ 
+                      {/* Progress card */}
+                      <div className="p-5 flex flex-col gap-3">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">Progresso do Ábaco Digital</p>
+                              <p className="text-[11px] text-slate-400 mt-1">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
+                            </div>
+                            <span className="material-symbols-outlined text-indigo-500 text-lg">emoji_events</span>
+                          </div>
+                          
+                          {/* Progress bar */}
+                          <div className="w-full h-2.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500" 
+                              style={{ width: `${(completedCount / NUMERAL_ITEMS.length) * 100}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+ 
+                      {/* Dropdown Menu Actions */}
+                      <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                        <button 
+                          onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">task</span>
+                            Ver Minhas Tarefas
+                          </span>
+                          <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                          Editar Perfil
+                        </button>
+                        
+                        <button 
+                          onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">logout</span>
+                          Sair da Conta
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </header>
@@ -404,6 +1119,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       setDragActive(false);
                       if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                         const file = e.dataTransfer.files[0];
+                        const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+                        const fileName = file.name.toLowerCase();
+                        const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+                        if (!isAllowed) {
+                          alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
+                          return;
+                        }
+
+                        const maxSize = 5 * 1024 * 1024; // 5MB
+                        if (file.size > maxSize) {
+                          alert('O tamanho do arquivo excede o limite máximo de 5MB!');
+                          return;
+                        }
+
                         const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
                         setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
                       }
@@ -420,7 +1150,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       type="file"
                       className="hidden"
                       onChange={handleFileChange}
-                      accept=".pdf,.doc,.docx,.zip,.rar,.png,.jpg,.jpeg,.txt"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
                     />
                     <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
                       <span className="material-symbols-outlined text-primary text-[24px]">upload_file</span>
@@ -429,36 +1159,200 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <p className="text-sm font-semibold text-slate-700">Arraste um arquivo aqui</p>
                       <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para selecionar</span></p>
                     </div>
-                    <p className="text-[10px] text-slate-400">PDF, DOC, ZIP, PNG, JPG — máx. 25 MB</p>
+                    <p className="text-[10px] text-slate-400">PDF ou Imagens — máx. 5 MB</p>
                   </div>
 
-                  {/* Link Input */}
+                  {/* Smart Teacher Link Input */}
                   <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-slate-400 text-[20px]">link</span>
                       <p className="text-sm font-semibold text-slate-700">Fazer o upload por link</p>
                     </div>
-                    <input
-                      type="url"
-                      value={uploadLink}
-                      onChange={(e) => setUploadLink(e.target.value)}
-                      placeholder="https:whatsapp.com.br/..."
-                      className="w-full px-4 py-3 rounded-lg border border-slate-200 text-sm text-slate-700 placeholder-slate-400 outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all bg-slate-50"
-                    />
-                    <button
-                      onClick={() => {
-                        if (uploadLink.trim()) {
-                          setTaskFiles(prev => [...prev, { name: uploadLink, size: 'link' }]);
-                          setUploadLink('');
-                          alert('Link enviado com sucesso!');
-                        }
-                      }}
-                      disabled={!uploadLink.trim()}
-                      className="w-full py-2.5 rounded-lg bg-primary text-white font-semibold text-sm transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
-                    >
-                      Fazer upload do Link
-                    </button>
+
+                    {/* Input field */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="task-link-input"
+                        value={uploadLink}
+                        onChange={(e) => {
+                          setUploadLink(e.target.value);
+                          setLinkError(null);
+                          setValidatedLink(null);
+                        }}
+                        onBlur={(e) => validateAndPreviewLink(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
+                        placeholder="Cole o link ou digite o código de 6 dígitos do professor..."
+                        className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${
+                          linkError
+                            ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
+                            : validatedLink
+                            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
+                            : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
+                        }`}
+                      />
+                      {uploadLink && (
+                        <button
+                          type="button"
+                          onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Validation error */}
+                    <AnimatePresence>
+                      {linkError && (
+                        <motion.div
+                          key="link-error"
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
+                        >
+                          <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
+                          <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Validated link preview */}
+                    <AnimatePresence>
+                      {validatedLink && (
+                        <motion.div
+                          key="link-preview"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div
+                            className="rounded-xl p-4 flex flex-col gap-3"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
+                              border: '1px solid rgba(99,102,241,0.2)'
+                            }}
+                          >
+                            {/* Tag */}
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
+                                style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                              >
+                                ✓ Link verificado
+                              </span>
+                            </div>
+
+                            {/* Task info */}
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                                <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
+                                <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
+                              </div>
+                            </div>
+
+                            {/* Link preview text */}
+                            <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
+                              <p className="text-[11px] text-slate-400 font-medium truncate">{validatedLink.link}</p>
+                            </div>
+
+                            {/* Fazer tarefa button */}
+                            <button
+                              type="button"
+                              onClick={handleAcceptTaskLink}
+                              className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
+                              Fazer tarefa
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Validate button when no preview yet */}
+                    {!validatedLink && !linkError && (
+                      <button
+                        type="button"
+                        onClick={() => validateAndPreviewLink(uploadLink)}
+                        disabled={!uploadLink.trim()}
+                        className="w-full py-2.5 rounded-lg bg-primary text-white font-semibold text-sm transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
+                      >
+                        Verificar Link
+                      </button>
+                    )}
                   </div>
+
+                  {/* Accepted Task Links history */}
+                  <AnimatePresence>
+                    {acceptedTaskLinks.length > 0 && (
+                      <motion.div
+                        key="accepted-links"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="mt-1"
+                      >
+                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Links de tarefa aceitos ({acceptedTaskLinks.length})</p>
+                        <div className="flex flex-col gap-2">
+                          {acceptedTaskLinks.map((item) => (
+                            <motion.div
+                              key={item.id}
+                              layout
+                              initial={{ opacity: 0, y: 6 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-slate-100 shadow-sm"
+                            >
+                              <div className="flex items-center gap-3 overflow-hidden">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                                  <span className="material-symbols-outlined text-white" style={{ fontSize: 16 }}>assignment</span>
+                                </div>
+                                <div className="overflow-hidden">
+                                  <p className="text-sm font-semibold text-slate-800 truncate">{item.taskTitle}</p>
+                                  <p className="text-[11px] text-slate-400 truncate">{item.link}</p>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 shrink-0 ml-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (onGoToAbacus) {
+                                      onGoToAbacus(
+                                        item.taskTitle,
+                                        'Atividade carregada via link do professor.'
+                                      );
+                                    } else {
+                                      alert(`Iniciando atividade: ${item.taskTitle}`);
+                                    }
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:brightness-110 active:scale-95 cursor-pointer border-none flex items-center gap-1"
+                                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">play_arrow</span>
+                                  Fazer tarefa
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setAcceptedTaskLinks(prev => prev.filter(l => l.id !== item.id))}
+                                  className="text-slate-300 hover:text-red-400 transition-colors bg-transparent border-none cursor-pointer p-1"
+                                  title="Remover"
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                                </button>
+                              </div>
+                            </motion.div>
+                          ))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Uploaded Files List */}
@@ -493,44 +1387,24 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <div className="flex flex-wrap items-center justify-between gap-sm mb-lg bg-white p-sm rounded-xl border border-outline-variant shadow-xs">
                 <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-50 border border-slate-100">
                   <button
-                    onClick={() => setTaskFilter('all')}
+                    onClick={() => setActiveTabLabel('recebidas')}
                     className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      taskFilter === 'all'
+                      activeTabLabel === 'recebidas'
                         ? 'bg-primary text-on-primary font-bold shadow-sm'
                         : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
                     }`}
                   >
-                    Todas
+                    Recebidas
                   </button>
                   <button
-                    onClick={() => setTaskFilter('pending')}
+                    onClick={() => setActiveTabLabel('enviadas')}
                     className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      taskFilter === 'pending'
+                      activeTabLabel === 'enviadas'
                         ? 'bg-primary text-on-primary font-bold shadow-sm'
                         : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
                     }`}
                   >
-                    Pendentes
-                  </button>
-                  <button
-                    onClick={() => setTaskFilter('in-progress')}
-                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      taskFilter === 'in-progress'
-                        ? 'bg-primary text-on-primary font-bold shadow-sm'
-                        : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
-                    }`}
-                  >
-                    Em Andamento
-                  </button>
-                  <button
-                    onClick={() => setTaskFilter('completed')}
-                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      taskFilter === 'completed'
-                        ? 'bg-primary text-on-primary font-bold shadow-sm'
-                        : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
-                    }`}
-                  >
-                    Concluídas
+                    Enviadas
                   </button>
                 </div>
 
@@ -546,180 +1420,294 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
               </div>
 
-              {/* Title Section */}
-              <h3 className="text-lg font-extrabold text-slate-800 tracking-tight mb-md pl-1 font-display animate-fade-in">
-                Atividades
-              </h3>
+              {/* Title Section & Description based on filters */}
+              <div className="mb-md pl-1 animate-fade-in">
+                {activeTabLabel === 'recebidas' ? (
+                  <>
+                    <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
+                      Atividades recebidas
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">essas atividades foram enviadas pelo professor</p>
+                  </>
+) : (
+                  <>
+                    <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
+                      Atividades enviadas
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Essas são as atividades que você enviou ao professor</p>
+                  </>
+                )}
+              </div>
 
               {/* Bento Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-                {[
-                  {
-                    id: 'numerais',
-                    title: 'Exercício de Numerais Multilingue',
-                    description: 'Pratique a escrita e pronúncia de numerais em três idiomas diferentes. Foco em fluência e acurácia.',
-                    dueDate: 'Entrega: 15 de Junho, 2026',
-                    status: completedCount === 0 ? 'pending' : completedCount === NUMERAL_ITEMS.length ? 'completed' : 'in-progress',
-                    progress: progressPercent,
-                    grade: null,
-                    urgent: false,
-                    filesCount: 1,
-                    teacherImg: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
-                    actionLabel: 'Ver Detalhes',
-                    onAction: () => setStudentView('details')
-                  },
-                  {
-                    id: 'civilizacoes',
-                    title: 'História das Civilizações',
-                    description: 'Estudo dirigido sobre o surgimento das primeiras cidades na Mesopotâmia e Egito antigo.',
-                    dueDate: 'Entrega: 28 de Outubro, 2026',
-                    status: 'in-progress',
-                    progress: 65,
-                    grade: null,
-                    urgent: false,
-                    filesCount: 0,
-                    teacherImg: 'https://lh3.googleusercontent.com/aida-public/AB6AXuArL0ZXqw6-8nd2XC05bbf6WVOoUU7TO1buAqTTRi-UwQNteb74cDiUJELC1WLWCPFECigsAECVBpfAqi0-XIMBJOCrxJgHZ5eJCJL3dnoiVCqQfe9RVCvuQnwHmYaVZdw9RDfMxPvORyEW70W8wnGnpSHr-0MBySwQN4tZq3IApQJrivULbWxmPYuhVNWOQ0aCYnOtwP6Yv6U5MYuQa7uWx9QicxDtzpdQ-nex-lRyyU5yyO4_lGSpeFm5uJIM8fxk5uJWBlTMgqae',
-                    actionLabel: 'Ver Detalhes',
-                    onAction: () => alert('Simulação: Você completou 65% das leituras recomendadas sobre o Egito Antigo.')
-                  },
-                  {
-                    id: 'busca',
-                    title: 'Algoritmos de Busca',
-                    description: 'Implementação de Breadth-First Search e Depth-First Search em Python para resolução de labirintos.',
-                    dueDate: 'Concluído em: 15 de Outubro',
-                    status: 'completed',
-                    progress: 100,
-                    grade: '9.5',
-                    urgent: false,
-                    filesCount: 0,
-                    teacherImg: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBBJG1mO85w2gGT5jVLx5pdUF2yDzUZTbfShygGj5W608nMHXsV5sL3KdsDS0hzc3a2L39vvLMt2WiyAhoebnf8dSvngFAZTF7NwUv_9OBMBfjzHiATtj381zjTxM_aMKVARdWyMsbCOrk9os50WUFAPeGVXNxjs8PbwHGwFe1sYUrrdU7E4s3BwKuk7U9_sl2std6bZoajgBK9BcZlNAJR6BE-VTmxBxnm9Uzz0hoeYrC7Ya2Zfm23yhnuqFLULuc65BehLTn5LVdm',
-                    actionLabel: 'Ver Feedback',
-                    onAction: () => alert('"Algoritmos de Busca" - Feedback do Professor:\nExcelente lógica e legibilidade de código. Ótima escolha de estruturas de dados.\nNota: 9.5')
-                  },
-                  {
-                    id: 'quimica',
-                    title: 'Laboratório de Química: Ácidos',
-                    description: 'Relatório detalhado sobre a reação de neutralização entre ácido clorídrico e hidróxido de sódio.',
-                    dueDate: 'Urgente: Entrega amanhã',
-                    status: 'pending',
-                    progress: 0,
-                    grade: null,
-                    urgent: true,
-                    filesCount: 2,
-                    teacherImg: 'https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150&h=150',
-                    actionLabel: 'Ver Detalhes',
-                    onAction: () => alert('Simulação: Baixando os 2 arquivos PDF com as instruções do Laboratório de Química...')
-                  }
-                ]
-                .filter(t => {
-                  const matchesFilter = taskFilter === 'all' ? true : t.status === taskFilter;
-                  const matchesSearch = t.title.toLowerCase().includes(generalSearchQuery.toLowerCase()) || 
-                                        t.description.toLowerCase().includes(generalSearchQuery.toLowerCase());
-                  return matchesFilter && matchesSearch;
-                })
-                .map((task) => {
-                  return (
-                    <div 
-                      key={task.id} 
-                      className="bg-white rounded-2xl border border-slate-200/85 p-6 flex flex-col gap-4 transition-all hover:translate-y-[-4px] hover:shadow-md duration-300 relative overflow-hidden min-h-[290px] shadow-xs"
-                    >
-                      {/* Left Stripe Indicator */}
-                      <div className={`absolute top-0 left-0 w-1.5 h-full ${getLeftStripe(task.status)}`} />
-                      
-                      {/* Header Row */}
-                      <div className="flex items-start justify-between w-full pl-1">
-                        <div className="flex items-center gap-3">
-                          {/* Stylized Logo Square */}
-                          <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${getLogoGradient(task.id)}`}>
-                            <span className="material-symbols-outlined text-[22px] font-medium">
-                              {getLogoIcon(task.id)}
-                            </span>
-                          </div>
-                          
-                          {/* Category Tag & Metadata */}
-                          <div className="flex flex-col gap-0.5">
-                            <span className={`text-[10px] font-extrabold tracking-wider uppercase ${
-                              task.urgent ? 'text-red-600' : 'text-slate-400'
-                            }`}>
-                              {getCategoryTag(task.id)}
-                            </span>
-                            <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
-                              <span className="material-symbols-outlined text-[12px]">schedule</span>
-                              {task.dueDate.replace('Entrega: ', '').replace('Concluído em: ', '')}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Three Dots More Menu */}
-                        <button className="text-slate-400 hover:text-slate-600 transition-colors p-1 bg-transparent border-none cursor-pointer outline-none flex items-center justify-center rounded-lg hover:bg-slate-50">
-                          <span className="material-symbols-outlined text-[20px]">more_horiz</span>
-                        </button>
-                      </div>
-
-                      {/* Content Area */}
-                      <div className="space-y-1.5 pl-1">
-                        <h3 className="font-extrabold text-slate-800 text-sm tracking-tight leading-snug font-display">
-                          {task.title}
-                        </h3>
-                        <p className="text-xs text-slate-500 font-sans line-clamp-2 leading-relaxed">
-                          {task.description}
-                        </p>
-                      </div>
-
-                      {/* Progress Area if Active */}
-                      {task.status === 'in-progress' && (
-                        <div className="space-y-1 mt-1 pl-1">
-                          <div className="flex justify-between text-[10px] font-bold text-slate-400">
-                            <span>Progresso</span>
-                            <span className="text-primary">{task.progress}%</span>
-                          </div>
-                          <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                            <div 
-                              className="bg-gradient-to-r from-primary to-indigo-500 h-full rounded-full transition-all duration-500" 
-                              style={{ width: `${task.progress}%` }} 
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Divider & Footer */}
-                      <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between pl-1">
-                        <div className="flex items-center gap-2">
-                          {task.grade ? (
-                            <div className="flex items-center gap-0.5 text-emerald-600 font-extrabold text-[11px] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                              <span className="material-symbols-outlined text-[13px]">grade</span>
-                              <span>Nota: {task.grade}</span>
-                            </div>
-                          ) : task.filesCount > 0 ? (
-                            <div className="flex items-center gap-1 text-slate-400 text-[11px]">
-                              <span className="material-symbols-outlined text-[14px]">attachment</span>
-                              <span>{task.filesCount} {task.filesCount === 1 ? 'arquivo' : 'arquivos'}</span>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1.5">
-                              <img 
-                                src={task.teacherImg} 
-                                alt="Professor" 
-                                className="w-6 h-6 rounded-full object-cover border border-slate-200" 
-                              />
-                              <span className="text-[10px] text-slate-400 font-medium">Prof. Ricardo</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Action Button */}
-                        <button
-                          onClick={task.onAction}
-                          className={`px-4 py-1.5 rounded-full font-extrabold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 duration-100 border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50`}
-                        >
-                          <span>{task.actionLabel}</span>
-                          <span className="material-symbols-outlined text-[12px] font-bold">open_in_new</span>
-                        </button>
-                      </div>
-                    </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg min-h-[320px]">
+                <AnimatePresence mode="popLayout">
+                {(() => {
+                  const autoAssignedTasks = teacherTasks.filter(task => 
+                    task.status === 'active' && 
+                    (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
                   );
-                })}
+
+                  const mergedRecebidas = [...acceptedTaskLinks];
+                  autoAssignedTasks.forEach(task => {
+                    if (!mergedRecebidas.some(link => link.taskId === task.id)) {
+                      mergedRecebidas.push({
+                        id: `AUTO-${task.id}`,
+                        studentName: user.name,
+                        taskId: task.id,
+                        taskTitle: task.title,
+                        createdAt: task.startDate || new Date().toISOString(),
+                        link: 'Atribuição direta do professor'
+                      });
+                    }
+                  });
+
+                  const listToRender = activeTabLabel === 'recebidas'
+                    ? mergedRecebidas.map(link => {
+                        const dbTask = teacherTasks.find(t => t.id === link.taskId);
+                        const isTask1 = dbTask?.id === 'task-1';
+                        const progress = isTask1 ? progressPercent : 0;
+                        const status = progress === 100 
+                          ? 'completed' 
+                          : progress > 0 
+                          ? 'in-progress' 
+                          : 'pending';
+
+                        return {
+                          id: link.id,
+                          title: link.taskTitle,
+                          description: dbTask?.description || 'Soletrar as palavras indicadas pelo professor usando as cores correspondentes no ábaco digital.',
+                          dueDate: dbTask?.dueDate ? `Entrega: ${new Date(dbTask.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}` : 'Entrega flexível',
+                          status: status,
+                          progress: progress,
+                          grade: null,
+                          urgent: dbTask?.priority === 'Alta',
+                          filesCount: dbTask?.targetWords?.length || 0,
+                          teacherImg: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
+                          actionLabel: 'Fazer tarefa',
+                          supportFiles: dbTask?.supportFiles || [],
+                          onAction: () => {
+                            if (onGoToAbacus) {
+                              onGoToAbacus(link.taskTitle, dbTask?.description || 'Atividade carregada via link do professor.');
+                            } else {
+                              alert(`Iniciando atividade: ${link.taskTitle}`);
+                            }
+                          }
+                        };
+                      })
+                    : sentActivities.map(activity => {
+                        return {
+                          id: activity.id,
+                          title: activity.taskTitle,
+                          description: `Esta tarefa foi concluída e enviada para o professor. Contém ${activity.spelledWordsCount} palavras soletradas no ábaco digital.`,
+                          dueDate: `Enviado em: ${new Date(activity.submittedAt).toLocaleDateString('pt-BR')} às ${new Date(activity.submittedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`,
+                          status: 'completed',
+                          progress: 100,
+                          grade: activity.grade || 'Revisado',
+                          urgent: false,
+                          filesCount: 0,
+                          teacherImg: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
+                          actionLabel: 'Ver Detalhes',
+                          supportFiles: [],
+                          onAction: () => alert(`Tarefa "${activity.taskTitle}" enviada com sucesso em ${new Date(activity.submittedAt).toLocaleString('pt-BR')}.`)
+                        };
+                      });
+
+                  const filtered = listToRender.filter(t => {
+                    return t.title.toLowerCase().includes(generalSearchQuery.toLowerCase()) || 
+                           t.description.toLowerCase().includes(generalSearchQuery.toLowerCase());
+                  });
+
+                  if (filtered.length === 0) {
+                    return (
+                      <div className="col-span-full py-16 text-center text-slate-400 text-sm">
+                        Nenhuma atividade encontrada nesta seção.
+                      </div>
+                    );
+                  }
+
+                  return filtered.map((task) => {
+                    return (
+                      <motion.div 
+                        layout
+                        initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -15, scale: 0.98 }}
+                        whileHover={{ 
+                          y: -6,
+                          boxShadow: "0 12px 20px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -8px rgba(0, 0, 0, 0.04)"
+                        }}
+                        transition={{ 
+                          type: "spring",
+                          damping: 26,
+                          stiffness: 280
+                        }}
+                        key={task.id} 
+                        className="bg-white rounded-2xl border border-slate-200/85 p-6 flex flex-col gap-4 relative overflow-hidden min-h-[290px] shadow-xs w-full hover:border-slate-300 transition-colors"
+                      >
+                        {/* Left Stripe Indicator */}
+                        <div className={`absolute top-0 left-0 w-1.5 h-full ${getLeftStripe(task.status)}`} />
+                        
+                        {/* Header Row */}
+                        <div className="flex items-start justify-between w-full pl-1">
+                          <div className="flex items-center gap-3">
+                            {/* Stylized Logo Square */}
+                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${getLogoGradient(task.id)}`}>
+                              <span className="material-symbols-outlined text-[22px] font-medium">
+                                {getLogoIcon(task.id)}
+                              </span>
+                            </div>
+                            
+                            {/* Category Tag & Metadata */}
+                            <div className="flex flex-col gap-0.5">
+                              <span className={`text-[10px] font-extrabold tracking-wider uppercase ${
+                                task.urgent ? 'text-red-600' : 'text-slate-400'
+                              }`}>
+                                {getCategoryTag(task.id)}
+                              </span>
+                              <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                {task.dueDate.replace('Entrega: ', '').replace('Concluído em: ', '').replace('Enviado em: ', '')}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Action badge */}
+                          <div className="flex items-center gap-1">
+                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              task.status === 'completed' ? 'bg-green-50 text-green-600 border border-green-100' :
+                              task.status === 'in-progress' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                              'bg-red-50 text-red-600 border border-red-100'
+                            }`}>
+                              {task.status === 'completed' ? 'Concluída' : task.status === 'in-progress' ? 'Fazendo' : 'Pendente'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Content Area */}
+                        <div className="space-y-1.5 pl-1">
+                          <h3 className="font-extrabold text-slate-800 text-sm tracking-tight leading-snug font-display">
+                            {task.title}
+                          </h3>
+                          <p className="text-xs text-slate-500 font-sans line-clamp-2 leading-relaxed">
+                            {task.description}
+                          </p>
+                        </div>
+
+                        {/* Progress Area if Active */}
+                        {task.status === 'in-progress' && (
+                          <div className="space-y-1 mt-1 pl-1">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                              <span>Progresso</span>
+                              <span className="text-primary">{task.progress}%</span>
+                            </div>
+                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                              <div 
+                                className="bg-gradient-to-r from-primary to-indigo-500 h-full rounded-full transition-all duration-500" 
+                                style={{ width: `${task.progress}%` }} 
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Support Files Area (PDF or Images from Teacher) */}
+                        {task.supportFiles && task.supportFiles.length > 0 && (
+                          <div className="space-y-1.5 mt-1 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
+                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                              <span className="material-symbols-outlined text-[12px]">folder_open</span>
+                              Arquivos de Apoio ({task.supportFiles.length})
+                            </span>
+                            <div className="flex flex-col gap-1 max-h-[85px] overflow-y-auto pr-1">
+                              {task.supportFiles.map((file: any, idx: number) => {
+                                const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                                return (
+                                  <a
+                                    key={idx}
+                                    href={file.url}
+                                    download={file.name}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="flex items-center justify-between p-1.5 bg-white border border-slate-200/80 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left no-underline group cursor-pointer"
+                                    title={`Baixar ${file.name} (${file.size})`}
+                                  >
+                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                      <span className={`material-symbols-outlined text-[15px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
+                                        {isPdf ? 'picture_as_pdf' : 'image'}
+                                      </span>
+                                      <span className="text-[11px] text-slate-700 font-semibold truncate group-hover:text-primary transition-colors">
+                                        {file.name}
+                                      </span>
+                                    </div>
+                                    <span className="text-[8px] text-slate-400 font-mono ml-2 shrink-0 group-hover:text-primary/70 transition-colors">
+                                      {file.size}
+                                    </span>
+                                  </a>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Divider & Footer */}
+                        <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between pl-1">
+                          <div className="flex items-center gap-2">
+                            {task.grade ? (
+                              <div className="flex items-center gap-0.5 text-emerald-600 font-extrabold text-[11px] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                                <span className="material-symbols-outlined text-[13px]">grade</span>
+                                <span>Status: {task.grade}</span>
+                              </div>
+                            ) : task.filesCount > 0 ? (
+                              <div className="flex items-center gap-1 text-slate-400 text-[11px]">
+                                <span className="material-symbols-outlined text-[14px]">attachment</span>
+                                <span>{task.filesCount} {task.filesCount === 1 ? 'palavra' : 'palavras'}</span>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-1.5">
+                                <img 
+                                  src={task.teacherImg} 
+                                  alt="Professor" 
+                                  className="w-6 h-6 rounded-full object-cover border border-slate-200" 
+                                />
+                                <span className="text-[10px] text-slate-400 font-medium">Prof. Décio</span>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Action Buttons */}
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={task.onAction}
+                              className={`px-4 py-1.5 rounded-full font-extrabold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 duration-100 border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50`}
+                            >
+                              <span>{task.actionLabel}</span>
+                              <span className="material-symbols-outlined text-[12px] font-bold">open_in_new</span>
+                            </button>
+                            
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
+                                  if (activeTabLabel === 'recebidas') {
+                                    setAcceptedTaskLinks(prev => prev.filter(l => l.id !== task.id));
+                                  } else {
+                                    setSentActivities(prev => prev.filter(a => a.id !== task.id));
+                                  }
+                                }
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border-none cursor-pointer flex items-center justify-center"
+                              title="Remover"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    );
+                  });
+                })()}
+                </AnimatePresence>
               </div>
+
 
               {/* Pagination Footer */}
               <div className="mt-xl py-lg border-t border-outline-variant flex items-center justify-center">
@@ -790,7 +1778,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
                     <div className="flex items-center justify-between mb-md">
                       <h3 className="font-headline-md text-headline-md text-on-surface">Arquivos da Tarefa</h3>
-                      <span className="text-label-sm text-on-surface-variant">Formatos aceitos: PDF, DOCX, JPG</span>
+                      <span className="text-label-sm text-on-surface-variant">PDF e Imagens — máx. 5 MB</span>
                     </div>
 
                     <input 
@@ -798,7 +1786,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       ref={fileInputRef} 
                       onChange={handleFileChange} 
                       className="hidden" 
-                      accept=".pdf,.docx,.jpg,.jpeg,.png"
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
                     />
                     <div 
                       onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -808,6 +1796,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         setDragActive(false);
                         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                           const file = e.dataTransfer.files[0];
+                          const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+                          const fileName = file.name.toLowerCase();
+                          const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+                          if (!isAllowed) {
+                            alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
+                            return;
+                          }
+
+                          const maxSize = 5 * 1024 * 1024; // 5MB
+                          if (file.size > maxSize) {
+                            alert('O tamanho do arquivo excede o limite máximo de 5MB!');
+                            return;
+                          }
+
                           const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
                           setTaskFiles([...taskFiles, { name: file.name, size: `${sizeMB} MB` }]);
                           alert(`Arquivo "${file.name}" anexado com sucesso!`);
@@ -881,23 +1884,32 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <h4 className="font-headline-md text-headline-md text-on-surface">Enviar Link da Tarefa</h4>
                       </div>
                       <p className="text-xs text-on-surface-variant leading-relaxed font-light">
-                        Cole abaixo o link da sua tarefa/atividade enviado pelo professor para realizá-la.
+                        Cole abaixo o link do WhatsApp enviado pelo professor para realizar a sua tarefa.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-sm items-center mt-xs w-full">
                         <input 
                           type="url"
                           value={uploadLink}
                           onChange={(e) => setUploadLink(e.target.value)}
-                          placeholder="Cole o link da tarefa aqui (ex: https://...)"
+                          placeholder="Cole o link do WhatsApp aqui (ex: https://wa.me/... ou https://chat.whatsapp.com/...)"
                           className="w-full sm:flex-1 px-4 py-3 rounded-lg border border-outline text-sm text-on-surface placeholder-on-surface-variant/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all bg-surface-container-low"
                         />
                         <button
                           onClick={() => {
-                            if (uploadLink.trim()) {
-                              setTaskFiles(prev => [...prev, { name: uploadLink, size: 'link' }]);
-                              setUploadLink('');
-                              alert('Link anexado com sucesso!');
+                            const trimmedLink = uploadLink.trim();
+                            if (!trimmedLink) return;
+
+                            // Regex to match WhatsApp domains and paths (wa.me, api.whatsapp.com, chat.whatsapp.com, web.whatsapp.com)
+                            const whatsappRegex = /^(https?:\/\/)?(www\.)?(wa\.me|api\.whatsapp\.com|chat\.whatsapp\.com|web\.whatsapp\.com)\/.+$/i;
+
+                            if (!whatsappRegex.test(trimmedLink)) {
+                              alert('Por favor, insira um link válido do WhatsApp (ex: https://wa.me/... ou https://chat.whatsapp.com/...)');
+                              return;
                             }
+
+                            setTaskFiles(prev => [...prev, { name: trimmedLink, size: 'link' }]);
+                            setUploadLink('');
+                            alert('Link anexado com sucesso!');
                           }}
                           type="button"
                           disabled={!uploadLink.trim()}
@@ -1111,7 +2123,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
 
                 {/* Numeral Items Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 min-h-[220px]">
+                  <AnimatePresence>
                   {filteredItems.length === 0 ? (
                     <div className="col-span-full text-center py-8 text-slate-400 italic text-sm">
                       Nenhuma palavra encontrada.
@@ -1122,8 +2135,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       const isDone = isWordCompleted(item.word);
                       
                       return (
-                        <div 
-                          key={idx}
+                        <motion.div 
+                          key={item.word + '-' + item.language}
+                          layout="position"
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                           className="bg-white rounded-2xl border border-slate-200/85 p-5 flex flex-col gap-4 transition-all hover:translate-y-[-4px] hover:shadow-md duration-300 relative overflow-hidden min-h-[195px] shadow-xs"
                         >
                           {/* Left Stripe Indicator */}
@@ -1192,10 +2210,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             </span>
                             <span>{isDone ? 'Soletrar Novamente' : 'Soletrar'}</span>
                           </button>
-                        </div>
+                        </motion.div>
                       );
                     })
                   )}
+                  </AnimatePresence>
                 </div>
               </section>
             </div>
@@ -1384,38 +2403,55 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <div className="flex flex-nowrap overflow-x-auto gap-4 no-scrollbar pb-4 scroll-smooth">
                   {(() => {
                     const query = studentView === 'tasks-list' ? generalSearchQuery : taskSearchQuery;
-                    const searchTasks = [
-                      {
-                        id: 'numerais',
-                        title: 'Exercício de Numerais Multilingue',
-                        description: 'Pratique a escrita e pronúncia de numerais no ábaco em três idiomas.',
-                        status: progressPercent === 100 ? 'completed' : 'in-progress',
-                        dueDate: 'Prazo: 15 de Junho'
-                      },
-                      {
-                        id: 'civilizacoes',
-                        title: 'História das Civilizações',
-                        description: 'Estudo dirigido sobre o surgimento das primeiras civilizações na Mesopotâmia.',
-                        status: 'pending',
-                        dueDate: 'Entrega em 3 dias'
-                      },
-                      {
-                        id: 'busca',
-                        title: 'Algoritmos de Busca',
-                        description: 'Implementação de Breadth-First Search e Depth-First Search em Python.',
-                        status: 'completed',
-                        dueDate: 'Concluído em: 15 de Outubro'
-                      },
-                      {
-                        id: 'quimica',
-                        title: 'Laboratório de Química: Ácidos',
-                        description: 'Relatório detalhado sobre a reação de neutralização e titulação de NaOH.',
-                        status: 'pending',
-                        dueDate: 'Urgente: Amanhã'
-                      }
-                    ];
                     
-                    const filteredSearchTasks = searchTasks.filter(task => 
+                    const autoAssigned = teacherTasks.filter(task => 
+                      task.status === 'active' && 
+                      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
+                    );
+
+                    const merged = [...acceptedTaskLinks];
+                    autoAssigned.forEach(task => {
+                      if (!merged.some(link => link.taskId === task.id)) {
+                        merged.push({
+                          id: `AUTO-${task.id}`,
+                          studentName: user.name,
+                          taskId: task.id,
+                          taskTitle: task.title,
+                          createdAt: task.startDate || new Date().toISOString(),
+                          link: 'Atribuição direta do professor'
+                        });
+                      }
+                    });
+
+                    const mapped = merged.map(link => {
+                      const dbTask = teacherTasks.find(t => t.id === link.taskId);
+                      const isTask1 = dbTask?.id === 'task-1';
+                      const progress = isTask1 ? progressPercent : 0;
+                      const status = progress === 100 
+                        ? 'completed' 
+                        : progress > 0 
+                        ? 'in-progress' 
+                        : 'pending';
+
+                      return {
+                        id: link.id,
+                        taskId: link.taskId,
+                        title: link.taskTitle,
+                        description: dbTask?.description || 'Soletrar as palavras indicadas pelo professor usando as cores correspondentes no ábaco digital.',
+                        dueDate: dbTask?.dueDate ? `Entrega: ${new Date(dbTask.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}` : 'Entrega flexível',
+                        status: status,
+                        progress: progress,
+                        grade: null,
+                        urgent: dbTask?.priority === 'Alta',
+                        supportFiles: dbTask?.supportFiles || [],
+                        category: dbTask?.priority === 'Alta' ? 'Urgente' : 'Atividade'
+                      };
+                    });
+
+                    // Filter out any excluded cards
+                    const actualSearchTasks = mapped.filter(t => !excludedSearchTaskIds.includes(t.id));
+
+                    const filteredSearchTasks = actualSearchTasks.filter(task => 
                       task.title.toLowerCase().includes(query.toLowerCase()) ||
                       task.description.toLowerCase().includes(query.toLowerCase())
                     );
@@ -1427,10 +2463,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             key={task.id}
                             id="ccDxtp"
                             onClick={() => {
-                              if (task.id === 'numerais') {
+                              if (task.taskId === 'task-1') {
                                 setStudentView('details');
                               } else {
-                                setStudentView('tasks-list');
+                                if (onGoToAbacus) {
+                                  onGoToAbacus(task.title, task.description);
+                                } else {
+                                  alert(`Iniciando atividade: ${task.title}`);
+                                }
                               }
                               setSearchExpanded(false);
                               setGeneralSearchQuery('');
@@ -1440,6 +2480,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           >
                             {/* Cabeçalho ilustrado (figura com imagem base64) exatamente como no ccDxtp */}
                             <header className="relative w-full h-24 overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center shrink-0">
+                              {/* Close/Exclude Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setExcludedSearchTaskIds(prev => [...prev, task.id]);
+                                }}
+                                className="absolute top-2 left-2 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-red-500 hover:text-white text-white flex items-center justify-center shadow transition-colors cursor-pointer border-none z-30"
+                                title="Excluir atividade do modal"
+                              >
+                                <span className="material-symbols-outlined text-[14px]">close</span>
+                              </button>
+
                               <figure className="w-full h-full flex items-center justify-center p-2 opacity-85 group-hover:opacity-100 transition-opacity">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 234" className="w-full h-full max-h-20 object-contain">
                                   <image 
@@ -1714,6 +2766,44 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </form>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ALREADY ASSIGNED DUPLICATION MODAL */}
+      <AnimatePresence>
+        {showAlreadyAssignedModal && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAlreadyAssignedModal(false)}
+              className="fixed inset-0 bg-slate-900/60"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl p-8 max-w-md w-full border border-slate-200 shadow-2xl relative z-10 flex flex-col items-center text-center gap-6"
+            >
+              <div className="w-16 h-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                <span className="material-symbols-outlined text-[32px] font-bold">assignment_turned_in</span>
+              </div>
+              <div>
+                <h3 className="font-extrabold text-xl text-slate-800 tracking-tight mb-2">Atividade já atribuída!</h3>
+                <p className="text-sm text-slate-500 leading-relaxed">
+                  Esta tarefa já foi enviada a você pelo seu professor e está disponível na sua lista de atividades recebidas. Não é necessário adicioná-la novamente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAlreadyAssignedModal(false)}
+                className="w-full py-3.5 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer border-none"
+              >
+                Entendido
+              </button>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

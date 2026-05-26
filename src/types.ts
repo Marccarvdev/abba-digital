@@ -52,6 +52,7 @@ export interface TaskItem {
   teacherNote?: string;
   priority?: 'Alta' | 'Média' | 'Baixa';
   assignedStudentIds?: string[];
+  supportFiles?: { name: string; url: string; size: string }[];
 }
 
 export interface StudentSubmission {

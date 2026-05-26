@@ -441,6 +441,7 @@ const SECTIONS = [
 export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
   const [activeGroup, setActiveGroup] = useState<string | null>(null);
   const [activeGroupIndex, setActiveGroupIndex] = useState<number>(0);
+  const containerRef = React.useRef<HTMLDivElement>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [fullScreenImage, setFullScreenImage] = useState<string | null>(null);
   const [isFormModalOpen, setIsFormModalOpen] = useState(false);
@@ -754,13 +755,17 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
 
   // Prevent background scrolling while the modal gallery is active
   useEffect(() => {
+    const el = containerRef.current;
     if (activeGroup !== null) {
       document.body.style.overflow = 'hidden';
+      if (el) el.style.overflowY = 'hidden';
     } else {
       document.body.style.overflow = '';
+      if (el) el.style.overflowY = 'auto';
     }
     return () => {
       document.body.style.overflow = '';
+      if (el) el.style.overflowY = 'auto';
     };
   }, [activeGroup]);
 
@@ -910,6 +915,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
 
   return (
     <motion.div 
+      ref={containerRef}
       initial={{ opacity: 0, x: 15 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: -15 }}
