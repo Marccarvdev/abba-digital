@@ -110,15 +110,10 @@ const Undo2: React.FC<SVGProps<SVGSVGElement>> = (props) => (
 
 import { ALPHABET_CUBES } from './data';
 import { LetterCube } from './components/LetterCube';
-import { SpelledLetter, LetterCubeData, SavedWord, User, TaskItem, StudentSubmission } from './types';
+import { SpelledLetter, LetterCubeData, SavedWord } from './types';
 import { AboutSection } from './components/AboutSection';
 import Loader from './components/Loader';
 import styled from 'styled-components';
-import { LoginScreen, SignupScreen } from './components/AuthScreens';
-import { TeacherDashboard } from './components/TeacherDashboard';
-import { StudentDashboard } from './components/StudentDashboard';
-import { Confetti } from './components/Confetti';
-
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -126,7 +121,7 @@ const getShelfCubeIdForLetter = (letter: string): string => {
 };
 
 interface StyledHamburgerProps {
-  $isOpen: boolean;
+  isOpen: boolean;
 }
 
 const StyledHamburger = styled.div<StyledHamburgerProps>`
@@ -147,25 +142,25 @@ const StyledHamburger = styled.div<StyledHamburgerProps>`
   }
 
   .bar--top {
-    bottom: ${props => props.$isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
-    transform: ${props => props.$isOpen ? 'rotate(135deg)' : 'none'};
+    bottom: ${props => props.isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
+    transform: ${props => props.isOpen ? 'rotate(135deg)' : 'none'};
     transition-property: bottom, transform;
-    transition-delay: ${props => props.$isOpen ? '0s, 0.35s' : '0.35s, 0s'};
+    transition-delay: ${props => props.isOpen ? '0s, 0.35s' : '0.35s, 0s'};
   }
 
   .bar--middle {
     top: calc(50% - 3px / 2);
-    opacity: ${props => props.$isOpen ? 0 : 1};
+    opacity: ${props => props.isOpen ? 0 : 1};
     transition-property: opacity;
-    transition-duration: ${props => props.$isOpen ? '0s' : '0.35s'};
+    transition-duration: ${props => props.isOpen ? '0s' : '0.35s'};
     transition-delay: 0.35s;
   }
 
   .bar--bottom {
-    top: ${props => props.$isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
-    transform: ${props => props.$isOpen ? 'rotate(225deg)' : 'none'};
+    top: ${props => props.isOpen ? 'calc(50% - 3px / 2)' : 'calc(50% + 6px + 3px / 2)'};
+    transform: ${props => props.isOpen ? 'rotate(225deg)' : 'none'};
     transition-property: top, transform;
-    transition-delay: ${props => props.$isOpen ? '0s, 0.35s' : '0.35s, 0s'};
+    transition-delay: ${props => props.isOpen ? '0s, 0.35s' : '0.35s, 0s'};
   }
 `;
 
@@ -175,195 +170,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'app' | 'about'>('app');
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isAboutLoading, setIsAboutLoading] = useState(false);
-
-  // NEW USER PORTAL ROUTING STATES
-  const [user, setUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('abba_logged_in_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as User;
-        if (parsed.codeSession && Date.now() > parsed.codeSession.expiresAt) {
-          localStorage.removeItem('abba_logged_in_user');
-          return null;
-        }
-        return parsed;
-      } catch {
-        return null;
-      }
-    }
-    return null;
-  });
-
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'signup' | 'student-dashboard' | 'teacher-dashboard' | 'abacus'>(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.has('import')) {
-      return 'teacher-dashboard';
-    }
-    const saved = localStorage.getItem('abba_logged_in_user');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved) as User;
-        if (parsed.role === 'teacher') return 'teacher-dashboard';
-        if (parsed.role === 'student') return 'student-dashboard';
-      } catch {}
-    }
-    return 'abacus';
-  });
-
-  // State for student task spelling target
-  const [activeSpellingTarget, setActiveSpellingTarget] = useState<{ word: string; language: 'pt' | 'en' | 'de'; color: string } | null>(null);
-  
-  // State for active task title and summary on abacus header
-  const [activeTaskInfo, setActiveTaskInfo] = useState<{ title: string; summary: string } | null>(null);
-  
-  // State for teacher reviewing a submission
-  const [activeReviewSubmission, setActiveReviewSubmission] = useState<StudentSubmission | null>(null);
-  
-  // State for show Session Expired modal
-  const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false);
-
-  // Spelled words list completed by student
-  const [completedSpelledWords, setCompletedSpelledWords] = useState<SavedWord[]>(() => {
-    const saved = localStorage.getItem('abba_completed_spelled_words');
-    return saved ? JSON.parse(saved) : [];
-  });
-
-  const [showConfetti, setShowConfetti] = useState(false);
-
-  // Review mode board state backup
-  const [savedBoardState, setSavedBoardState] = useState<{
-    spelledRows: SpelledLetter[][];
-    rowColors: Record<number, 'black' | 'blue' | 'red' | 'green'>;
-    rowIds: string[];
-    cutWiresRows: Record<number, boolean>;
-  } | null>(null);
-
-  useEffect(() => {
-    localStorage.setItem('abba_completed_spelled_words', JSON.stringify(completedSpelledWords));
-  }, [completedSpelledWords]);
-
-  // Session validation interval for offline unique access code
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (user && user.codeSession) {
-        if (Date.now() > user.codeSession.expiresAt) {
-          setUser(null);
-          localStorage.removeItem('abba_logged_in_user');
-          setIsSessionExpiredOpen(true);
-          setCurrentScreen('login');
-        }
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [user]);
-
-  // Process import link query parameter on mount
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const importParam = params.get('import');
-    if (importParam) {
-      try {
-        const decodedJson = decodeURIComponent(escape(atob(importParam)));
-        const submission = JSON.parse(decodedJson) as StudentSubmission;
-        if (submission.studentName && submission.spelledWords) {
-          if (!user) {
-            const reviewProf: User = {
-              name: 'Prof. Revisor Importado',
-              email: 'revisor@abba.com',
-              role: 'teacher'
-            };
-            setUser(reviewProf);
-            localStorage.setItem('abba_logged_in_user', JSON.stringify(reviewProf));
-          }
-          
-          // Load submission spelled words into spelledRows
-          const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
-          const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
-          
-          submission.spelledWords.forEach((wordObj, idx) => {
-            if (idx < 6) {
-              newSpelledRows[idx] = wordObj.letters;
-              const col = wordObj.themeColor || '#1e293b';
-              if (col === '#3b82f6') newRowColors[idx] = 'blue';
-              else if (col === '#ef4444') newRowColors[idx] = 'red';
-              else if (col === '#10b981') newRowColors[idx] = 'green';
-              else newRowColors[idx] = 'black';
-            }
-          });
-          
-          setSpelledRows(newSpelledRows);
-          setRowColors(newRowColors);
-          setActiveReviewSubmission(submission);
-          setCurrentScreen('abacus');
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-      } catch (err) {
-        console.error('Error importing magic link:', err);
-      }
-    }
-  }, []);
-
-  const handleLaunchReviewMode = (submission: StudentSubmission) => {
-    setSavedBoardState({
-      spelledRows,
-      rowColors,
-      rowIds,
-      cutWiresRows
-    });
-    
-    const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
-    const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
-    
-    submission.spelledWords.forEach((wordObj, idx) => {
-      if (idx < 6) {
-        newSpelledRows[idx] = wordObj.letters;
-        const col = wordObj.themeColor || '#1e293b';
-        if (col === '#3b82f6') newRowColors[idx] = 'blue';
-        else if (col === '#ef4444') newRowColors[idx] = 'red';
-        else if (col === '#10b981') newRowColors[idx] = 'green';
-        else newRowColors[idx] = 'black';
-      }
-    });
-    
-    setSpelledRows(newSpelledRows);
-    setRowColors(newRowColors);
-    setActiveReviewSubmission(submission);
-    setCurrentScreen('abacus');
-  };
-
-  const handleCloseReviewMode = () => {
-    if (savedBoardState) {
-      setSpelledRows(savedBoardState.spelledRows);
-      setRowColors(savedBoardState.rowColors);
-      setRowIds(savedBoardState.rowIds);
-      setCutWiresRows(savedBoardState.cutWiresRows);
-    }
-    setActiveReviewSubmission(null);
-    setCurrentScreen('teacher-dashboard');
-  };
-
-  const handleLaunchSpellingTask = (word: string, language: 'pt' | 'en' | 'de', color: string) => {
-    setActiveSpellingTarget({ word, language, color });
-    
-    // Auto-setup active row and thread color
-    let targetRowIdx = activeRowIdx;
-    for (let i = 0; i < spelledRows.length; i++) {
-      if (spelledRows[i].length === 0) {
-        targetRowIdx = i;
-        break;
-      }
-    }
-    
-    setActiveRowIdx(targetRowIdx);
-    const colKey = color === '#3b82f6' ? 'blue' : color === '#ef4444' ? 'red' : color === '#10b981' ? 'green' : 'black';
-    setRowColors(prev => ({
-      ...prev,
-      [targetRowIdx]: colKey
-    }));
-    
-    setCurrentScreen('abacus');
-  };
-
 
   // Ref for scrolling to the enter button on landing page
   const enterButtonRef = useRef<HTMLDivElement>(null);
@@ -500,10 +306,7 @@ export default function App() {
   const previousLengthsRef = useRef<number[]>([]);
 
   // Splash/Landing screen state managers (blank screen first -> smooth fade-in logo -> rest of content)
-  const [showLanding, setShowLanding] = useState<boolean>(() => {
-    const saved = localStorage.getItem('abba_logged_in_user');
-    return !saved;
-  });
+  const [showLanding, setShowLanding] = useState<boolean>(true);
   const [landingPhase, setLandingPhase] = useState<'blank' | 'logo' | 'text'>('blank');
 
   useEffect(() => {
@@ -2072,106 +1875,6 @@ export default function App() {
     }
   };
 
-  // Session Expired Modal
-  const renderSessionExpiredModal = () => (
-    <AnimatePresence>
-      {isSessionExpiredOpen && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[99999] flex items-center justify-center p-4">
-          <div className="bg-white p-6 rounded-3xl border border-red-200 max-w-sm w-full text-center space-y-4 shadow-2xl">
-            <span className="material-symbols-outlined text-red-500 text-5xl">lock_clock</span>
-            <h3 className="text-lg font-extrabold text-slate-800">Sessão Expirada!</h3>
-            <p className="text-xs text-slate-500 leading-relaxed">
-              O tempo limite de segurança do seu Código de Acesso Único expirou. Por favor, solicite um novo código ao seu professor.
-            </p>
-            <button
-              onClick={() => setIsSessionExpiredOpen(false)}
-              className="w-full py-3 bg-[#005bb3] text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-95"
-            >
-              Entendido
-            </button>
-          </div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-
-  // Render routing screens
-  if (currentScreen === 'login') {
-    return (
-      <>
-        {renderSessionExpiredModal()}
-        <LoginScreen
-          onLoginSuccess={(loggedUser) => {
-            setUser(loggedUser);
-            localStorage.setItem('abba_logged_in_user', JSON.stringify(loggedUser));
-            setShowLanding(false); // Skip landing once logged in
-            if (loggedUser.role === 'teacher') {
-              setCurrentScreen('teacher-dashboard');
-            } else {
-              setCurrentScreen('student-dashboard');
-            }
-          }}
-          onGoToSignup={() => setCurrentScreen('signup')}
-        />
-      </>
-    );
-  }
-
-  if (currentScreen === 'signup') {
-    return (
-      <SignupScreen
-        onSignupSuccess={() => setCurrentScreen('login')}
-        onGoToLogin={() => setCurrentScreen('login')}
-      />
-    );
-  }
-
-  if (currentScreen === 'teacher-dashboard' && user) {
-    return (
-      <TeacherDashboard
-        user={user}
-        onLogout={() => {
-          setUser(null);
-          localStorage.removeItem('abba_logged_in_user');
-          setCurrentScreen('abacus');
-          setShowLanding(true);
-        }}
-        onLaunchReviewMode={handleLaunchReviewMode}
-      />
-    );
-  }
-
-  if (currentScreen === 'student-dashboard' && user) {
-    return (
-      <StudentDashboard
-        user={user}
-        onLogout={() => {
-          setUser(null);
-          localStorage.removeItem('abba_logged_in_user');
-          setCurrentScreen('abacus');
-          setShowLanding(true);
-        }}
-        onLaunchSpellingTask={handleLaunchSpellingTask}
-        completedSpelledWords={completedSpelledWords}
-        onGoToAbacus={(title, summary) => {
-          if (title && summary) {
-            setActiveTaskInfo({ title, summary });
-          } else {
-            setActiveTaskInfo(null);
-          }
-          setActiveSpellingTarget(null);
-          setCurrentScreen('abacus');
-        }}
-        onRemoveCompletedWord={(idx) => {
-          setCompletedSpelledWords(prev => prev.filter((_, i) => i !== idx));
-        }}
-        onClearCompletedWords={() => {
-          setCompletedSpelledWords([]);
-        }}
-      />
-    );
-  }
-
   if (activeTab === 'about') {
     return (
       <AboutSection 
@@ -2412,107 +2115,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {showConfetti && <Confetti />}
-
-      {/* Floating Task Guide Bar for Aluno */}
-      {activeSpellingTarget && (
-        <div className="bg-[#eaedff] border-b border-[#005bb3] py-3.5 px-6 flex justify-between items-center text-xs font-bold z-[45] shadow-sm shrink-0 sticky top-0">
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="px-3 py-1.5 rounded bg-[#005bb3] text-white font-extrabold uppercase">
-              Soletrar: {activeSpellingTarget.word}
-            </span>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-medium">Idioma:</span>
-              <span className="capitalize text-[#005bb3] font-bold">
-                {activeSpellingTarget.language === 'pt' ? 'Português' : activeSpellingTarget.language === 'en' ? 'Inglês' : 'Alemão'}
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 font-medium">Fio Recomendado:</span>
-              <div className="w-4 h-4 rounded-full border border-slate-200" style={{ backgroundColor: activeSpellingTarget.color }} />
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                const target = activeSpellingTarget.word;
-                const targetColor = activeSpellingTarget.color;
-                let isSpelledCorrectly = false;
-                let matchedRowIdx = -1;
-                
-                spelledRows.forEach((row, idx) => {
-                  const wordstr = row.map(l => l.letter).join("").trim();
-                  if (wordstr === target) {
-                    isSpelledCorrectly = true;
-                    matchedRowIdx = idx;
-                  }
-                });
-                
-                if (isSpelledCorrectly) {
-                  setShowConfetti(true);
-                  
-                  const matchedRow = spelledRows[matchedRowIdx];
-                  const newWord: SavedWord = {
-                    word: target,
-                    letters: matchedRow,
-                    themeColor: targetColor
-                  };
-                  
-                  setCompletedSpelledWords(prev => {
-                    if (prev.some(w => w.word === target)) return prev;
-                    return [...prev, newWord];
-                  });
-                  
-                  alert(`Parabéns! Você soletrou "${target}" com sucesso! 🎉`);
-                  setTimeout(() => {
-                    setShowConfetti(false);
-                  }, 4500);
-                  setActiveSpellingTarget(null);
-                  setCurrentScreen('student-dashboard');
-                } else {
-                  alert(`Quase lá! Lembre-se de soletrar a palavra "${target}" exatamente em uma das linhas.`);
-                }
-              }}
-              className="px-4 py-2 bg-[#00aa6c] hover:bg-[#00925c] text-white rounded-xl shadow transition-all cursor-pointer active:scale-95 flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-[16px]">check_circle</span>
-              Validar e Concluir
-            </button>
-            <button
-              onClick={() => {
-                setActiveSpellingTarget(null);
-                setCurrentScreen('student-dashboard');
-              }}
-              className="px-4 py-2 border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 rounded-xl cursor-pointer"
-            >
-              Voltar para Atividades
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Floating Review Bar for Professor */}
-      {activeReviewSubmission && (
-        <div className="bg-[#faf8ff] border-b border-[#005bb3] py-4 px-6 flex justify-between items-center text-xs font-bold z-[45] shadow-sm shrink-0 sticky top-0">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-purple-600">rate_review</span>
-            <div>
-              <p className="text-sm font-black text-slate-800">Modo de Revisão de Atividades</p>
-              <p className="text-[10px] text-slate-400 font-semibold mt-0.5">Aluno: {activeReviewSubmission.studentName} • Tarefa: {activeReviewSubmission.taskTitle}</p>
-            </div>
-          </div>
-          
-          <button
-            onClick={handleCloseReviewMode}
-            className="px-5 py-2.5 bg-[#005bb3] hover:bg-[#00468c] text-white rounded-xl shadow cursor-pointer transition-all active:scale-95 flex items-center gap-1.5"
-          >
-            <span className="material-symbols-outlined text-[16px]">arrow_back</span>
-            Voltar para o Painel do Professor
-          </button>
-        </div>
-      )}
-
       {/* HEADER SECTION */}
       <header className="sticky top-0 bg-white/95 backdrop-blur-md border-b border-gray-100 py-3.5 px-4 sm:px-6 md:px-8 z-40 shadow-xs">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
@@ -2524,7 +2126,7 @@ export default function App() {
               className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all flex items-center justify-center cursor-pointer relative"
               aria-label="Toggle menu"
             >
-              <StyledHamburger $isOpen={isMenuOpen}>
+              <StyledHamburger isOpen={isMenuOpen}>
                 <div className="bar bar--top" />
                 <div className="bar bar--middle" />
                 <div className="bar bar--bottom" />
@@ -2569,52 +2171,10 @@ export default function App() {
                   <h3 className="font-display font-black text-2xl sm:text-3xl text-gray-950 group-hover:text-[#005ba4] transition-colors tracking-tight leading-tight">
                     Saiba mais
                   </h3>
-                  <p className="text-xs sm:text-sm text-gray-500 mt-2 font-medium leading-relaxed font-sans max-w-md font-semibold font-sans">
+                  <p className="text-xs sm:text-sm text-gray-500 mt-2 font-medium leading-relaxed font-sans max-w-md font-semibold">
                     Clique aqui para acessar a matéria completa sobre o Ábaco Brasileiro de Alfabetização Bilingue por José Décio de Alencar.
                   </p>
                 </button>
-
-                {user ? (
-                  <div className="border-t border-[#dde0e2] mt-6 pt-6 flex flex-col gap-4">
-                    <button
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        if (user.role === 'teacher') {
-                          setCurrentScreen('teacher-dashboard');
-                        } else {
-                          setCurrentScreen('student-dashboard');
-                        }
-                      }}
-                      className="text-left font-display font-black text-2xl sm:text-3xl text-[#005bb3] hover:text-[#00468c] transition-colors tracking-tight leading-tight cursor-pointer"
-                    >
-                      Voltar ao Painel Geral
-                    </button>
-                    <button
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setUser(null);
-                        localStorage.removeItem('abba_logged_in_user');
-                        setCurrentScreen('abacus');
-                        setShowLanding(true);
-                      }}
-                      className="text-left font-display font-black text-2xl sm:text-3xl text-red-600 hover:text-red-800 transition-colors tracking-tight leading-tight cursor-pointer"
-                    >
-                      Sair da Conta
-                    </button>
-                  </div>
-                ) : (
-                  <div className="border-t border-[#dde0e2] mt-6 pt-6 flex flex-col gap-4">
-                    <button
-                      onClick={() => {
-                        setIsMenuOpen(false);
-                        setCurrentScreen('login');
-                      }}
-                      className="text-left font-display font-black text-2xl sm:text-3xl text-[#005bb3] hover:text-[#00468c] transition-colors tracking-tight leading-tight cursor-pointer"
-                    >
-                      Entrar na Conta
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </motion.div>
@@ -2625,24 +2185,13 @@ export default function App() {
       <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
         
         <div className="text-left">
-          {activeTaskInfo ? (
-            <>
-              <h1 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
-                {activeTaskInfo.title}
-              </h1>
-              <p className="text-sm text-slate-500 mt-1">
-                {activeTaskInfo.summary}
-              </p>
-            </>
-          ) : (
-            <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
-              Inovação Brasileira no ensino de línguas estrangeiras.
-            </h2>
-          )}
+          <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
+            Inovação Brasileira no ensino de línguas estrangeiras.
+          </h2>
         </div>
 
         {/* 1. INTERACTIVE CUBES GRID */}
-        <section className={`bg-white rounded-3xl border border-gray-200 p-5 sm:p-6 shadow-xs w-full text-left ${activeReviewSubmission ? 'pointer-events-none opacity-50 select-none' : ''}`}>
+        <section className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-6 shadow-xs w-full text-left">
           <div className="mb-4 border-b border-gray-100 pb-2.5 flex items-center justify-between">
             <button
               onClick={handleFlagClick}
@@ -2727,7 +2276,7 @@ export default function App() {
         {/* 2. THE MULTI-LINE SPELLING WORKSPACE */}
         <section 
           ref={trayRef} 
-          className={`bg-white rounded-3xl border border-gray-150 p-5 sm:p-6 shadow-xs relative overflow-hidden w-full text-left font-sans animate-feed ${activeReviewSubmission ? 'pointer-events-none' : ''}`}
+          className="bg-white rounded-3xl border border-gray-150 p-5 sm:p-6 shadow-xs relative overflow-hidden w-full text-left font-sans animate-feed"
         >
           <div className="flex flex-col gap-4 w-full">
 
