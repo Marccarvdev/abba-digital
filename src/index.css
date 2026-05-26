@@ -50,8 +50,32 @@
 /* Force touch optimization and prevent selection on interactive parts */
 html, body, button, [pointer-events-auto], .cursor-pointer, .cursor-grab, [data-slot-idx], [data-row-container-idx] {
   touch-action: manipulation !important;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Enable global smooth scrolling behavior */
+html {
+  scroll-behavior: smooth !important;
+  scroll-padding-top: 5rem; /* Space for sticky header */
+}
+
+/* Allow text selection specifically for content articles, inputs, and textareas */
+.select-text, .select-text *, p, h1, h2, h3, h4, h5, h6, span:not(.material-symbols-outlined), li, strong, em, input, textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Re-disable selection on drag items and symbols to protect user experience */
+[data-slot-idx], [data-row-container-idx], .cursor-grab, button, .material-symbols-outlined {
   -webkit-user-select: none !important;
   user-select: none !important;
+}
+
+/* Smooth scrolling on all auto-overflow containers */
+.overflow-y-auto, .overflow-x-auto, [class*="overflow-y-"], [class*="overflow-x-"] {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
 }
 
 @theme {
@@ -63,6 +87,80 @@ html, body, button, [pointer-events-auto], .cursor-pointer, .cursor-grab, [data-
   --font-inter-reg: 'InterCustomRegular', sans-serif;
   --font-inter-light: 'InterCustomLight', sans-serif;
   --font-freestyle: 'FreestyleScript', cursive;
+
+  /* Custom ABBA DIGITAL Semantic Theme Colors */
+  --color-inverse-surface: #283044;
+  --color-surface-container-low: #f2f3ff;
+  --color-on-tertiary-fixed-variant: #930014;
+  --color-surface-bright: #faf8ff;
+  --color-tertiary-fixed-dim: #ffb3ae;
+  --color-tertiary-fixed: #ffdad7;
+  --color-primary: #005bb3;
+  --color-surface-container: #eaedff;
+  --color-secondary-container: #dde0e2;
+  --color-on-primary: #ffffff;
+  --color-on-tertiary-container: #fffbff;
+  --color-on-background: #131b2e;
+  --color-on-surface: #131b2e;
+  --color-on-secondary-fixed: #181c1e;
+  --color-surface-dim: #d2d9f4;
+  --color-secondary: #5b5f61;
+  --color-on-error-container: #93000a;
+  --color-error: #ba1a1a;
+  --color-outline: #717785;
+  --color-primary-fixed: #d6e3ff;
+  --color-surface-container-highest: #dae2fd;
+  --color-primary-fixed-dim: #a9c7ff;
+  --color-outline-variant: #c1c6d6;
+  --color-tertiary: #b71422;
+  --color-on-error: #ffffff;
+  --color-secondary-fixed-dim: #c4c7c9;
+  --color-on-surface-variant: #414754;
+  --color-inverse-primary: #a9c7ff;
+  --color-surface-variant: #dae2fd;
+  --color-on-secondary-container: #5f6365;
+  --color-on-tertiary: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-on-secondary: #ffffff;
+  --color-on-secondary-fixed-variant: #434749;
+  --color-primary-container: #0073e0;
+  --color-surface: #faf8ff;
+  --color-tertiary-container: #db3237;
+  --color-secondary-fixed: #e0e3e5;
+  --color-inverse-on-surface: #eef0ff;
+  --color-surface-container-high: #e2e7ff;
+  --color-error-container: #ffdad6;
+  --color-surface-tint: #005db7;
+  --color-on-tertiary-fixed: #410004;
+  --color-background: #faf8ff;
+  --color-on-primary-fixed-variant: #00468c;
+  --color-on-primary-fixed: #001b3d;
+  --color-on-primary-container: #fefcff;
+
+  /* Custom ABBA DIGITAL Spacing System (Tailwind v4 variables) */
+  --spacing-xs: 4px;
+  --spacing-margin-desktop: 40px;
+  --spacing-sm: 8px;
+  --spacing-unit: 4px;
+  --spacing-md: 16px;
+  --spacing-xl: 32px;
+  --spacing-margin-mobile: 20px;
+  --spacing-lg: 24px;
+  --spacing-gutter: 16px;
+
+  /* Custom ABBA DIGITAL Typography System */
+  --font-size-body-lg: 16px;
+  --line-height-body-lg: 24px;
+  --font-size-headline-md: 20px;
+  --line-height-headline-md: 28px;
+  --font-size-body-md: 14px;
+  --line-height-body-md: 20px;
+  --font-size-label-md: 13px;
+  --line-height-label-md: 18px;
+  --font-size-headline-lg: 28px;
+  --line-height-headline-lg: 36px;
+  --font-size-label-sm: 12px;
+  --line-height-label-sm: 16px;
 }
 
 /* Custom scrollbar styling for slick layout */
@@ -189,4 +287,82 @@ html, body, button, [pointer-events-auto], .cursor-pointer, .cursor-grab, [data-
   }
 }
 
+/* Search bar animations */
+@keyframes searchSlideDown {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-12px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+@keyframes searchFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes searchFadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.animate-fade-in {
+  animation: searchFadeIn 0.2s ease-out both;
+}
+
+.animate-search-panel {
+  animation: searchSlideDown 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.animate-search-backdrop {
+  animation: searchFadeIn 0.2s ease-out both;
+}
+
+/* Smooth search bar expansion */
+.search-bar-collapsed {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.search-bar-collapsed:hover {
+  box-shadow: 0 0 0 2px rgba(0, 91, 179, 0.15);
+}
+
+@keyframes searchDropdownSlide {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-search-dropdown {
+  animation: searchDropdownSlide 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Mockup Specific Styles */
+.glass-nav {
+  backdrop-filter: blur(12px);
+  background-color: rgba(255, 255, 255, 0.8);
+}
+.sidebar-active {
+  background-color: #0073e0;
+  color: #ffffff;
+  border-radius: 0.5rem;
+  font-weight: 600;
+}
+.card-shadow {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  border: 1px solid #E2E8F0;
+}
+.student-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
 

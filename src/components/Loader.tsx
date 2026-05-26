@@ -7,7 +7,7 @@ interface LoaderProps {
 
 const Loader: React.FC<LoaderProps> = ({ isDark = false }) => {
   return (
-    <StyledWrapper isDark={isDark}>
+    <StyledWrapper $isDark={isDark}>
       <div className="boxes">
         <div className="box">
           <div />
@@ -38,7 +38,7 @@ const Loader: React.FC<LoaderProps> = ({ isDark = false }) => {
   );
 }
 
-const StyledWrapper = styled.div<{ isDark: boolean }>`
+const StyledWrapper = styled.div<{ $isDark: boolean }>`
   display: flex;
   justify-content: center;
   align-items: center;
@@ -126,7 +126,7 @@ const StyledWrapper = styled.div<{ isDark: boolean }>`
   }
 
   .boxes .box > div:nth-child(4) {
-    --background: ${props => props.isDark ? '#0b0f19' : '#DBE3F4'};
+    --background: ${props => props.$isDark ? '#0b0f19' : '#DBE3F4'};
     --top: 0;
     --left: 0;
     --translateZ: calc(var(--size) * 3 * -1);

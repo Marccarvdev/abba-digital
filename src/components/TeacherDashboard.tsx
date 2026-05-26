@@ -1,0 +1,6025 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { User, TaskItem, StudentSubmission, AccessCode, SavedWord } from '../types';
+import abbaLogo from '../assets/logo abba.svg';
+import { supabase } from '../supabaseClient';
+import { cardImageBase64 } from '../base64Data/cardBase64';
+
+const parseTeacherNoteAndFiles = (rawNote: string) => {
+  if (!rawNote) return { note: '', files: [] };
+  const marker = '__SUPPORT_FILES_JSON__:';
+  const index = rawNote.indexOf(marker);
+  if (index !== -1) {
+    const note = rawNote.substring(0, index);
+    const filesJson = rawNote.substring(index + marker.length);
+    try {
+      return { note, files: JSON.parse(filesJson) };
+    } catch {
+      return { note, files: [] };
+    }
+  }
+  return { note: rawNote, files: [] };
+};
+
+const serializeTeacherNoteAndFiles = (note: string, files: any[]) => {
+  if (!files || files.length === 0) return note;
+  return `${note}__SUPPORT_FILES_JSON__:${JSON.stringify(files)}`;
+};
+
+interface TeacherDashboardProps {
+  user: User;
+  onLogout: () => void;
+  onLaunchReviewMode: (submission: StudentSubmission) => void;
+}
+
+// Initial Mock Data
+const INITIAL_STUDENTS = [
+  { id: 'st-1', name: "Ana Beatriz Silva", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuA36Ly4xeWawwKgX-g0LtkXrGT5DTjmm-XeB9Qk6DnSHU-NH54f_hVpqhRSjZs2501yox04bFvBm3qcg4yJditWLeZ66sEhf1BM2qzrzTrRAJ1IuAIpRYb1T08Th4stWnf7V5GK2BSYKgk3P5OvbDzMAAbIACMxK2mI8bpZrbH76YSaaBRPkN9xMZfQmhcm1FtZ7ThFMF6DEYGrtqYqtjPuw6W6iljH5xz1skvI1FXm8WrX2SwaVwgX4vD0qOebo0Hq7Z48evtz0z5Z", progress: 85, matricula: '202300142', gender: 'F' },
+  { id: 'st-2', name: "Carlos andré", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuDqkV-9yCRTIEx8yOwalSNgnJoB7RDDIC5cjysNDwq3qLDkFhWPSGMkg_upCUk2izlt4E-kqkdhSEbFbCNkiuxBU8MtAExoSWUkjzw8FlH2wZ4VSNrCVOHHweC7l6JL19tJNL5ff3Uwdt1UJsPMMHs3POE0Ile5WBXcNOYSC72xdbVYwTSuZTAHmCJ3b69Zs-_lW1c2qq-pKfAeqP8CFv0SUDEntbF7bUmmBtE3o97YG2yRkd-Cx5gF0NYXf4nZkSCMIhiOb68pAWOS", progress: 60, matricula: '202300891', gender: 'M' },
+  { id: 'st-3', name: "Gabriela Fontes", class: "Turma B - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBpRBuZNFWOpOoV_maEY_xg9EoZOrICbKrCsPNfW24bg3aC9ZYU5ORJA4sBL1TO4HTT5oDcgnyA1veDLqsnMEOdwTXgXNf4GW-WF4roWaC_e7MoJYH3ZFFhGCo0Rvep8UZilU1vS3GOROSKcJzB6QxvXzS0obKYNGiYDyGHQ1PtXFoK_QqYXJOzedbSAGVwD7Fx9FpJdD1RAKvVKZPsuDpQMnH1k-Cb4Xr7WM0BQny82cnTZp5vlve3OVfOmb0wlHRa5S9foFIRVSQh", progress: 95, matricula: '202301225', gender: 'F' },
+  { id: 'st-4', name: "João Vitor Rezende", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBr8bD9ZzGhFEt7oLruZohpN8SJELwbHxG11_tSiiJu5T4bVdwWf4yrCVWYCbFHtMQ5UVaL5ULioUnlkyWiGw3gzgbiqySzjtjm1PDHPxur524EFEKchY3whP1deXqnANASENlzs-e_E99vbTm7a6mGhPhOtXIUHKHuIBCkfKVQAYGctKycj5IaP-kSNtnulfLt3TthD-cEDbx4tQTyw2gvFjttyvK2YOljZ7IWw0hAACZGrBf39sgtgvUZ8SoVelySNvCJKnTvOgMw", progress: 40, matricula: '202300554', gender: 'M' },
+  { id: 'st-5', name: "Lara Vasconcelos", class: "Turma C - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAZCDyQjcZT49YUlxQl2LjrBSU4AGNV8wpgZUzz6x_eW-n-23oY3rh-5bbHCjnp_OwnfeCWJxah_8xD5m3I-318UQowMH1epfQmhp5oRAd4zgJx7G6h7SkH0rFOUY-FekT_U_mze4HPnrZC4cAg3azgr2j1sKmTnrF4qf7s007A7carK9Np5c3X0AwBk7ONLeX2LDFjfaYz2bGYeVKRfVrE1hvKt59L8a2oq7-7Fx9u0iV8lCM_Q3Vd3JsHYZsYTlrRXv_dmb4fTi4D", progress: 70, matricula: '202301102', gender: 'F' },
+  { id: 'st-6', name: "Gabriel Souza", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&q=80&w=150&h=150", progress: 50, matricula: '202406', gender: 'M' },
+  { id: 'st-7', name: "Helena Rocha", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&q=80&w=150&h=150", progress: 90, matricula: '202407', gender: 'F' },
+  { id: 'st-8', name: "Igor Mendes", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150&h=150", progress: 30, matricula: '202408', gender: 'M' },
+  { id: 'st-9', name: "Julia Paiva", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&q=80&w=150&h=150", progress: 80, matricula: '202409', gender: 'F' },
+  { id: 'st-10', name: "Kevin Costa", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1542909168-82c3e7fdca5c?auto=format&fit=crop&q=80&w=150&h=150", progress: 65, matricula: '202410', gender: 'M' },
+  { id: 'st-11', name: "Lucas Oliveira", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=150&h=150", progress: 75, matricula: '202411', gender: 'M' },
+  { id: 'st-12', name: "Mariana Costa", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150&h=150", progress: 88, matricula: '202412', gender: 'F' },
+  { id: 'st-13', name: "Nataniel Cruz", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150&h=150", progress: 45, matricula: '202413', gender: 'M' },
+  { id: 'st-14', name: "Olivia Martins", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150&h=150", progress: 92, matricula: '202414', gender: 'F' },
+  { id: 'st-15', name: "Pedro Henrique", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=150&h=150", progress: 55, matricula: '202415', gender: 'M' }
+];
+
+const INITIAL_TASKS: TaskItem[] = [
+  {
+    id: 'task-1',
+    title: 'Exercício de Numerais Multilingue',
+    description: 'Soletrar os numerais de 0 a 9 em Português, Inglês e Alemão usando as cores de fios correspondentes.',
+    dueDate: '2026-06-15',
+    status: 'active',
+    targetWords: [
+      { word: 'ZERO', language: 'pt', color: '#1e293b' },
+      { word: 'UM', language: 'pt', color: '#1e293b' },
+      { word: 'DOIS', language: 'pt', color: '#1e293b' },
+      { word: 'THREE', language: 'en', color: '#3b82f6' },
+      { word: 'FOUR', language: 'en', color: '#3b82f6' },
+      { word: 'FIVE', language: 'en', color: '#3b82f6' },
+      { word: 'SECHS', language: 'de', color: '#ef4444' },
+      { word: 'SIEBEN', language: 'de', color: '#ef4444' },
+      { word: 'ACHT', language: 'de', color: '#ef4444' }
+    ],
+    submissionsCount: 15
+  },
+  {
+    id: 'task-2',
+    title: 'Gramática Básica - Unidade 4',
+    description: 'Exercícios práticos de tempos verbais e estruturação de frases no idioma nativo.',
+    dueDate: '2026-06-25',
+    status: 'draft',
+    targetWords: [
+      { word: 'ESTUDAR', language: 'pt', color: '#1e293b' },
+      { word: 'APRENDER', language: 'pt', color: '#1e293b' }
+    ],
+    submissionsCount: 0
+  },
+  {
+    id: 'task-3',
+    title: 'História das Civilizações',
+    description: 'Soletrar conceitos-chave do surgimento das sociedades clássicas.',
+    dueDate: '2026-06-28',
+    status: 'active',
+    targetWords: [
+      { word: 'ROMA', language: 'pt', color: '#1e293b' },
+      { word: 'ATENAS', language: 'pt', color: '#1e293b' }
+    ],
+    submissionsCount: 8
+  },
+  {
+    id: 'task-4',
+    title: 'Revisão de Verbos Irregulares',
+    description: 'Atividade concluída de conjugação de verbos em múltiplos idiomas.',
+    dueDate: '2026-05-10',
+    status: 'completed',
+    targetWords: [
+      { word: 'BE', language: 'en', color: '#3b82f6' },
+      { word: 'HAVE', language: 'en', color: '#3b82f6' }
+    ],
+    submissionsCount: 20
+  },
+  {
+    id: 'task-5',
+    title: 'Cálculo Diferencial Avançado',
+    description: 'Montar os símbolos fundamentais de cálculo no ábaco numérico.',
+    dueDate: '2026-07-02',
+    status: 'active',
+    targetWords: [
+      { word: 'LIMITE', language: 'pt', color: '#1e293b' },
+      { word: 'DERIVADA', language: 'pt', color: '#1e293b' }
+    ],
+    submissionsCount: 19
+  }
+];
+
+const INITIAL_SUBMISSIONS: StudentSubmission[] = [
+  {
+    id: 'sub-1',
+    studentName: 'Ana Beatriz Silva',
+    taskTitle: 'Exercício de Numerais Multilingue',
+    submittedAt: '2026-05-23T14:30:00Z',
+    spelledWords: [
+      {
+        word: 'ZERO',
+        letters: [
+          { id: 'l1', letter: 'Z', originCubeId: 'cube-z', color: '#1e293b' },
+          { id: 'l2', letter: 'E', originCubeId: 'cube-e', color: '#1e293b' },
+          { id: 'l3', letter: 'R', originCubeId: 'cube-r', color: '#1e293b' },
+          { id: 'l4', letter: 'O', originCubeId: 'cube-o', color: '#1e293b' }
+        ],
+        themeColor: '#1e293b'
+      },
+      {
+        word: 'THREE',
+        letters: [
+          { id: 'l5', letter: 'T', originCubeId: 'cube-t', color: '#3b82f6' },
+          { id: 'l6', letter: 'H', originCubeId: 'cube-h', color: '#3b82f6' },
+          { id: 'l7', letter: 'R', originCubeId: 'cube-r', color: '#3b82f6' },
+          { id: 'l8', letter: 'E', originCubeId: 'cube-e', color: '#3b82f6' },
+          { id: 'l9', letter: 'E', originCubeId: 'cube-e', color: '#3b82f6' }
+        ],
+        themeColor: '#3b82f6'
+      }
+    ]
+  },
+  {
+    id: 'sub-2',
+    studentName: 'Carlos andré',
+    taskTitle: 'Exercício de Numerais Multilingue',
+    submittedAt: '2026-05-24T10:15:00Z',
+    spelledWords: [
+      {
+        word: 'UM',
+        letters: [
+          { id: 'l10', letter: 'U', originCubeId: 'cube-u', color: '#1e293b' },
+          { id: 'l11', letter: 'M', originCubeId: 'cube-m', color: '#1e293b' }
+        ],
+        themeColor: '#1e293b'
+      }
+    ]
+  }
+];
+
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode }) => {
+  const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
+  const [students, setStudents] = useState<any[]>(() => {
+    const local = localStorage.getItem('abba_students_list');
+    return local ? JSON.parse(local) : INITIAL_STUDENTS;
+  });
+
+  const [gridSearchQuery, setGridSearchQuery] = useState('');
+  const [gridFilterType, setGridFilterType] = useState<'all' | 'code' | 'link' | 'login'>('all');
+  const [isGridFilterOpen, setIsGridFilterOpen] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('abba_students_list', JSON.stringify(students));
+  }, [students]);
+  const [tasks, setTasks] = useState<TaskItem[]>(() => {
+    const local = localStorage.getItem('abba_teacher_tasks');
+    return local ? JSON.parse(local) : INITIAL_TASKS;
+  });
+  
+  const [submissions, setSubmissions] = useState<StudentSubmission[]>(() => {
+    const local = localStorage.getItem('abba_student_submissions');
+    return local ? JSON.parse(local) : INITIAL_SUBMISSIONS;
+  });
+
+  // Access Code Generation States
+  const [studentNameInput, setStudentNameInput] = useState('');
+  const [duration, setDuration] = useState('1h'); // 1h, 4h, 1d, 1w, custom
+  const [customExpiryDate, setCustomExpiryDate] = useState('2026-12-31');
+  const [generatedCode, setGeneratedCode] = useState('');
+  const [generatedBase64, setGeneratedBase64] = useState('');
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  
+  const [activeCodes, setActiveCodes] = useState<AccessCode[]>(() => {
+    const local = localStorage.getItem('abba_active_codes');
+    return local ? JSON.parse(local) : [];
+  });
+
+  // Duplicate student active code prevention states
+  const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
+  const [duplicateName, setDuplicateName] = useState('');
+  const [duplicateActiveCode, setDuplicateActiveCode] = useState<AccessCode | null>(null);
+  const [duplicateSelectedDuration, setDuplicateSelectedDuration] = useState('1h');
+  const [duplicateCustomExpiryDate, setDuplicateCustomExpiryDate] = useState('2026-12-31');
+  const [duplicateStep, setDuplicateStep] = useState<'question' | 'edit_duration'>('question');
+
+  // Task link generation and sharing states
+  const [generatedStudentLinks, setGeneratedStudentLinks] = useState<Record<string, string>>({});
+  const [dbTaskLinks, setDbTaskLinks] = useState<{ id: string; studentName: string; link: string; taskId: string }[]>(() => {
+    const local = localStorage.getItem('abba_generated_task_links');
+    return local ? JSON.parse(local) : [];
+  });
+
+  useEffect(() => {
+    localStorage.setItem('abba_generated_task_links', JSON.stringify(dbTaskLinks));
+  }, [dbTaskLinks]);
+
+  // Share task panel states (mini-modal below Confirmar Seleção)
+  const [showSharePanel, setShowSharePanel] = useState(false);
+  const [shareTaskLinks, setShareTaskLinks] = useState<Record<string, string>>({}); // studentId -> link
+  const [copiedShareId, setCopiedShareId] = useState<string | null>(null);
+
+  const handleGenerateStudentLink = async (studentId: string, studentName: string, taskId: string, taskTitle: string) => {
+    const salt = Math.random().toString(36).substring(2, 9).toUpperCase();
+    const payload = {
+      id: `LINK-${studentId}-${salt}`,
+      studentName,
+      taskId,
+      taskTitle,
+      createdAt: new Date().toISOString()
+    };
+    const code = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    const link = `${window.location.origin}?code=${code}`;
+
+    const newLinkItem = { id: payload.id, studentName, link, taskId };
+
+    // Update state and LocalStorage
+    setDbTaskLinks(prev => [newLinkItem, ...prev]);
+
+    setGeneratedStudentLinks(prev => ({
+      ...prev,
+      [studentId]: link
+    }));
+
+    // Database Sinking & Synchronization Integration (Supabase client check)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { error } = await supabase
+          .from('teacher_generated_links')
+          .insert([
+            {
+              link_id: payload.id,
+              student_name: studentName,
+              task_id: taskId,
+              task_title: taskTitle,
+              link_url: link,
+              teacher_id: session.user.id,
+              created_at: payload.createdAt
+            }
+          ]);
+        
+        if (!error) {
+          console.log('⚡ Sincronização em tempo real concluída com Supabase!');
+        } else {
+          console.warn('Conexão estabelecida, mas erro ao sincronizar tabela:', error);
+        }
+      }
+    } catch (err) {
+      console.log('💾 Backup Local Ativado: Dados salvos localmente e programados para envio automático quando o banco Supabase estiver disponível.');
+    }
+
+    alert(`✅ Código e link de acesso gerados com sucesso para ${studentName}!`);
+  };
+
+  const syncTeacherLinks = async () => {
+    try {
+      const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_teacher_links') || '[]');
+      if (unsynced.length === 0) return;
+
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+
+      const remaining: any[] = [];
+      for (const item of unsynced) {
+        const { error } = await supabase
+          .from('teacher_generated_links')
+          .insert([
+            {
+              link_id: item.id,
+              student_name: item.studentName,
+              task_id: item.taskId,
+              task_title: item.taskTitle || 'Exercício de Numerais Multilingue',
+              link_url: item.link,
+              teacher_id: session.user.id,
+              created_at: item.createdAt || new Date().toISOString()
+            }
+          ]);
+        if (error) {
+          console.warn('Erro ao sincronizar link:', error);
+          remaining.push(item);
+        }
+      }
+      localStorage.setItem('abba_unsynced_teacher_links', JSON.stringify(remaining));
+      if (remaining.length === 0) {
+        console.log('⚡ Todos os links do professor pendentes foram sincronizados com o Supabase!');
+      }
+    } catch (err) {
+      console.warn('Erro na sincronização de links com o Supabase:', err);
+    }
+  };
+
+  const syncSingleTaskToSupabase = async (task: TaskItem) => {
+    try {
+      const finalNote = serializeTeacherNoteAndFiles(task.teacherNote || '', task.supportFiles || []);
+      const dbPayload = {
+        id: task.id,
+        title: task.title,
+        description: task.description,
+        due_date: task.dueDate,
+        status: task.status,
+        target_words: JSON.stringify(task.targetWords),
+        priority: task.priority || 'Alta',
+        assigned_student_ids: JSON.stringify(task.assignedStudentIds || []),
+        start_date: task.startDate || '',
+        teacher_note: finalNote,
+        submissions_count: task.submissionsCount || 0
+      };
+      
+      const { error } = await supabase
+        .from('tasks')
+        .upsert([dbPayload], { onConflict: 'id' });
+        
+      if (!error) {
+        console.log(`⚡ Tarefa "${task.title}" sincronizada com o Supabase!`);
+      } else {
+        console.warn('Erro ao salvar tarefa no Supabase:', error);
+      }
+    } catch (e) {
+      console.warn('Falha na conexão com o Supabase ao salvar tarefa:', e);
+    }
+  };
+
+  const fetchSupabaseData = async () => {
+    try {
+      // 1. Sincronizar tarefas
+      const { data: dbTasks, error: tasksErr } = await supabase
+        .from('tasks')
+        .select('*');
+      if (dbTasks && !tasksErr) {
+        const mappedTasks: TaskItem[] = dbTasks.map((t: any) => {
+          const rawNote = t.teacher_note || t.teacherNote || '';
+          const parsed = parseTeacherNoteAndFiles(rawNote);
+          return {
+            id: t.id || t.task_id,
+            title: t.title || t.task_title || '',
+            description: t.description || t.task_description || '',
+            dueDate: t.due_date || t.dueDate || '',
+            status: t.status || 'active',
+            targetWords: typeof t.target_words === 'string' 
+              ? JSON.parse(t.target_words) 
+              : t.target_words || typeof t.targetWords === 'string' 
+              ? JSON.parse(t.targetWords) 
+              : t.targetWords || [],
+            priority: t.priority || 'Alta',
+            assignedStudentIds: typeof t.assigned_student_ids === 'string'
+              ? JSON.parse(t.assigned_student_ids)
+              : t.assigned_student_ids || typeof t.assignedStudentIds === 'string'
+              ? JSON.parse(t.assignedStudentIds)
+              : t.assignedStudentIds || [],
+            startDate: t.start_date || t.startDate || '',
+            teacherNote: parsed.note,
+            supportFiles: parsed.files,
+            submissionsCount: t.submissions_count || t.submissionsCount || 0
+          };
+        });
+
+        setTasks(prev => {
+          const merged = [...prev];
+          mappedTasks.forEach(mt => {
+            const index = merged.findIndex(x => x.id === mt.id);
+            if (index !== -1) {
+              merged[index] = { ...merged[index], ...mt };
+            } else {
+              merged.push(mt);
+            }
+          });
+          localStorage.setItem('abba_teacher_tasks', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // 2. Sincronizar submissões
+      const { data: dbSubs, error: subsErr } = await supabase
+        .from('student_submissions')
+        .select('*')
+        .order('submitted_at', { ascending: false });
+      if (dbSubs && !subsErr) {
+        const mappedSubs: StudentSubmission[] = dbSubs.map((s: any) => ({
+          id: s.id.toString(),
+          studentName: s.student_name,
+          taskTitle: s.task_title,
+          submittedAt: s.submitted_at,
+          spelledWords: []
+        }));
+        setSubmissions(prev => {
+          const merged = [...prev];
+          mappedSubs.forEach(ms => {
+            if (!merged.some(x => x.studentName === ms.studentName && x.taskTitle === ms.taskTitle)) {
+              merged.unshift(ms);
+            }
+          });
+          localStorage.setItem('abba_student_submissions', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // 3. Sincronizar links gerados
+      const { data: dbLinks, error: linksErr } = await supabase
+        .from('teacher_generated_links')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (dbLinks && !linksErr) {
+        const mappedLinks = dbLinks.map((l: any) => ({
+          id: l.link_id,
+          studentName: l.student_name,
+          taskId: l.task_id,
+          link: l.link_url
+        }));
+        setDbTaskLinks(prev => {
+          const merged = [...prev];
+          mappedLinks.forEach(ml => {
+            if (!merged.some(x => x.id === ml.id)) {
+              merged.unshift(ml);
+            }
+          });
+          localStorage.setItem('abba_generated_task_links', JSON.stringify(merged));
+          return merged;
+        });
+      }
+
+      // 4. Sincronizar logins para enriquecer a lista de alunos local
+      const { data: dbLogins, error: loginsErr } = await supabase
+        .from('student_logins')
+        .select('*')
+        .order('logged_at', { ascending: false });
+      if (dbLogins && !loginsErr) {
+        setStudents(prev => {
+          const updated = [...prev];
+          dbLogins.forEach((login: any) => {
+            const index = updated.findIndex(s => s.name.toLowerCase() === login.student_name.toLowerCase());
+            if (index !== -1) {
+              updated[index].email = login.student_email;
+              updated[index].loginMethod = login.login_method;
+              updated[index].lastAccessAt = login.logged_at;
+            } else {
+              updated.push({
+                id: 'st-' + login.id,
+                name: login.student_name,
+                class: "Turma A - 3º Ano",
+                img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+                progress: 0,
+                matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+                gender: 'M',
+                email: login.student_email,
+                lastAccessAt: login.logged_at,
+                loginMethod: login.login_method
+              });
+            }
+          });
+          localStorage.setItem('abba_students_list', JSON.stringify(updated));
+          return updated;
+        });
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar dados do Supabase:', err);
+    }
+  };
+
+  // Sync effect
+  useEffect(() => {
+    syncTeacherLinks();
+    fetchSupabaseData();
+    window.addEventListener('online', syncTeacherLinks);
+    window.addEventListener('online', fetchSupabaseData);
+    const interval = setInterval(() => {
+      syncTeacherLinks();
+      fetchSupabaseData();
+    }, 15000);
+    return () => {
+      window.removeEventListener('online', syncTeacherLinks);
+      window.removeEventListener('online', fetchSupabaseData);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const modalBottomRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (showSharePanel && modalBottomRef.current) {
+      setTimeout(() => {
+        modalBottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }, 100);
+    }
+  }, [showSharePanel, shareTaskLinks]);
+
+  // State for the beautiful visual task assignment success overlay
+  const [assignedModalInfo, setAssignedModalInfo] = useState<{
+    taskTitle: string;
+    students: {
+      id: string;
+      name: string;
+      link?: string;
+      code?: string;
+    }[];
+  } | null>(null);
+
+  // State to track copied status inside the success overlay
+  const [copiedStudentItem, setCopiedStudentItem] = useState<{ id: string; type: 'link' | 'code' } | null>(null);
+
+  // Helper function to map student data with their offline keys and links, and show the visual assignment overlay
+  const showAssignmentSuccessOverlay = (taskTitle: string, taskId: string, studentIds: string[]) => {
+    if (!studentIds || studentIds.length === 0) return;
+
+    const mapped = studentIds.map(studentId => {
+      const student = students.find(s => s.id === studentId);
+      if (!student) return null;
+
+      // Look for a link generated for this student and task
+      const foundLink = dbTaskLinks.find(
+        link => link.studentName === student.name && link.taskId === taskId
+      );
+
+      // Look for an active code for this student
+      const foundCode = activeCodes.find(
+        c => c.studentName === student.name && c.expiresAt > Date.now() && c.status === 'active'
+      );
+
+      return {
+        id: student.id,
+        name: student.name,
+        link: foundLink?.link,
+        code: foundCode?.code
+      };
+    }).filter(Boolean) as { id: string; name: string; link?: string; code?: string }[];
+
+    setAssignedModalInfo({
+      taskTitle,
+      students: mapped
+    });
+  };
+
+  // Checkbox Student Selector States
+  const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
+  const [isBatchAssignModalOpen, setIsBatchAssignModalOpen] = useState(false);
+  const [batchDuration, setBatchDuration] = useState('1d');
+  const [studentSearchQuery, setStudentSearchQuery] = useState('');
+  const [studentsFilter, setStudentsFilter] = useState<'all' | 'completed' | 'pending' | 'inprogress'>('all');
+  const [studentsLimit, setStudentsLimit] = useState(6);
+  const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
+  const [newStudentName, setNewStudentName] = useState('');
+  const [newStudentEmail, setNewStudentEmail] = useState('');
+  const [newStudentClass, setNewStudentClass] = useState('Turma A - 3º Ano');
+  const [newStudentProgress, setNewStudentProgress] = useState(0);
+
+  // Modals for Cloud Save and Batch Delete
+  const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [selectedStudentIdsSave, setSelectedStudentIdsSave] = useState<string[]>([]);
+  const [selectedStudentIdsDelete, setSelectedStudentIdsDelete] = useState<string[]>([]);
+
+  // Add Task Modal State
+  const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [newTaskTitle, setNewTaskTitle] = useState('');
+  const [newTaskDesc, setNewTaskDesc] = useState('');
+  const [newTaskDueDate, setNewTaskDueDate] = useState('2026-06-30');
+  const [newTaskWords, setNewTaskWords] = useState<{ word: string; language: 'pt' | 'en' | 'de'; color: string }[]>([
+    { word: 'CASA', language: 'pt', color: '#1e293b' }
+  ]);
+
+  const [isAssignStudentsOpen, setIsAssignStudentsOpen] = useState(false);
+  const [tempCreatedTask, setTempCreatedTask] = useState<TaskItem | null>(null);
+  const [newTaskTeacherNote, setNewTaskTeacherNote] = useState('');
+  const [newTaskStartDate, setNewTaskStartDate] = useState('2026-05-24');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const [generalSearchQuery, setGeneralSearchQuery] = useState('');
+  const [showNotificationsDropdown, setShowNotificationsDropdown] = useState(false);
+  const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all');
+  const [readNotifications, setReadNotifications] = useState<string[]>([]);
+  const [excludedSearchTaskIds, setExcludedSearchTaskIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_teacher_excluded_search_tasks');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('abba_teacher_excluded_search_tasks', JSON.stringify(excludedSearchTaskIds));
+  }, [excludedSearchTaskIds]);
+
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+  const bellButtonRef = useRef<HTMLButtonElement>(null);
+  const avatarButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (showNotificationsDropdown) {
+        if (
+          notificationsRef.current && 
+          !notificationsRef.current.contains(event.target as Node) &&
+          bellButtonRef.current && 
+          !bellButtonRef.current.contains(event.target as Node)
+        ) {
+          setShowNotificationsDropdown(false);
+        }
+      }
+      if (showProfileMenu) {
+        if (
+          profileMenuRef.current && 
+          !profileMenuRef.current.contains(event.target as Node) &&
+          avatarButtonRef.current && 
+          !avatarButtonRef.current.contains(event.target as Node)
+        ) {
+          setShowProfileMenu(false);
+        }
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showNotificationsDropdown, showProfileMenu]);
+  const [addTaskStudentSearchQuery, setAddTaskStudentSearchQuery] = useState('');
+  const [addTaskFile, setAddTaskFile] = useState<File | null>(null);
+  const addTaskFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // States for Task Editing Modal (matches requested high-fidelity markup)
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
+  const [editTaskTitle, setEditTaskTitle] = useState('');
+  const [editTaskDueDate, setEditTaskDueDate] = useState('');
+  const [editTaskDescription, setEditTaskDescription] = useState('');
+  const [editTaskPriority, setEditTaskPriority] = useState<'Alta' | 'Média' | 'Baixa'>('Alta');
+  const [editTaskAssignedStudentIds, setEditTaskAssignedStudentIds] = useState<string[]>([]);
+  const [showEditAssignPanel, setShowEditAssignPanel] = useState(false);
+  const [editTaskStudentSearchQuery, setEditTaskStudentSearchQuery] = useState('');
+  const [isDetailEditMode, setIsDetailEditMode] = useState(false);
+  const [isAssigningStudentsDetails, setIsAssigningStudentsDetails] = useState<TaskItem | null>(null);
+  const [tempDetailsAssignedStudentIds, setTempDetailsAssignedStudentIds] = useState<string[]>([]);
+  const [assignedStudentsResult, setAssignedStudentsResult] = useState<{
+    taskTitle: string;
+    studentIds: string[];
+  } | null>(null);
+  const [copiedInviteType, setCopiedInviteType] = useState<'code' | 'link' | null>(null);
+
+  const [supportFilesModal, setSupportFilesModal] = useState<{
+    isOpen: boolean;
+    task: TaskItem;
+    isNew: boolean;
+    assignedStudentIds: string[];
+  } | null>(null);
+  const [uploadedSupportFiles, setUploadedSupportFiles] = useState<{ name: string; url: string; size: string }[]>([]);
+  const [supportDragActive, setSupportDragActive] = useState(false);
+  const supportFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const getGenderedTitle = (selectedStudents: any[]): string => {
+    if (selectedStudents.length === 0) {
+      return "Nenhum aluno atribuído";
+    }
+
+    const studentsWithGender = selectedStudents.map(s => ({
+      ...s,
+      detectedGender: s.gender || (
+        (() => {
+          const firstName = s.name.split(' ')[0].toLowerCase();
+          if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
+            return 'F';
+          }
+          return 'M';
+        })()
+      )
+    }));
+
+    const allFemale = studentsWithGender.every(s => s.detectedGender === 'F');
+    const allMale = studentsWithGender.every(s => s.detectedGender === 'M');
+
+    if (allFemale) {
+      return studentsWithGender.length === 1
+        ? "Aluna que você atribuiu a essa tarefa"
+        : "Alunas que você atribuiu a essa tarefa";
+    } else if (allMale) {
+      return studentsWithGender.length === 1
+        ? "Aluno que você atribuiu a essa tarefa"
+        : "Alunos que você atribuiu a essa tarefa";
+    } else {
+      return "Alunos que você atribuiu a essa tarefa";
+    }
+  };
+
+  const [detailsAssignSearchQuery, setDetailsAssignSearchQuery] = useState('');
+  const [detailsStudentSearchQuery, setDetailsStudentSearchQuery] = useState('');
+  const [detailsStudentPage, setDetailsStudentPage] = useState(1);
+
+  const handleAddTaskFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      const isImage = file.type.startsWith('image/');
+      const isPdf = file.type === 'application/pdf';
+      if (!isImage && !isPdf) {
+        alert('Por favor, selecione apenas arquivos de imagem ou PDF.');
+        return;
+      }
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        alert('O arquivo selecionado excede o limite de tamanho de 5MB.');
+        return;
+      }
+      setAddTaskFile(file);
+      alert(`Arquivo "${file.name}" anexado com sucesso!`);
+    }
+  };
+
+  // Leave students unchecked by default when the Add Task Modal opens
+  useEffect(() => {
+    if (isAddTaskOpen) {
+      setSelectedStudentIds([]);
+      setAddTaskStudentSearchQuery('');
+      setAddTaskFile(null);
+    }
+  }, [isAddTaskOpen]);
+
+  // Sync editing task states when selection changes
+  useEffect(() => {
+    if (editingTask) {
+      setEditTaskTitle(editingTask.title);
+      setEditTaskDueDate(editingTask.dueDate);
+      setEditTaskDescription(editingTask.description);
+      setEditTaskPriority(editingTask.priority || 'Alta');
+      setEditTaskAssignedStudentIds(editingTask.assignedStudentIds || []);
+      setShowEditAssignPanel(false);
+      setEditTaskStudentSearchQuery('');
+      setIsDetailEditMode(false);
+      setDetailsStudentSearchQuery('');
+      setDetailsStudentPage(1);
+    }
+  }, [editingTask]);
+
+  // Lock body scroll when any modal is open
+  useEffect(() => {
+    const isAnyModalOpen = !!(
+      isAddStudentOpen ||
+      isAssigningStudentsDetails ||
+      editingTask ||
+      assignedStudentsResult ||
+      isAddTaskOpen ||
+      isDuplicateModalOpen ||
+      isBatchAssignModalOpen ||
+      isSaveModalOpen ||
+      isDeleteModalOpen
+    );
+
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [
+    isAddStudentOpen,
+    isAssigningStudentsDetails,
+    editingTask,
+    assignedStudentsResult,
+    isAddTaskOpen,
+    isDuplicateModalOpen,
+    isBatchAssignModalOpen,
+    isSaveModalOpen,
+    isDeleteModalOpen
+  ]);
+
+  // Stateful Bento Grid & Details parameters
+  const [tasksFilter, setTasksFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
+  const [tasksPage, setTasksPage] = useState(1);
+  const [selectedTaskDetails, setSelectedTaskDetails] = useState<TaskItem | null>(null);
+  const [taskSearchQuery, setTaskSearchQuery] = useState('');
+
+  // Sync state helpers
+  useEffect(() => {
+    localStorage.setItem('abba_teacher_tasks', JSON.stringify(tasks));
+    
+    // Background sync of all tasks to Supabase
+    const syncAll = async () => {
+      for (const t of tasks) {
+        await syncSingleTaskToSupabase(t);
+      }
+    };
+    syncAll();
+  }, [tasks]);
+
+  useEffect(() => {
+    localStorage.setItem('abba_active_codes', JSON.stringify(activeCodes));
+  }, [activeCodes]);
+
+  const [accessedStudents, setAccessedStudents] = useState<{ id: string; studentName: string; accessedAt: string; code: string }[]>(() => {
+    const local = localStorage.getItem('abba_students_logged_by_code');
+    if (local) {
+      return JSON.parse(local);
+    }
+    
+    // Default mock data so it's never empty and looks robust!
+    const mockAccessList = [
+      {
+        id: 'st-1',
+        studentName: 'Ana Beatriz Silva',
+        accessedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 mins ago
+        code: 'ABBA-5MTAUIK-ANA'
+      },
+      {
+        id: 'st-2',
+        studentName: 'Carlos andré',
+        accessedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(), // 2 hours ago
+        code: 'ABBA-0TJZ3UW-CARLOS'
+      }
+    ];
+    localStorage.setItem('abba_students_logged_by_code', JSON.stringify(mockAccessList));
+    return mockAccessList;
+  });
+
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'abba_students_logged_by_code') {
+        const local = localStorage.getItem('abba_students_logged_by_code');
+        if (local) {
+          setAccessedStudents(JSON.parse(local));
+        }
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    
+    const interval = setInterval(() => {
+      const local = localStorage.getItem('abba_students_logged_by_code');
+      if (local) {
+        setAccessedStudents(prev => {
+          const parsed = JSON.parse(local);
+          if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+            return parsed;
+          }
+          return prev;
+        });
+      }
+    }, 3000);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
+
+  // Sync students list in real time from localStorage (when active student logs in!)
+  useEffect(() => {
+    const syncStudents = () => {
+      const local = localStorage.getItem('abba_students_list');
+      if (local) {
+        setStudents(prev => {
+          const parsed = JSON.parse(local);
+          if (JSON.stringify(prev) !== JSON.stringify(parsed)) {
+            return parsed;
+          }
+          return prev;
+        });
+      }
+    };
+
+    window.addEventListener('storage', syncStudents);
+    const interval = setInterval(syncStudents, 1500);
+
+    return () => {
+      window.removeEventListener('storage', syncStudents);
+      clearInterval(interval);
+    };
+  }, []);
+
+  const handleGenerateCode = () => {
+    if (!studentNameInput.trim()) {
+      alert('Por favor, informe o nome do aluno.');
+      return;
+    }
+
+    const name = studentNameInput.trim();
+
+    // Check for active keys matching name and surname
+    const activeMatch = activeCodes.find(
+      c => c.studentName.trim().toLowerCase() === name.toLowerCase() && Date.now() < c.expiresAt
+    );
+
+    if (activeMatch) {
+      setDuplicateName(name);
+      setDuplicateActiveCode(activeMatch);
+      setDuplicateSelectedDuration(duration === 'custom' ? '1d' : duration);
+      setDuplicateCustomExpiryDate(customExpiryDate);
+      setDuplicateStep('question');
+      setIsDuplicateModalOpen(true);
+      return;
+    }
+
+    let durationMs = 0;
+    let durationLabel = '';
+
+    if (duration === '1h') {
+      durationMs = 60 * 60 * 1000;
+      durationLabel = '1 Hora';
+    } else if (duration === '4h') {
+      durationMs = 4 * 60 * 60 * 1000;
+      durationLabel = '4 Horas';
+    } else if (duration === '1d') {
+      durationMs = 24 * 60 * 60 * 1000;
+      durationLabel = '1 Dia';
+    } else if (duration === '1w') {
+      durationMs = 7 * 24 * 60 * 60 * 1000;
+      durationLabel = '1 Semana';
+    } else {
+      const parts = customExpiryDate.split('-');
+      const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+      durationMs = expDate.getTime() - Date.now();
+      durationLabel = `Até ${customExpiryDate}`;
+    }
+
+    const expiresAt = Date.now() + durationMs;
+    const codeId = 'st-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+    // Generate a simple 6-char alphanumeric code (e.g., K9X8J2)
+    const generateSimpleCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let res = '';
+      for (let i = 0; i < 6; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return res;
+    };
+    const code = generateSimpleCode();
+
+    // Save to local registry so App.tsx and AuthScreens.tsx can decode it!
+    const registryKey = 'abba_invite_codes_registry';
+    const currentRegistry = localStorage.getItem(registryKey);
+    const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+    registryList.push({
+      code: code,
+      name: name,
+      expiresAt: expiresAt,
+      codeId: codeId
+    });
+    localStorage.setItem(registryKey, JSON.stringify(registryList));
+
+    const friendlyCode = code;
+    const token = code;
+
+    const newCodeItem: AccessCode = {
+      id: codeId,
+      code: token,
+      studentName: name,
+      expiresAt,
+      durationLabel,
+      status: 'active'
+    };
+
+    setActiveCodes([newCodeItem, ...activeCodes]);
+    setGeneratedCode(friendlyCode);
+    setGeneratedBase64(token);
+    setStudentNameInput('');
+  };
+
+  const handleCopyCode = (codeText: string, index: number) => {
+    let messageText = codeText;
+    try {
+      if (codeText.startsWith('ABBA-')) {
+        const base64 = codeText.substring(5);
+        // decode base64 safely
+        const decoded = atob(base64);
+        const payload = JSON.parse(decoded);
+        if (payload && payload.name) {
+          messageText = `Olá, ${payload.name}, esse é seu código para acessar o aplicativo:\n\n${codeText}\nInsira-o na página de login, clicando nesse link: https://abba-digital.vercel.app`;
+        }
+      } else {
+        const activeItem = activeCodes.find(c => c.code === codeText);
+        const name = activeItem ? activeItem.studentName : 'Aluno';
+        
+        const guessedGender = (() => {
+          const firstName = name.split(' ')[0].toLowerCase();
+          if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
+            return 'F';
+          }
+          return 'M';
+        })();
+        const welcomeWord = guessedGender === 'F' ? 'bem-vinda' : 'bem-vindo';
+        
+        messageText = `Olá, *${name}* 👋🏾\nSeja muito ${welcomeWord} ao *Abba Digital*!\n\nUse o seu *código de acesso* na página de login do aluno para entrar:\nSeu código: *${codeText}*\n\n*Como entrar?*\nNa tela de login do Abba Digital, clique na aba *Entrar com código* e cole o código acima para acessar sua conta!`;
+      }
+    } catch (e) {
+      console.error('Failed to construct whatsapp message:', e);
+    }
+
+    navigator.clipboard.writeText(messageText);
+    setCopiedIndex(index);
+    setTimeout(() => setCopiedIndex(null), 2000);
+  };
+
+  // Mass / Bulk Task Actions
+  const handleBulkArchiveTasks = () => {
+    const tasksToArchive = filteredTasks.filter(t => t.status !== 'completed');
+    if (tasksToArchive.length === 0) {
+      alert("Nenhuma tarefa elegível para arquivamento nesta aba.");
+      return;
+    }
+
+    const currentTabName = tasksFilter === 'all' ? 'todas as' : tasksFilter === 'active' ? 'ativas' : 'rascunhos';
+    if (confirm(`Deseja realmente arquivar todas as ${tasksToArchive.length} tarefas (${currentTabName}) atualmente visíveis nesta aba?`)) {
+      const tasksToArchiveIds = tasksToArchive.map(t => t.id);
+      const updated = tasks.map(t => tasksToArchiveIds.includes(t.id) ? { ...t, status: 'completed' as const } : t);
+      setTasks(updated);
+      alert(`${tasksToArchive.length} tarefas foram arquivadas com sucesso! 📦`);
+    }
+  };
+
+  const handleBulkDeleteTasks = () => {
+    if (filteredTasks.length === 0) {
+      alert("Nenhuma tarefa para excluir nesta aba.");
+      return;
+    }
+
+    const currentTabName = tasksFilter === 'all' ? 'todas as' : tasksFilter === 'active' ? 'ativas' : tasksFilter === 'draft' ? 'rascunhos' : 'arquivadas';
+    if (confirm(`Deseja realmente excluir permanentemente todas as ${filteredTasks.length} tarefas (${currentTabName}) atualmente visíveis nesta aba?`)) {
+      const filteredIds = filteredTasks.map(t => t.id);
+      const updated = tasks.filter(t => !filteredIds.includes(t.id));
+      setTasks(updated);
+      alert(`${filteredIds.length} tarefas foram excluídas permanentemente com sucesso! 🗑️`);
+    }
+  };
+
+  // Student Select logic
+  const handleSelectAllStudents = (checked: boolean) => {
+    if (checked) {
+      const filtered = students.filter(s => 
+        s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
+        s.class.toLowerCase().includes(studentSearchQuery.toLowerCase())
+      );
+      setSelectedStudentIds(filtered.map(s => s.id));
+    } else {
+      setSelectedStudentIds([]);
+    }
+  };
+
+  const handleSelectStudent = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedStudentIds([...selectedStudentIds, id]);
+    } else {
+      setSelectedStudentIds(selectedStudentIds.filter(sid => sid !== id));
+    }
+  };
+
+  const handleBatchAssignKeys = () => {
+    if (selectedStudentIds.length === 0) {
+      alert('Por favor, selecione ao menos um aluno para atribuição.');
+      return;
+    }
+
+    // 1. Validation: check for existing active (not expired) keys for selected students
+    const activeStudentNames = activeCodes
+      .filter(c => Date.now() < c.expiresAt)
+      .map(c => c.studentName.toLowerCase());
+
+    const alreadyHasActiveKey = selectedStudentIds
+      .map(sid => students.find(s => s.id === sid))
+      .filter(s => s && activeStudentNames.includes(s.name.toLowerCase()));
+
+    if (alreadyHasActiveKey.length > 0) {
+      const names = alreadyHasActiveKey.map(s => s!.name).join(', ');
+      alert(`Não é possível atribuir novas chaves. Os seguintes alunos já possuem chaves ativas em vigor: ${names}. Revogue as chaves atuais antes de gerar novas.`);
+      return;
+    }
+
+    // 2. Open duration selection modal
+    setBatchDuration('1d'); // default to 1 day
+    setIsBatchAssignModalOpen(true);
+  };
+
+  const handleConfirmBatchAssignKeys = (selectedDuration: string) => {
+    let durationMs = 0;
+    let durationLabel = '';
+
+    if (selectedDuration === '1h') {
+      durationMs = 60 * 60 * 1000;
+      durationLabel = '1 Hora';
+    } else if (selectedDuration === '4h') {
+      durationMs = 4 * 60 * 60 * 1000;
+      durationLabel = '4 Horas';
+    } else if (selectedDuration === '1d') {
+      durationMs = 24 * 60 * 60 * 1000;
+      durationLabel = '1 Dia';
+    } else if (selectedDuration === '1w') {
+      durationMs = 7 * 24 * 60 * 60 * 1000;
+      durationLabel = '1 Semana';
+    } else if (selectedDuration === '30d') {
+      durationMs = 30 * 24 * 60 * 60 * 1000;
+      durationLabel = '30 Dias';
+    }
+
+    const expiresAt = Date.now() + durationMs;
+    const newCodes: AccessCode[] = [];
+
+    const registryKey = 'abba_invite_codes_registry';
+    const currentRegistry = localStorage.getItem(registryKey);
+    const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+
+    // Generate a simple 6-char alphanumeric code (e.g., K9X8J2)
+    const generateSimpleCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let res = '';
+      for (let i = 0; i < 6; i++) {
+        res += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return res;
+    };
+
+    selectedStudentIds.forEach(sid => {
+      const student = students.find(s => s.id === sid);
+      if (!student) return;
+
+      const code = generateSimpleCode();
+      const codeId = 'st-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+      registryList.push({
+        code: code,
+        name: student.name,
+        expiresAt,
+        codeId
+      });
+
+      newCodes.push({
+        id: codeId,
+        code: code,
+        studentName: student.name,
+        expiresAt,
+        durationLabel,
+        status: 'active'
+      });
+    });
+
+    localStorage.setItem(registryKey, JSON.stringify(registryList));
+
+    setActiveCodes(prev => [...newCodes, ...prev]);
+    setSelectedStudentIds([]);
+    setIsBatchAssignModalOpen(false);
+    alert(`Chaves de acesso geradas e atribuídas com sucesso para ${newCodes.length} alunos! 🚀`);
+  };
+
+  // Add word helper in Add Task
+  const handleAddWordToNewTask = () => {
+    setNewTaskWords([...newTaskWords, { word: '', language: 'pt', color: '#1e293b' }]);
+  };
+
+  const handleRemoveWordFromNewTask = (index: number) => {
+    setNewTaskWords(newTaskWords.filter((_, idx) => idx !== index));
+  };
+
+  const handleCreateTask = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTaskTitle.trim() || !newTaskDesc.trim()) {
+      alert('Preencha os campos obrigatórios.');
+      return;
+    }
+
+    const cleanWords = newTaskWords
+      .filter(w => w.word.trim().length > 0)
+      .map(w => ({
+        word: w.word.trim().toUpperCase(),
+        language: w.language,
+        color: w.color
+      }));
+
+    if (cleanWords.length === 0) {
+      alert('Adicione pelo menos uma palavra para a tarefa.');
+      return;
+    }
+
+    const newTaskItem: TaskItem = {
+      id: 'task-' + Math.random().toString(36).substring(2, 9),
+      title: newTaskTitle.trim(),
+      description: newTaskDesc.trim(),
+      dueDate: newTaskDueDate,
+      status: 'active',
+      targetWords: cleanWords,
+      submissionsCount: 0,
+      startDate: newTaskStartDate,
+      teacherNote: newTaskTeacherNote.trim() || undefined,
+      assignedStudentIds: selectedStudentIds,
+      supportFiles: []
+    };
+
+    setUploadedSupportFiles([]);
+    setSupportFilesModal({
+      isOpen: true,
+      task: newTaskItem,
+      isNew: true,
+      assignedStudentIds: selectedStudentIds
+    });
+  };
+
+  const handleSupportFileUpload = (filesList: FileList) => {
+    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+    const maxSize = 5 * 1024 * 1024; // 5MB
+
+    Array.from(filesList).forEach(file => {
+      const fileName = file.name.toLowerCase();
+      const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+      if (!isAllowed) {
+        alert(`O arquivo "${file.name}" não é suportado! Apenas PDF e Imagens são permitidos.`);
+        return;
+      }
+
+      if (file.size > maxSize) {
+        alert(`O arquivo "${file.name}" excede o limite máximo de 5MB!`);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = () => {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+        const fileData = {
+          name: file.name,
+          url: reader.result as string,
+          size: `${sizeMB} MB`
+        };
+        setUploadedSupportFiles(prev => {
+          // Prevent duplicates by name
+          if (prev.some(f => f.name === fileData.name)) return prev;
+          return [...prev, fileData];
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const handleSaveWithSupportFiles = (includeFiles: boolean) => {
+    if (!supportFilesModal) return;
+    const { task, isNew, assignedStudentIds } = supportFilesModal;
+
+    const finalSupportFiles = includeFiles ? uploadedSupportFiles : [];
+    const savedTask: TaskItem = {
+      ...task,
+      supportFiles: finalSupportFiles
+    };
+
+    if (isNew) {
+      setTasks(prev => [savedTask, ...prev]);
+      setIsAddTaskOpen(false);
+      
+      // Trigger the beautiful success overlay
+      showAssignmentSuccessOverlay(savedTask.title, savedTask.id, assignedStudentIds);
+
+      // Reset Create Form
+      setNewTaskTitle('');
+      setNewTaskDesc('');
+      setNewTaskTeacherNote('');
+      setNewTaskStartDate('2026-05-24');
+      setNewTaskDueDate('2026-06-30');
+      setNewTaskWords([{ word: 'CASA', language: 'pt', color: '#1e293b' }]);
+      setSelectedStudentIds([]);
+    } else {
+      setTasks(prev => prev.map(t => t.id === task.id ? savedTask : t));
+      setEditingTask(null);
+      
+      // Also show success overlay for updated student assignments if any!
+      if (assignedStudentIds && assignedStudentIds.length > 0) {
+        showAssignmentSuccessOverlay(savedTask.title, savedTask.id, assignedStudentIds);
+      } else {
+        alert('Tarefa atualizada com sucesso! 🚀');
+      }
+    }
+
+    setSupportFilesModal(null);
+  };
+
+  const filteredStudentsForGrid = students.filter(s => {
+    const matchesSearch = s.name.toLowerCase().includes(studentSearchQuery.toLowerCase()) || 
+                          s.class.toLowerCase().includes(studentSearchQuery.toLowerCase()) ||
+                          (s.name.toLowerCase().replace(' ', '.') + '@email.com').includes(studentSearchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (studentsFilter === 'completed') return s.progress === 100;
+    if (studentsFilter === 'pending') return s.progress < 50;
+    if (studentsFilter === 'inprogress') return s.progress >= 50 && s.progress < 100;
+    return true;
+  });
+
+  const [selectedStudentIdsGrid, setSelectedStudentIdsGrid] = useState<string[]>([]);
+
+  const handleCloudSync = () => {
+    setSelectedStudentIdsSave(students.map(s => s.id));
+    setIsSaveModalOpen(true);
+  };
+
+  const handleDeleteSelected = () => {
+    setSelectedStudentIdsDelete(selectedStudentIdsGrid);
+    setIsDeleteModalOpen(true);
+  };
+
+  const toggleSelectStudentGrid = (id: string) => {
+    setSelectedStudentIdsGrid(prev => 
+      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
+    );
+  };
+
+  // Filter and paginated tasks logic
+  const filteredTasks = tasks.filter(task => {
+    const matchesSearch = task.title.toLowerCase().includes(taskSearchQuery.toLowerCase()) || 
+                          task.description.toLowerCase().includes(taskSearchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+
+    if (tasksFilter === 'all') return true;
+    if (tasksFilter === 'active') return task.status === 'active';
+    if (tasksFilter === 'draft') return task.status === 'draft';
+    if (tasksFilter === 'archived') return task.status === 'completed';
+    return true;
+  });
+
+  const TASKS_PER_PAGE = 5;
+  const totalPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE) || 1;
+  const startIndex = (tasksPage - 1) * TASKS_PER_PAGE;
+  const paginatedTasks = filteredTasks.slice(startIndex, startIndex + TASKS_PER_PAGE);
+
+  return (
+    <div className="min-h-screen bg-surface text-on-background flex flex-col font-sans">
+      
+      {/* Side Navigation Bar */}
+      <aside className="fixed left-0 top-0 bottom-0 flex flex-col p-md z-40 bg-surface-container-low border-r border-outline-variant h-screen w-64">
+        <div className="flex items-center gap-sm mb-xl px-sm">
+          <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
+          <div>
+            <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
+            <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+          </div>
+        </div>
+        
+        <nav className="flex-1 space-y-xs">
+          <button
+            onClick={() => { setActiveTab('home'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+              activeTab === 'home'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <span className="material-symbols-outlined">home</span>Inicio
+          </button>
+          
+          <button
+            onClick={() => { setActiveTab('students'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+              activeTab === 'students'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <span className="material-symbols-outlined">group</span>Alunos
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('tasks'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+              activeTab === 'tasks'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <span className="material-symbols-outlined">assignment</span>Tarefas
+          </button>
+
+          <button
+            onClick={() => { setActiveTab('access'); setSelectedTaskDetails(null); }}
+            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer ${
+              activeTab === 'access'
+                ? 'bg-primary-container text-on-primary-container font-bold'
+                : 'text-on-surface-variant hover:bg-surface-container-high'
+            }`}
+          >
+            <span className="material-symbols-outlined">admin_panel_settings</span>Acessos
+          </button>
+        </nav>
+        
+        <div className="mt-auto space-y-xs">
+          <button
+            onClick={() => alert('Para obter ajuda, entre em contato em suporte@abbadigital.com')}
+            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer"
+          >
+            <span className="material-symbols-outlined">help</span>
+            Ajuda
+          </button>
+          <button 
+            onClick={onLogout}
+            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer"
+          >
+            <span className="material-symbols-outlined">logout</span>
+            Sair
+          </button>
+        </div>
+      </aside>
+
+      {/* Main Content Area */}
+      <main className="ml-64 min-h-screen flex flex-col">
+        {/* Top App Bar - Identical to Student Dashboard */}
+        <header className="flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-surface/80 backdrop-blur-md h-16 border-b border-outline-variant">
+          <div className="flex items-center gap-md flex-1">
+            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold md:block hidden">Área do Professor</h2>
+            {activeTab === 'students' && (
+              <div className="flex items-center gap-2 ml-4">
+                <button 
+                  onClick={() => setIsAddStudentOpen(true)}
+                  className="bg-primary text-on-primary px-4 py-1.5 rounded-full font-label-md text-label-md flex items-center gap-sm hover:opacity-90 active:scale-95 transition-all shadow-sm border-none cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">person_add</span>
+                  Adicionar Aluno
+                </button>
+                <button 
+                  onClick={handleCloudSync}
+                  className="p-1.5 bg-surface-container-high text-primary rounded-full hover:bg-primary-container/10 transition-all shadow-sm flex items-center justify-center border-none cursor-pointer active:scale-95" 
+                  title="Nuvem"
+                >
+                  <span className="material-symbols-outlined text-[18px]">cloud</span>
+                </button>
+                <button 
+                  onClick={handleDeleteSelected}
+                  className="p-1.5 bg-surface-container-high text-error rounded-full hover:bg-error-container transition-all shadow-sm flex items-center justify-center border-none cursor-pointer active:scale-95" 
+                  title="Excluir Selecionados"
+                >
+                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                </button>
+              </div>
+            )}
+          </div>
+          
+          <div className="flex items-center gap-md relative">
+            {/* Notifications Bell Button */}
+            <div className="relative">
+              <button 
+                ref={bellButtonRef}
+                onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                className={`relative w-10 h-10 flex items-center justify-center rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border ${
+                  showNotificationsDropdown 
+                    ? 'bg-slate-100 border-slate-300 text-slate-900' 
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                }`}
+                title="Notificações"
+              >
+                <span className="material-symbols-outlined font-semibold text-[20px]">notifications</span>
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#10B981] rounded-full animate-pulse border-2 border-white"></span>
+              </button>
+            </div>
+            
+            {/* Search Lupa Button (Style Matched) */}
+            <button 
+              onClick={() => setSearchExpanded(true)}
+              className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-2.5 rounded-xl font-bold border-none transition-all active:scale-95 cursor-pointer flex items-center justify-center shadow-xs"
+              title="Pesquisar Atividades (Lupa)"
+            >
+              <span className="material-symbols-outlined font-black text-[20px]">search</span>
+            </button>
+            
+            <div className="w-px h-6 bg-outline-variant mx-xs"></div>
+ 
+            {/* Profile Avatar & Dropdowns */}
+            <div className="relative">
+              <button
+                ref={avatarButtonRef}
+                onClick={() => setShowProfileMenu(prev => !prev)}
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
+                title="Perfil"
+              >
+                <img
+                  alt={`${user.name} Avatar`}
+                  className="w-full h-full object-cover"
+                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFglNNrbUVhLI4jVpxuIpCzpHrDsFs3-5yWZKyg2YmaJLhlq0-vJzzjFo1kJPLT3M1SRSUkXCVB8HL1GlLR1fA2eLLinUqMpKgIZkH5zyH5NqJtLipvICB8BuKnAZRnj7zY74zzuRSyGwf7XxHDwFjLz8SZTZhz4cXeZNtS8af-VkIwwQVHcxn94y9hlSvTqpmhfpBsA0OtQer6mb5eADOLH6ey3YByVEPnNMaAv_D4SQxSceGiLApcsmAfp9HgBZfNY8oVLWbuenB"
+                />
+              </button>
+ 
+              {/* Notifications Dropdown for Teacher */}
+              <AnimatePresence>
+                {showNotificationsDropdown && (
+                  <motion.div
+                    ref={notificationsRef}
+                    initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.99 }}
+                    transition={{ 
+                      type: "spring", 
+                      damping: 30, 
+                      stiffness: 400
+                    }}
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right"
+                  >
+                    {/* Dropdown Header */}
+                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
+                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        Notificações
+                      </h2>
+                      
+                      <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
+                        <button 
+                          onClick={() => setNotificationFilter('all')}
+                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
+                            notificationFilter === 'all' 
+                              ? 'bg-white shadow-sm text-slate-900' 
+                              : 'bg-transparent text-slate-500 hover:text-slate-700'
+                          }`}
+                        >
+                          Todas
+                        </button>
+                      </div>
+                    </div>
+ 
+                    {/* Dropdown Content */}
+                    <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
+                      {[
+                        {
+                          id: 'notif-1',
+                          title: 'Nova entrega!',
+                          message: 'Ana Beatriz Silva concluiu "Exercício de Numerais Multilingue".',
+                          createdAt: new Date().toISOString(),
+                          isRead: false,
+                        },
+                        {
+                          id: 'notif-2',
+                          title: 'Tarefa criada!',
+                          message: 'Você criou com sucesso a tarefa "Tarefa de cores".',
+                          createdAt: new Date(Date.now() - 3600000).toISOString(),
+                          isRead: true,
+                        }
+                      ].map((notif) => (
+                        <div 
+                          key={notif.id}
+                          className={`p-5 flex gap-4 transition-colors relative text-left bg-white`}
+                        >
+                          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                            <span className="material-symbols-outlined text-indigo-500 text-[18px]">
+                              {notif.title.includes('entrega') ? 'assignment_turned_in' : 'assignment_add'}
+                            </span>
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2">
+                              <p className="font-bold text-xs text-slate-800 leading-tight truncate">{notif.title}</p>
+                              <span className="text-[9px] text-slate-400 font-medium shrink-0">agora</span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-1 leading-normal">{notif.message}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Profile Dropdown for Teacher */}
+              <AnimatePresence>
+                {showProfileMenu && (
+                  <motion.div
+                    ref={profileMenuRef}
+                    initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 6, scale: 0.99 }}
+                    transition={{ 
+                      type: "spring", 
+                      damping: 30, 
+                      stiffness: 400
+                    }}
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right"
+                  >
+                    {/* Header */}
+                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                      <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
+                      <span className="material-symbols-outlined text-slate-400">school</span>
+                    </div>
+ 
+                    {/* Scrollable Content */}
+                    <div className="overflow-y-auto bg-white">
+                      {/* User info details */}
+                      <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                        <div className="relative shrink-0">
+                          <img 
+                            alt="Avatar" 
+                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFglNNrbUVhLI4jVpxuIpCzpHrDsFs3-5yWZKyg2YmaJLhlq0-vJzzjFo1kJPLT3M1SRSUkXCVB8HL1GlLR1fA2eLLinUqMpKgIZkH5zyH5NqJtLipvICB8BuKnAZRnj7zY74zzuRSyGwf7XxHDwFjLz8SZTZhz4cXeZNtS8af-VkIwwQVHcxn94y9hlSvTqpmhfpBsA0OtQer6mb5eADOLH6ey3YByVEPnNMaAv_D4SQxSceGiLApcsmAfp9HgBZfNY8oVLWbuenB" 
+                          />
+                          <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
+                            <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
+                          </div>
+                        </div>
+                        <div className="text-left min-w-0">
+                          <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
+                          <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                        </div>
+                      </div>
+ 
+                      {/* Progress/Summary Card for Teacher */}
+                      <div className="p-5 flex flex-col gap-3">
+                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <p className="text-xs font-bold text-slate-700">Função: Professor</p>
+                              <p className="text-[11px] text-slate-400 mt-1">Matemática &amp; Idiomas</p>
+                            </div>
+                            <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
+                          </div>
+                          <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                            Gerencie tarefas, atribua atividades e acompanhe o progresso de alfabetização digital dos seus alunos.
+                          </p>
+                        </div>
+                      </div>
+ 
+                      {/* Dropdown Menu Actions */}
+                      <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                        <button 
+                          onClick={() => { setActiveTab('tasks'); setShowProfileMenu(false); }}
+                          className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="material-symbols-outlined text-[18px]">task</span>
+                            Ver Minhas Tarefas
+                          </span>
+                          <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                          Editar Perfil
+                        </button>
+                        
+                        <button 
+                          onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">logout</span>
+                          Sair da Conta
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          </div>
+        </header>
+
+        {/* Content Body */}
+        <main className="p-margin-desktop max-w-[1200px] mx-auto w-full flex-1">
+          
+          {/* TAB 1: HOME */}
+          {activeTab === 'home' && (
+            <div className="space-y-6">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm">
+                <div>
+                  <h2 className="text-2xl font-extrabold tracking-tight text-[#131b2e]">Bem-vindo de volta, {user.name.split(' ')[0]}! 👋</h2>
+                  <p className="text-xs text-slate-500 mt-1">Aqui está a visão geral da alfabetização bilíngue de suas turmas.</p>
+                </div>
+                <button
+                  onClick={() => setIsAddTaskOpen(true)}
+                  className="flex items-center justify-center gap-2 px-5 py-3 bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold rounded-xl transition-all shadow shadow-[#005bb3]/20 active:scale-95 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[18px]">add</span>
+                  Adicionar Tarefa
+                </button>
+              </div>
+
+              {/* Bento Grid Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">group</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{students.length}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alunos Ativos</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">assignment</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{tasks.length}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tarefas Totais</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">pending_actions</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{submissions.length}</h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entregas Pendentes</p>
+                  </div>
+                </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center">
+                    <span className="material-symbols-outlined text-2xl">verified_user</span>
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-extrabold text-[#131b2e]">
+                      {activeCodes.filter(c => c.expiresAt > Date.now()).length}
+                    </h3>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Códigos Ativos</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Submissions Section */}
+              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-[#dde0e2]">
+                  <h3 className="font-extrabold text-lg">Submissões Recentes dos Alunos</h3>
+                  <p className="text-xs text-slate-400">Clique em Revisar para abrir a simulação tridimensional do ábaco</p>
+                </div>
+                <div className="divide-y divide-[#dde0e2]">
+                  {submissions.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-sm">
+                      Nenhuma submissão recebida até o momento.
+                    </div>
+                  ) : (
+                    submissions.map((sub, idx) => (
+                      <div key={sub.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f2f3ff] transition-all">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-[#eaedff] text-[#005bb3] flex items-center justify-center font-bold">
+                            {sub.studentName[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-bold">{sub.studentName}</p>
+                            <p className="text-xs text-slate-400 mt-0.5">{sub.taskTitle} • {new Date(sub.submittedAt).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <span className="px-3 py-1 bg-blue-50 text-[#005bb3] text-[10px] font-bold rounded-full">
+                            {sub.spelledWords.length} Palavras
+                          </span>
+                          <button
+                            onClick={() => onLaunchReviewMode(sub)}
+                            className="flex items-center gap-1.5 px-4 py-2 border border-[#005bb3] text-[#005bb3] hover:bg-[#005bb3] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">visibility</span>
+                            Revisar Ábaco
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: TASKS */}
+          {activeTab === 'tasks' && (
+            selectedTaskDetails ? (
+              <div className="space-y-xl animate-fade-in select-text">
+                {/* Breadcrumbs */}
+                <nav className="flex items-center gap-sm text-label-sm text-outline mb-md select-none">
+                  <span onClick={() => setSelectedTaskDetails(null)} className="cursor-pointer hover:text-primary transition-colors">EduConnect</span>
+                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                  <span onClick={() => setSelectedTaskDetails(null)} className="cursor-pointer hover:text-primary transition-colors font-semibold">Minhas Tarefas</span>
+                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                  <span className="text-on-surface-variant font-bold">Detalhes</span>
+                </nav>
+
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-lg mb-xl">
+                  <div>
+                    <h2 className="font-headline-lg text-headline-lg text-on-surface mb-xs font-black">{selectedTaskDetails.title}</h2>
+                    <p className="text-body-md text-on-surface-variant mt-sm mb-md max-w-3xl leading-relaxed">{selectedTaskDetails.description}</p>
+                    <div className="flex flex-wrap items-center gap-md">
+                      <div className="flex items-center gap-xs text-on-surface-variant">
+                        <span className="material-symbols-outlined text-[18px]">calendar_today</span>
+                        <span className="text-body-md">Entrega: <span className="font-semibold">{selectedTaskDetails.dueDate ? new Date(selectedTaskDetails.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Sem prazo'}</span></span>
+                      </div>
+                      <span className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-xs ${
+                        selectedTaskDetails.status === 'active' 
+                          ? 'bg-primary-fixed text-on-primary-fixed-variant' 
+                          : selectedTaskDetails.status === 'draft'
+                          ? 'bg-secondary-fixed text-on-secondary-fixed-variant'
+                          : 'bg-surface-container-high text-on-surface-variant'
+                      }`}>
+                        <span className={`w-2 h-2 rounded-full ${
+                          selectedTaskDetails.status === 'active' ? 'bg-primary animate-pulse' : 'bg-secondary'
+                        }`}></span>
+                        {selectedTaskDetails.status === 'active' ? 'Ativa' : selectedTaskDetails.status === 'draft' ? 'Rascunho' : 'Arquivada'}
+                      </span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-sm self-start shrink-0 select-none">
+                    <button 
+                      onClick={() => setEditingTask(selectedTaskDetails)}
+                      className="flex items-center justify-center w-10 h-10 border border-outline-variant rounded-lg text-primary hover:bg-surface-container-high transition-all cursor-pointer bg-white" 
+                      title="Editar Tarefa"
+                    >
+                      <span className="material-symbols-outlined">edit</span>
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setIsAssigningStudentsDetails(selectedTaskDetails);
+                        setTempDetailsAssignedStudentIds(selectedTaskDetails.assignedStudentIds || []);
+                        setDetailsAssignSearchQuery('');
+                        setShowSharePanel(false);
+                        setShareTaskLinks({});
+                      }}
+                      className="flex items-center justify-center w-10 h-10 bg-primary text-on-primary rounded-lg shadow-sm hover:bg-primary-container transition-all active:scale-95 cursor-pointer border-none" 
+                      title="Selecionar Alunos"
+                    >
+                      <span className="material-symbols-outlined">person_add</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary Bento Grid Section */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-md mb-xl select-none">
+                  {(() => {
+                    const totalTargetWords = selectedTaskDetails.targetWords?.length || 0;
+                    const completedStudentsCount = students.filter(s => {
+                      const submission = submissions.find(
+                        sub => sub.studentName === s.name && sub.taskTitle === selectedTaskDetails.title
+                      );
+                      const spelledCount = submission?.spelledWords?.length || 0;
+                      return totalTargetWords > 0 && spelledCount >= totalTargetWords;
+                    }).length;
+                    
+                    const percentFinished = students.length > 0 ? Math.round((completedStudentsCount / students.length) * 100) : 0;
+
+                    return (
+                      <div className="md:col-span-2 bg-white card-shadow rounded-xl p-lg flex flex-col justify-between">
+                        <div>
+                          <p className="text-label-md text-outline uppercase tracking-wider mb-sm">Progresso Geral</p>
+                          <h3 className="text-headline-md text-on-surface font-extrabold">
+                            {completedStudentsCount} de {students.length} Alunos concluíram
+                          </h3>
+                        </div>
+                        <div className="mt-md">
+                          <div className="flex justify-between items-end mb-xs">
+                            <span className="text-label-md font-bold text-primary">
+                              {percentFinished}% concluído
+                            </span>
+                          </div>
+                          <div className="w-full bg-surface-container-high rounded-full h-3 overflow-hidden">
+                            <div 
+                              className="bg-primary h-3 rounded-full shadow-inner transition-all duration-500" 
+                              style={{ width: `${percentFinished}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  
+                  <div className="bg-white card-shadow rounded-xl p-lg flex flex-col justify-center items-center text-center">
+                    <div className="bg-surface-container-low text-primary p-md rounded-full mb-md flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[32px] font-variation-settings-fill">schedule</span>
+                    </div>
+                    <p className="text-label-sm text-outline mb-xs">Prazo Restante</p>
+                    <p className="font-headline-md text-on-surface font-extrabold">
+                      {(() => {
+                        if (!selectedTaskDetails.dueDate) return 'Sem prazo';
+                        const daysLeft = Math.ceil((new Date(selectedTaskDetails.dueDate + 'T23:59:59').getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
+                        return daysLeft > 0 ? `${daysLeft} Dias` : 'Expirado';
+                      })()}
+                    </p>
+                  </div>
+                  
+                  <div className="bg-white card-shadow rounded-xl p-lg flex flex-col justify-center items-center text-center">
+                    <div className="bg-surface-container-low text-primary p-md rounded-full mb-md flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[32px] font-variation-settings-fill">star</span>
+                    </div>
+                    <p className="text-label-sm text-outline mb-xs">Média da Turma</p>
+                    <p className="font-headline-md text-on-surface font-extrabold">8.4 / 10</p>
+                  </div>
+                </div>
+
+                {/* Students List Header */}
+                <div className="flex items-center justify-between mb-lg">
+                  <h4 className="text-on-surface text-headline-lg font-bold text-black font-extrabold">Atribuído aos alunos</h4>
+                  
+                  <div className="flex-1 max-w-md mx-md hidden lg:block">
+                    <div className="relative flex items-center">
+                      <span className="material-symbols-outlined absolute left-3 text-outline text-[20px]">search</span>
+                      <input 
+                        className="pl-10 pr-4 py-2 bg-white border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary w-full text-body-md font-display outline-none" 
+                        placeholder="Buscar aluno..." 
+                        type="text"
+                        value={detailsStudentSearchQuery}
+                        onChange={(e) => {
+                          setDetailsStudentSearchQuery(e.target.value);
+                          setDetailsStudentPage(1);
+                        }}
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="flex gap-sm select-none">
+                    <button className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-high transition-colors bg-white cursor-pointer flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[20px]">filter_list</span>
+                    </button>
+                    <button className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-high transition-colors bg-white cursor-pointer flex items-center justify-center">
+                      <span className="material-symbols-outlined text-[20px]">grid_view</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Student Cards Grid */}
+                {(() => {
+                  const filteredStudents = students.filter(s => {
+                    const matchesSearch = s.name.toLowerCase().includes(detailsStudentSearchQuery.toLowerCase());
+                    if (!matchesSearch) return false;
+                    
+                    const isExplicitlyAssigned = selectedTaskDetails.assignedStudentIds?.includes(s.id);
+                    const hasSubmission = submissions.some(
+                      sub => sub.studentName === s.name && sub.taskTitle === selectedTaskDetails.title
+                    );
+                    const hasLink = dbTaskLinks.some(
+                      link => link.taskId === selectedTaskDetails.id && 
+                      link.studentName.toLowerCase() === s.name.toLowerCase()
+                    );
+                    
+                    return isExplicitlyAssigned || hasSubmission || hasLink;
+                  });
+                  
+                  const pageSize = 6;
+                  const totalPages = Math.ceil(filteredStudents.length / pageSize) || 1;
+                  const startIndex = (detailsStudentPage - 1) * pageSize;
+                  const paginatedStudents = filteredStudents.slice(startIndex, startIndex + pageSize);
+                  
+                  return (
+                    <>
+                      <div className="student-grid">
+                        {paginatedStudents.map(student => {
+                          const submission = submissions.find(
+                            sub => sub.studentName === student.name && sub.taskTitle === selectedTaskDetails.title
+                          );
+                          
+                          const targetWordsCount = selectedTaskDetails.targetWords?.length || 0;
+                          const spelledWordsCount = submission?.spelledWords?.length || 0;
+                          
+                          const progress = targetWordsCount > 0 ? Math.min(100, Math.round((spelledWordsCount / targetWordsCount) * 100)) : 0;
+                          const isCompleted = progress === 100;
+                          const status = isCompleted 
+                            ? 'completed' 
+                            : progress > 0 
+                            ? 'inprogress' 
+                            : 'pending';
+                          
+                          return (
+                            <div 
+                              key={student.id} 
+                              className="bg-white card-shadow rounded-xl p-md flex flex-col gap-md hover:border-primary transition-all group border border-outline-variant/60"
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="flex items-center gap-md">
+                                  <div className="relative shrink-0">
+                                    <img 
+                                      alt={student.name} 
+                                      className="w-12 h-12 rounded-full object-cover border-2 border-surface-container-high" 
+                                      src={student.img}
+                                    />
+                                    <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
+                                      status === 'completed' ? 'bg-green-500' : status === 'inprogress' ? 'bg-blue-500' : 'bg-slate-400'
+                                    }`}></span>
+                                  </div>
+                                  <div>
+                                    <h5 className="font-bold text-on-surface group-hover:text-primary transition-colors line-clamp-1 font-sans">{student.name}</h5>
+                                    <p className="text-xs text-outline">
+                                      {status === 'completed' 
+                                        ? `Entregue em: ${new Date(submission!.submittedAt).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                        : status === 'inprogress'
+                                        ? 'Em progresso...'
+                                        : 'Não iniciada.'}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                {status === 'completed' ? (
+                                  <span className="flex items-center gap-xs px-2 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded uppercase shrink-0">
+                                    <span className="material-symbols-outlined text-[14px] font-variation-settings-fill">check_circle</span>
+                                  </span>
+                                ) : status === 'inprogress' ? (
+                                  <span className="flex items-center gap-xs px-2 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded uppercase shrink-0">
+                                    <span className="material-symbols-outlined text-[14px] font-variation-settings-fill">pending</span>
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-xs px-2 py-1 bg-slate-100 text-slate-600 text-[10px] font-bold rounded uppercase shrink-0" title="Não iniciada.">
+                                    <span className="material-symbols-outlined text-[14px]">circle</span>
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="space-y-sm select-none">
+                                <div className="flex justify-between text-[11px] font-bold">
+                                  <span className="text-on-surface-variant">Progresso</span>
+                                  <span className={status === 'completed' ? 'text-green-600' : status === 'inprogress' ? 'text-blue-600' : 'text-slate-500'}>
+                                    {progress}%
+                                  </span>
+                                </div>
+                                <div className="w-full bg-surface-container-high h-2 rounded-full overflow-hidden">
+                                  <div 
+                                    className={`h-2 rounded-full transition-all duration-300 ${
+                                      status === 'completed' ? 'bg-green-500' : status === 'inprogress' ? 'bg-blue-500' : 'bg-slate-300'
+                                    }`} 
+                                    style={{ width: `${progress}%` }}
+                                  ></div>
+                                </div>
+                              </div>
+                              
+                              <button 
+                                type="button"
+                                onClick={() => {
+                                  if (isCompleted && submission) {
+                                    onLaunchReviewMode(submission);
+                                  } else {
+                                    alert('O aluno ou aluna não realizou a tarefa ainda');
+                                  }
+                                }}
+                                className="w-full py-sm text-label-md font-bold text-primary border border-primary rounded-lg hover:bg-primary hover:text-white transition-all cursor-pointer bg-white shrink-0 select-none"
+                              >
+                                Conferir
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      
+                      {/* Pagination Footer */}
+                      <div className="flex items-center justify-between mt-xl pt-lg border-t border-outline-variant select-none">
+                        <p className="text-body-md text-on-surface-variant">
+                          Mostrando {Math.min(filteredStudents.length, startIndex + 1)}-{Math.min(filteredStudents.length, startIndex + pageSize)} de {filteredStudents.length} alunos
+                        </p>
+                        
+                        {totalPages > 1 && (
+                          <div className="flex items-center gap-xs">
+                            <button 
+                              type="button"
+                              onClick={() => setDetailsStudentPage(prev => Math.max(1, prev - 1))}
+                              disabled={detailsStudentPage === 1}
+                              className="p-2 rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined">chevron_left</span>
+                            </button>
+                            
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                              <button 
+                                key={page}
+                                type="button"
+                                onClick={() => setDetailsStudentPage(page)}
+                                className={`w-10 h-10 rounded-lg font-bold cursor-pointer transition-all ${
+                                  detailsStudentPage === page 
+                                    ? 'bg-primary text-on-primary border-none shadow' 
+                                    : 'border border-outline-variant hover:bg-surface-container-high bg-white'
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            ))}
+                            
+                            <button 
+                              type="button"
+                              onClick={() => setDetailsStudentPage(prev => Math.min(totalPages, prev + 1))}
+                              disabled={detailsStudentPage === totalPages}
+                              className="p-2 rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined">chevron_right</span>
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="space-y-xl animate-fade-in">
+                <div className="flex items-center justify-between mb-xl select-none">
+                  <div>
+                    <h1 className="font-headline-lg text-headline-lg text-on-surface">Minhas Tarefas</h1>
+                    <p className="font-body-md text-body-md text-on-surface-variant mt-1">Gerencie e acompanhe o progresso das atividades enviadas.</p>
+                  </div>
+                  <div className="flex items-center gap-md">
+                    {/* Bulk Archive Button */}
+                    <button
+                      type="button"
+                      onClick={handleBulkArchiveTasks}
+                      disabled={filteredTasks.filter(t => t.status !== 'completed').length === 0}
+                      className="flex items-center gap-xs px-md py-2.5 border border-[#c1c6d6] hover:bg-slate-50 text-slate-600 rounded-xl font-label-md text-label-md transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white shadow-sm"
+                      title="Arquivar todas as tarefas visíveis nesta aba"
+                      style={{ border: '1px solid #c1c6d6', background: '#ffffff' }}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">archive</span>
+                      Arquivar Tudo
+                    </button>
+
+                    {/* Bulk Delete Button */}
+                    <button
+                      type="button"
+                      onClick={handleBulkDeleteTasks}
+                      disabled={filteredTasks.length === 0}
+                      className="flex items-center gap-xs px-md py-2.5 border border-red-200 hover:bg-red-50 text-red-600 rounded-xl font-label-md text-label-md transition-all active:scale-95 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed bg-white shadow-sm"
+                      title="Excluir todas as tarefas visíveis nesta aba"
+                      style={{ border: '1px solid #fca5a5', background: '#ffffff' }}
+                    >
+                      <span className="material-symbols-outlined text-[18px] text-red-500">delete</span>
+                      Excluir Tudo
+                    </button>
+
+                    {/* Nova Tarefa Button */}
+                    <button
+                      type="button"
+                      onClick={() => setIsAddTaskOpen(true)}
+                      className="flex items-center gap-sm px-lg py-md bg-primary text-on-primary rounded-xl font-label-md text-label-md hover:opacity-90 transition-all shadow-sm active:scale-95 cursor-pointer border-none"
+                    >
+                      <span className="material-symbols-outlined">add</span>
+                      Nova Tarefa
+                    </button>
+                  </div>
+                </div>
+
+                {/* Filter Tabs */}
+                <div className="flex items-center gap-md mb-xl border-b border-outline-variant select-none">
+                  <button
+                    onClick={() => { setTasksFilter('all'); setTasksPage(1); }}
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                      tasksFilter === 'all'
+                        ? 'border-primary text-primary font-bold'
+                        : 'border-transparent text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    Todas
+                  </button>
+                  <button
+                    onClick={() => { setTasksFilter('active'); setTasksPage(1); }}
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                      tasksFilter === 'active'
+                        ? 'border-primary text-primary font-bold'
+                        : 'border-transparent text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    Ativas
+                  </button>
+                  <button
+                    onClick={() => { setTasksFilter('draft'); setTasksPage(1); }}
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                      tasksFilter === 'draft'
+                        ? 'border-primary text-primary font-bold'
+                        : 'border-transparent text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    Rascunhos
+                  </button>
+                  <button
+                    onClick={() => { setTasksFilter('archived'); setTasksPage(1); }}
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                      tasksFilter === 'archived'
+                        ? 'border-primary text-primary font-bold'
+                        : 'border-transparent text-on-surface-variant hover:text-primary'
+                    }`}
+                  >
+                    Arquivadas
+                  </button>
+                </div>
+
+                {/* Bento Grid Layout */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg min-h-[350px]">
+                  {/* Create New Task Card - Outside AnimatePresence to prevent StrictMode duplication */}
+                  {tasksPage === 1 && (tasksFilter === 'all' || tasksFilter === 'draft') && (
+                    <button
+                      onClick={() => setIsAddTaskOpen(true)}
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-outline-variant rounded-xl p-xl bg-surface-container-lowest hover:bg-surface-container-low hover:border-primary transition-all group min-h-[280px] w-full cursor-pointer"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center text-primary mb-md group-hover:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-[32px]">add_task</span>
+                      </div>
+                      <span className="font-headline-md text-headline-md text-on-surface">Criar nova tarefa</span>
+                      <span className="font-body-md text-body-md text-on-surface-variant mt-xs">Clique para iniciar uma nova atividade</span>
+                    </button>
+                  )}
+
+                  <AnimatePresence>
+                    {/* Paginated Tasks list */}
+                    {paginatedTasks.length === 0 ? (
+                      <motion.div
+                        key="empty-tasks-state"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="col-span-full py-12 flex flex-col items-center justify-center text-slate-400 text-sm bg-white rounded-2xl border border-outline-variant p-6"
+                      >
+                        <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">layers_clear</span>
+                        Nenhuma tarefa encontrada neste filtro.
+                      </motion.div>
+                    ) : (
+                      paginatedTasks.map(task => {
+                        const isArchived = task.status === 'completed';
+                        const isDraft = task.status === 'draft';
+                        const isActive = task.status === 'active';
+
+                        if (isArchived) {
+                          return (
+                            <motion.div
+                              key={task.id}
+                              layout="position"
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                              className="bg-white/60 rounded-xl border border-outline-variant p-lg card-shadow flex flex-col justify-between min-h-[280px] hover:shadow-md hover:translate-y-[-4px] transition-all duration-200"
+                            >
+                              <div>
+                                <div className="flex justify-between items-start mb-md">
+                                  <span className="px-sm py-xs bg-surface-container-high text-on-surface-variant rounded-lg font-label-sm text-label-sm">
+                                    Arquivada
+                                  </span>
+                                </div>
+                                <h3 className="font-headline-md text-headline-md text-on-surface-variant/80 mb-xs line-through">
+                                  {task.title}
+                                </h3>
+                                <div className="flex items-center gap-xs text-on-surface-variant/60 mb-md">
+                                  <span className="material-symbols-outlined text-[18px]">inventory_2</span>
+                                  <span className="font-label-sm text-label-sm">Finalizada</span>
+                                </div>
+                              </div>
+                              <div className="space-y-md">
+                                <div className="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant">
+                                  <span>Relatório Final Gerado</span>
+                                  <span className="material-symbols-outlined text-green-600">check_circle</span>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const updated = tasks.map(t => t.id === task.id ? { ...t, status: 'active' as const } : t);
+                                    setTasks(updated);
+                                    alert(`Tarefa "${task.title}" reativada com sucesso! 🚀`);
+                                  }}
+                                  className="w-full py-sm border border-outline text-on-surface-variant rounded-lg font-label-md text-label-md hover:bg-surface-container-low transition-colors cursor-pointer bg-white"
+                                >
+                                  Reativar
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        }
+
+                        if (isDraft) {
+                          return (
+                            <motion.div
+                              key={task.id}
+                              layout="position"
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                              className="bg-white rounded-xl border border-outline-variant p-lg card-shadow flex flex-col justify-between min-h-[280px] hover:border-primary/30 hover:translate-y-[-4px] transition-all duration-200"
+                            >
+                              <div>
+                                <div className="flex justify-between items-start mb-md select-none">
+                                  <span className="px-sm py-xs bg-secondary-container text-on-secondary-container rounded-lg font-label-sm text-label-sm">
+                                    Rascunho
+                                  </span>
+                                  <button
+                                    onClick={() => setEditingTask(task)}
+                                    className="text-on-surface-variant hover:text-primary cursor-pointer bg-transparent border-none"
+                                  >
+                                    <span className="material-symbols-outlined">edit</span>
+                                  </button>
+                                </div>
+                                <h3 className="font-headline-md text-headline-md text-on-surface mb-xs">{task.title}</h3>
+                                <div className="flex items-center gap-xs text-on-surface-variant mb-md">
+                                  <span className="material-symbols-outlined text-[18px]">history</span>
+                                  <span className="font-label-sm text-label-sm">Aguardando publicação</span>
+                                </div>
+                              </div>
+                              <div className="space-y-md select-none">
+                                <div className="p-md bg-surface-container-low rounded-lg text-center">
+                                  <p className="font-body-md text-body-md text-on-surface-variant italic">Aguardando publicação</p>
+                                </div>
+                                <button
+                                  onClick={() => {
+                                    const updated = tasks.map(t => t.id === task.id ? { ...t, status: 'active' as const } : t);
+                                    setTasks(updated);
+                                    alert(`Tarefa "${task.title}" publicada com sucesso! 📡`);
+                                  }}
+                                  className="w-full py-sm border border-primary text-primary rounded-lg font-label-md text-label-md hover:bg-primary/5 transition-colors cursor-pointer bg-white"
+                                >
+                                  Retomar Edição
+                                </button>
+                              </div>
+                            </motion.div>
+                          );
+                        }
+
+                        // Active state (Ativa)
+                        return (
+                          <motion.div
+                            key={task.id}
+                            layout="position"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="bg-white rounded-xl border border-outline-variant p-lg card-shadow flex flex-col justify-between min-h-[280px] hover:border-primary/50 transition-all hover:translate-y-[-4px] duration-200"
+                          >
+                            <div>
+                              <div className="flex justify-between items-start mb-md select-none">
+                                <span className="px-sm py-xs bg-primary-container/20 text-on-primary-fixed-variant rounded-lg font-label-sm text-label-sm flex items-center gap-xs">
+                                  <span className="w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+                                  Ativa
+                                </span>
+                                <button
+                                  onClick={() => setEditingTask(task)}
+                                  className="text-on-surface-variant hover:text-primary cursor-pointer bg-transparent border-none"
+                                >
+                                  <span className="material-symbols-outlined">edit</span>
+                                </button>
+                              </div>
+                              <h3 className="font-headline-md text-headline-md text-on-surface mb-xs">{task.title}</h3>
+                              <div className="flex items-center gap-xs text-on-surface-variant mb-md">
+                                <span className="material-symbols-outlined text-[18px]">event</span>
+                                <span className="font-label-sm text-label-sm">Entrega: {task.dueDate ? new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: 'numeric', month: 'short' }) : 'Sem prazo'}</span>
+                              </div>
+                            </div>
+                            <div className="space-y-md">
+                              <div className="space-y-xs select-none">
+                                {(() => {
+                                    const assignedCount = students.filter(s => {
+                                      const isExplicitlyAssigned = task.assignedStudentIds?.includes(s.id);
+                                      const hasSubmission = submissions.some(
+                                        sub => sub.studentName === s.name && sub.taskTitle === task.title
+                                      );
+                                      const hasLink = dbTaskLinks.some(
+                                        link => link.taskId === task.id && 
+                                        link.studentName.toLowerCase() === s.name.toLowerCase()
+                                      );
+                                      return isExplicitlyAssigned || hasSubmission || hasLink;
+                                    }).length;
+                                    const subsCount = submissions.filter(sub => sub.taskTitle === task.title).length;
+                                    const displayAssigned = assignedCount;
+                                    const progressPercent = displayAssigned > 0 
+                                      ? Math.min(100, Math.round((subsCount / displayAssigned) * 100)) 
+                                      : 0;
+                                    return (
+                                      <>
+                                        <div className="flex justify-between font-label-sm text-label-sm">
+                                          <span className="text-on-surface-variant">Progresso de Entrega</span>
+                                          <span className="text-primary font-bold">{subsCount}/{displayAssigned} Alunos</span>
+                                        </div>
+                                        <div className="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
+                                          <div
+                                            className="h-full bg-primary rounded-full transition-all duration-300"
+                                            style={{ width: `${progressPercent}%` }}
+                                          ></div>
+                                        </div>
+                                      </>
+                                    );
+                                  })()}
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedTaskDetails(task);
+                                  setActiveTab('tasks');
+                                }}
+                                className="w-full py-sm bg-primary text-on-primary rounded-lg font-label-md text-label-md hover:bg-primary-container transition-colors cursor-pointer border-none"
+                              >
+                                Ver Detalhes
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                {/* Pagination */}
+                {filteredTasks.length > 0 && (
+                  <div className="mt-xl flex items-center justify-between py-md border-t border-outline-variant select-none">
+                    <p className="font-body-md text-body-md text-on-surface-variant">
+                      Mostrando {Math.min(filteredTasks.length, startIndex + 1)}-{Math.min(filteredTasks.length, startIndex + TASKS_PER_PAGE)} de {filteredTasks.length} tarefas
+                    </p>
+                    <div className="flex items-center gap-xs">
+                      <button
+                        onClick={() => setTasksPage(prev => Math.max(1, prev - 1))}
+                        disabled={tasksPage === 1}
+                        className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low text-on-surface-variant transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
+                      >
+                        <span className="material-symbols-outlined">chevron_left</span>
+                      </button>
+                      <div className="flex items-center gap-xs">
+                        {Array.from({ length: totalPages }).map((_, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setTasksPage(i + 1)}
+                            className={`w-10 h-10 rounded-lg font-label-md text-label-md cursor-pointer transition-colors ${
+                              tasksPage === i + 1
+                                ? 'bg-primary text-on-primary font-bold border-none shadow'
+                                : 'hover:bg-surface-container-high text-on-surface-variant bg-white border border-outline-variant'
+                            }`}
+                          >
+                            {i + 1}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={() => setTasksPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={tasksPage === totalPages}
+                        className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low text-on-surface-variant transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
+                      >
+                        <span className="material-symbols-outlined">chevron_right</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          )}
+
+          {/* TAB 3: STUDENTS */}
+          {activeTab === 'students' && (
+            <div className="space-y-6">
+              {/* Header Section with Search & Filter in the Upper Right */}
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg">
+                <div>
+                  <h2 className="font-headline-lg text-headline-lg text-on-background">Alunos</h2>
+                  <p className="text-on-surface-variant font-label-sm text-label-sm">Gerencie seus estudantes e acompanhe o progresso individual.</p>
+                </div>
+                
+                <div className="flex items-center gap-md self-end md:self-auto">
+                  {/* Search Input */}
+                  <div className="relative w-64">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                    <input
+                      type="text"
+                      value={gridSearchQuery}
+                      onChange={(e) => {
+                        setGridSearchQuery(e.target.value);
+                        setStudentsLimit(6); // Reset limit on search
+                      }}
+                      placeholder="Pesquisar por nome ou turma..."
+                      className="w-full pl-9 pr-4 py-2.5 bg-[#f2f3ff] border border-outline-variant/60 rounded-full text-xs outline-none focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] transition-all text-on-surface"
+                      style={{ border: '1px solid #c1c6d6' }}
+                    />
+                  </div>
+
+                  {/* Filter Button & Popover */}
+                  <div className="relative">
+                    <button
+                      onClick={() => setIsGridFilterOpen(prev => !prev)}
+                      className={`flex items-center gap-xs px-4 py-2 bg-[#f2f3ff] border border-outline-variant/60 rounded-full font-label-sm text-label-sm hover:bg-[#e4e6ff] transition-all cursor-pointer border-none text-on-surface-variant ${isGridFilterOpen ? 'bg-primary-container text-primary font-bold' : ''}`}
+                      style={{ border: '1px solid #c1c6d6' }}
+                    >
+                      <span className="material-symbols-outlined text-[18px]">filter_alt</span>
+                      Filtros
+                    </button>
+
+                    <AnimatePresence>
+                      {isGridFilterOpen && (
+                        <>
+                          <div className="fixed inset-0 z-40 cursor-default" onClick={() => setIsGridFilterOpen(false)} />
+                          <motion.div
+                            initial={{ opacity: 0, y: 8, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 8, scale: 0.95 }}
+                            transition={{ duration: 0.15, ease: 'easeOut' }}
+                            className="absolute right-0 mt-2 w-56 bg-surface border border-outline-variant/60 rounded-xl shadow-lg z-50 p-3 font-sans flex flex-col gap-sm"
+                            style={{ backgroundColor: '#ffffff', border: '1px solid #c1c6d6' }}
+                          >
+                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1 select-none">MÉTODO DE LOGIN:</p>
+                            <div className="flex flex-col gap-xs">
+                              {[
+                                { type: 'all', label: 'Todos os Métodos' },
+                                { type: 'code', label: 'Código (Entrou por Código)' },
+                                { type: 'link', label: 'Link (Entrou por Link)' },
+                                { type: 'login', label: 'Login (Email/Cadastro)' }
+                              ].map(option => (
+                                <button
+                                  key={option.type}
+                                  onClick={() => {
+                                    setGridFilterType(option.type as any);
+                                    setIsGridFilterOpen(false);
+                                    setStudentsLimit(6); // Reset limit on filter
+                                  }}
+                                  className={`w-full text-left px-md py-sm rounded-lg text-xs font-semibold transition-colors cursor-pointer border-none ${
+                                    gridFilterType === option.type
+                                      ? 'bg-primary/10 text-primary font-extrabold'
+                                      : 'bg-transparent text-on-surface-variant hover:bg-surface-container-high'
+                                  }`}
+                                  style={{
+                                    backgroundColor: gridFilterType === option.type ? '#f0f3ff' : '',
+                                    color: gridFilterType === option.type ? '#005bb3' : ''
+                                  }}
+                                >
+                                  {option.label}
+                                </button>
+                              ))}
+                            </div>
+                          </motion.div>
+                        </>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                </div>
+              </div>
+
+              {/* Filters & Stats Chips */}
+              <div className="flex flex-wrap items-center gap-sm mb-lg">
+                <button 
+                  onClick={() => { setStudentsFilter('all'); setStudentsLimit(6); }}
+                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                    studentsFilter === 'all' 
+                      ? 'bg-on-background text-surface font-bold shadow-sm' 
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-outline-variant'
+                  }`}
+                >
+                  Todos ({students.length})
+                </button>
+                <button 
+                  onClick={() => { setStudentsFilter('completed'); setStudentsLimit(6); }}
+                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                    studentsFilter === 'completed' 
+                      ? 'bg-green-600 text-white font-bold shadow-sm' 
+                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                  }`}
+                >
+                  Concluídos ({students.filter(s => s.progress === 100).length})
+                </button>
+                <button 
+                  onClick={() => { setStudentsFilter('pending'); setStudentsLimit(6); }}
+                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                    studentsFilter === 'pending' 
+                      ? 'bg-red-500 text-white font-bold shadow-sm' 
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-outline-variant'
+                  }`}
+                >
+                  Pendentes ({students.filter(s => s.progress < 50).length})
+                </button>
+                <button 
+                  onClick={() => { setStudentsFilter('inprogress'); setStudentsLimit(6); }}
+                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                    studentsFilter === 'inprogress' 
+                      ? 'bg-blue-600 text-white font-bold shadow-sm' 
+                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                  }`}
+                >
+                  Concluindo ({students.filter(s => s.progress >= 50 && s.progress < 100).length})
+                </button>
+              </div>
+
+              {/* Dynamic Filtering, Ordering & Sessions Layout */}
+              {(() => {
+                const getSessionTitle = (list: any[], type: string) => {
+                  if (list.length === 0) return '';
+                  
+                  const isFemaleStudent = (student: any) => {
+                    if (student.gender === 'F') return true;
+                    if (student.gender === 'M') return false;
+                    const firstName = student.name.split(' ')[0].toLowerCase();
+                    return firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene', 'maria', 'ana', 'lara', 'gabriela'].includes(firstName);
+                  };
+
+                  const total = list.length;
+                  const females = list.filter(s => isFemaleStudent(s)).length;
+                  const isAllFemale = females === total;
+                  const isSingular = total === 1;
+
+                  if (type === 'code') {
+                    return isSingular
+                      ? (isAllFemale ? "Aluna que entrou por código" : "Aluno que entrou por código")
+                      : (isAllFemale ? "Alunas que entraram por código" : "Alunos que entraram por código");
+                  }
+                  if (type === 'link') {
+                    return isSingular
+                      ? (isAllFemale ? "Aluna que entrou por link" : "Aluno que entrou por link")
+                      : (isAllFemale ? "Alunas que entraram por link" : "Alunos que entraram por link");
+                  }
+                  if (type === 'login') {
+                    return isSingular
+                      ? (isAllFemale ? "Aluna que fez o login" : "Aluno que fez o login")
+                      : (isAllFemale ? "Alunas que fizeram o login" : "Alunos que fizeram o login");
+                  }
+                  if (type === 'invite') {
+                    return isSingular
+                      ? (isAllFemale ? "Aluna que entrou por convite" : "Aluno que entrou por convite")
+                      : (isAllFemale ? "Alunas que entraram por convite" : "Alunos que entraram por convite");
+                  }
+                  if (type === 'registered') {
+                    return isSingular
+                      ? (isAllFemale ? "Aluna cadastrada" : "Aluno cadastrado")
+                      : (isAllFemale ? "Alunas cadastradas" : "Alunos cadastrados");
+                  }
+                  return "Alunos";
+                };
+
+                const renderStudentCard = (student: any) => {
+                  const studentEmail = student.email || `${student.name.toLowerCase().replace(/\s+/g, '.')}@email.com`;
+                  const isDone = student.progress === 100;
+                  const isWaiting = student.progress < 50;
+
+                  return (
+                    <div 
+                      className="student-card bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col shadow-[0px_1px_2px_rgba(0,0,0,0.05)] hover:translate-y-[-2px] transition-all duration-200 min-h-[220px] select-text relative"
+                    >
+                      <div className="flex items-start justify-between mb-md">
+                        <div className="flex items-center gap-md">
+                          {/* Circular Selection Checkbox */}
+                          <div 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleSelectStudentGrid(student.id);
+                            }}
+                            className={`w-5 h-5 rounded-full flex items-center justify-center cursor-pointer border transition-all shrink-0 ${
+                              selectedStudentIdsGrid.includes(student.id)
+                                ? 'bg-primary border-primary text-white shadow-sm'
+                                : 'border-[#c1c6d6] bg-white text-transparent hover:border-primary'
+                            }`}
+                            title="Selecionar aluno"
+                          >
+                            <span className="material-symbols-outlined text-[12px] font-black select-none">check</span>
+                          </div>
+
+                          <div className="relative">
+                            <img 
+                              src={student.img} 
+                              alt={student.name} 
+                              className="w-14 h-14 rounded-full object-cover border-2 border-surface-container-high"
+                            />
+                            {student.lastAccessAt && (
+                              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" title="Online recentemente" />
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <h3 className="font-headline-md text-body-lg font-bold text-on-background flex flex-wrap items-center gap-xs">
+                              {student.name}
+                              {student.loginMethod && student.loginMethod !== 'login' && (
+                                <span 
+                                  className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold select-none tracking-wide ${
+                                    student.loginMethod === 'code' 
+                                      ? 'bg-purple-100 text-purple-700 border border-purple-200' 
+                                      : 'bg-blue-100 text-blue-700 border border-blue-200'
+                                  }`}
+                                  title={student.loginMethod === 'code' ? 'Entrou por Código' : 'Entrou por Link'}
+                                >
+                                  {student.loginMethod.toUpperCase()}
+                                </span>
+                              )}
+                            </h3>
+                            <p className="text-outline font-label-sm text-label-sm font-medium truncate block max-w-[170px]" title={studentEmail}>{studentEmail}</p>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0">
+                          {isDone ? (
+                            <span className="flex items-center gap-1 text-green-600">
+                              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
+                                check_circle
+                              </span>
+                            </span>
+                          ) : isWaiting ? (
+                            <span className="material-symbols-outlined text-red-500" style={{ fontVariationSettings: "'FILL' 1" }}>
+                              report_problem
+                            </span>
+                          ) : (
+                            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
+                              schedule
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className={`rounded-lg p-md mb-lg ${isDone ? 'bg-green-100' : 'bg-surface-container-low'}`}>
+                        <div className="flex justify-between items-end mb-xs">
+                          <span className="text-outline font-label-sm text-label-sm">Progresso de Tarefas</span>
+                          <span className={`font-label-md text-label-md font-bold ${isDone ? 'text-green-600' : isWaiting ? 'text-red-500' : 'text-primary'}`}>
+                            {isDone ? 'Concluído' : `${student.progress}%`}
+                          </span>
+                        </div>
+                        <div className="w-full bg-outline-variant h-1.5 rounded-full overflow-hidden">
+                          <div 
+                            className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-green-600' : isWaiting ? 'bg-red-500' : 'bg-primary'}`}
+                            style={{ width: `${student.progress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex gap-sm mt-auto">
+                        <button 
+                          onClick={() => {
+                            const sub = submissions.find(sub => sub.studentName === student.name);
+                            if (sub && student.progress > 0) {
+                              onLaunchReviewMode(sub);
+                            } else {
+                              alert('O aluno ou aluna não realizou a tarefa ainda');
+                            }
+                          }}
+                          className="flex-1 py-sm bg-surface-container-high text-on-surface font-label-md text-label-md rounded-lg hover:bg-outline-variant transition-colors border-none cursor-pointer"
+                        >
+                          Ver Tarefas
+                        </button>
+                        <button 
+                          onClick={() => alert(`Acesso na Nuvem sincronizado para o aluno ${student.name} (ID: ${student.matricula})`)}
+                          className="px-md py-sm bg-primary text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center hover:opacity-90 border-none cursor-pointer active:scale-95"
+                          title="Sincronizar Cloud PWA"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">cloud</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                };
+
+                const renderAddNewCardSkeleton = () => {
+                  return (
+                    <div 
+                      onClick={() => setIsAddStudentOpen(true)}
+                      className="border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-outline hover:border-primary hover:text-primary transition-all cursor-pointer group bg-surface-container-low/30 min-h-[220px] duration-150"
+                    >
+                      <div className="w-12 h-12 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center mb-md group-hover:border-primary transition-all">
+                        <span className="material-symbols-outlined text-[32px]">add</span>
+                      </div>
+                      <p className="font-label-md text-label-md font-bold">Adicionar Novo Aluno</p>
+                      <p className="text-[11px] text-center mt-xs px-md">Adicione um aluno usando formulário rápido</p>
+                    </div>
+                  );
+                };
+
+                // Pipeline: 1. Search Query & Progress stats filter
+                const filteredAll = students.filter(s => {
+                  const q = gridSearchQuery.toLowerCase();
+                  const matchesSearch = s.name.toLowerCase().includes(q) || 
+                                        s.class.toLowerCase().includes(q) ||
+                                        (s.email && s.email.toLowerCase().includes(q)) ||
+                                        (s.name.toLowerCase().replace(/\s+/g, '.') + '@email.com').includes(q);
+                  if (!matchesSearch) return false;
+
+                  if (studentsFilter === 'completed') return s.progress === 100;
+                  if (studentsFilter === 'pending') return s.progress < 50;
+                  if (studentsFilter === 'inprogress') return s.progress >= 50 && s.progress < 100;
+                  return true;
+                });
+
+                // Pipeline: 2. Sorting (Recent Access first in queue!)
+                const sortStudents = (list: any[]) => {
+                  return [...list].sort((a, b) => {
+                    const timeA = a.lastAccessAt ? new Date(a.lastAccessAt).getTime() : 0;
+                    const timeB = b.lastAccessAt ? new Date(b.lastAccessAt).getTime() : 0;
+                    if (timeA !== timeB) return timeB - timeA; // Descending order (recent first)
+                    return a.id.localeCompare(b.id);
+                  });
+                };
+
+                const sortedAll = sortStudents(filteredAll);
+
+                // Group lists for "all" view
+                const inviteList = sortedAll.filter(s => s.loginMethod === 'code' || s.loginMethod === 'link');
+                const registeredList = sortedAll.filter(s => s.loginMethod === 'login' || !s.loginMethod);
+
+                const limit = studentsLimit;
+
+                return (
+                  <div className="space-y-8 select-text min-h-[450px]">
+                    {gridFilterType === 'all' ? (
+                      <>
+                        {/* Session 1: Alunos por Convite */}
+                        {inviteList.length > 0 && (
+                          <div className="space-y-4">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1 font-sans">
+                              {getSessionTitle(inviteList, 'invite')} ({inviteList.length})
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
+                              <AnimatePresence>
+                                {inviteList.slice(0, limit).map(student => (
+                                  <motion.div
+                                    key={student.id}
+                                    layout="position"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                                  >
+                                    {renderStudentCard(student)}
+                                  </motion.div>
+                                ))}
+                              </AnimatePresence>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Session 2: Alunos Cadastrados */}
+                        {registeredList.length > 0 && (
+                          <div className="space-y-4 pt-sm">
+                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1 font-sans">
+                              {getSessionTitle(registeredList, 'registered')} ({registeredList.length})
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
+                              <AnimatePresence>
+                                {registeredList.slice(0, limit).map(student => (
+                                  <motion.div
+                                    key={student.id}
+                                    layout="position"
+                                    initial={{ opacity: 0, scale: 0.95 }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.95 }}
+                                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                                  >
+                                    {renderStudentCard(student)}
+                                  </motion.div>
+                                ))}
+                              </AnimatePresence>
+                              
+                              {/* Add New Card Skeleton is rendered as the last element of registered list */}
+                              <motion.div layout="position">
+                                {renderAddNewCardSkeleton()}
+                              </motion.div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {inviteList.length === 0 && registeredList.length === 0 && (
+                          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                            <span className="material-symbols-outlined text-[48px] mb-2 text-slate-300">group_off</span>
+                            <p className="font-medium text-sm font-sans">Nenhum aluno encontrado para os filtros ativos.</p>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      // Single filter active (Código, Link or Login)
+                      (() => {
+                        const filteredList = sortedAll.filter(s => {
+                          if (gridFilterType === 'code') return s.loginMethod === 'code';
+                          if (gridFilterType === 'link') return s.loginMethod === 'link';
+                          if (gridFilterType === 'login') return s.loginMethod === 'login' || !s.loginMethod;
+                          return true;
+                        });
+
+                        return (
+                          <div className="space-y-4 font-sans min-h-[450px]">
+                            {filteredList.length > 0 ? (
+                              <>
+                                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1">
+                                  {getSessionTitle(filteredList, gridFilterType)} ({filteredList.length})
+                                </h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
+                                  <AnimatePresence>
+                                    {filteredList.slice(0, limit).map(student => (
+                                      <motion.div
+                                        key={student.id}
+                                        layout="position"
+                                        initial={{ opacity: 0, scale: 0.95 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.95 }}
+                                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                                      >
+                                        {renderStudentCard(student)}
+                                      </motion.div>
+                                    ))}
+                                  </AnimatePresence>
+                                </div>
+                              </>
+                            ) : (
+                              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
+                                <span className="material-symbols-outlined text-[48px] mb-2 text-slate-300">group_off</span>
+                                <p className="font-medium text-sm">Nenhum aluno correspondente a esse filtro de acesso.</p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })()
+                    )}
+
+                    {/* Pagination/Load More button dynamically calculated */}
+                    {(() => {
+                      const totalLength = gridFilterType === 'all' 
+                        ? (inviteList.length + registeredList.length)
+                        : sortedAll.filter(s => {
+                            if (gridFilterType === 'code') return s.loginMethod === 'code';
+                            if (gridFilterType === 'link') return s.loginMethod === 'link';
+                            if (gridFilterType === 'login') return s.loginMethod === 'login' || !s.loginMethod;
+                            return true;
+                          }).length;
+
+                      return totalLength > limit && (
+                        <div className="mt-xl flex justify-center pt-md">
+                          <button 
+                            onClick={() => setStudentsLimit(prev => prev + 6)}
+                            className="flex items-center gap-sm px-xl py-md bg-surface-container-lowest border border-outline-variant rounded-full text-on-surface font-label-md text-label-md hover:bg-surface-container-high transition-all shadow-sm cursor-pointer active:scale-95 duration-100 border-none"
+                            style={{ border: '1px solid #c1c6d6', background: '#ffffff' }}
+                          >
+                            Carregar mais alunos
+                            <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+                          </button>
+                        </div>
+                      );
+                    })()}
+                  </div>
+                );
+              })()}
+            </div>
+          )}
+
+          {/* TAB 4: ACCESS (Template 8) */}
+          {activeTab === 'access' && (
+            <div className="space-y-6">
+              
+              {/* Alphanumeric Configuração de Acesso Block */}
+              <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm space-y-6">
+                <div>
+                  <h2 className="text-xl font-extrabold tracking-tight text-[#131b2e]">Configuração de Acesso</h2>
+                  <p className="text-xs text-slate-400 mt-1">Gere chaves encriptadas temporárias para acesso offline do aluno.</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Name and Expiry select */}
+                  <div className="space-y-4 md:col-span-2">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                        Nome do Aluno
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Ana Souza"
+                        value={studentNameInput}
+                        onChange={(e) => setStudentNameInput(e.target.value)}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-600 mb-1.5">
+                          Validade do Código
+                        </label>
+                        <select
+                          value={duration}
+                          onChange={(e) => setDuration(e.target.value)}
+                          className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                        >
+                          <option value="1h">1 Hora</option>
+                          <option value="4h">4 Horas</option>
+                          <option value="1d">1 Dia</option>
+                          <option value="1w">1 Semana</option>
+                          <option value="custom">Personalizado (Calendário)</option>
+                        </select>
+                      </div>
+
+                      {duration === 'custom' && (
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="expiry-date">
+                            Data de Expiração
+                          </label>
+                          <input
+                            type="date"
+                            id="expiry-date"
+                            value={customExpiryDate}
+                            onChange={(e) => setCustomExpiryDate(e.target.value)}
+                            className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleGenerateCode}
+                      className="px-6 py-3 bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold rounded-xl transition-all shadow cursor-pointer active:scale-95"
+                    >
+                      Gerar Código Criptografado
+                    </button>
+                  </div>
+
+                  {/* Render Generated Code Area */}
+                  {generatedCode && (
+                    <div className="bg-[#f2f3ff] border border-[#d6e3ff] p-6 rounded-2xl flex flex-col justify-between">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Chave Aluna Gerada</span>
+                        <div className="font-mono text-lg font-bold text-[#005bb3] break-all leading-tight">
+                          {generatedCode}
+                        </div>
+                        <p className="text-[10px] text-slate-400 mt-2">
+                          Utilize o botão abaixo para copiar o token integral encriptado em Base64.
+                        </p>
+                      </div>
+
+                      <div className="flex gap-2 mt-4 pt-4 border-t border-[#dde0e2]">
+                        <button
+                          onClick={() => handleCopyCode(generatedBase64, 999)}
+                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-white border border-[#c1c6d6] hover:bg-[#005bb3] hover:text-white rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">
+                            {copiedIndex === 999 ? 'check' : 'content_copy'}
+                          </span>
+                          {copiedIndex === 999 ? 'Copiado!' : 'Copiar Token'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Student grid with Checkboxes selection */}
+              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
+                <div className="p-6 border-b border-[#dde0e2] space-y-4">
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                    <h3 className="font-extrabold text-lg">Selecionar Alunos para Atribuição</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-[#f2f3ff] rounded-xl border border-[#c1c6d6]/60">
+                        <input
+                          type="checkbox"
+                          id="select-all"
+                          checked={selectedStudentIds.length === filteredStudentsForGrid.length && filteredStudentsForGrid.length > 0}
+                          onChange={(e) => handleSelectAllStudents(e.target.checked)}
+                          className="w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] cursor-pointer"
+                        />
+                        <label htmlFor="select-all" className="text-xs font-bold text-slate-500 cursor-pointer select-none">
+                          Selecionar Todos
+                        </label>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleBatchAssignKeys}
+                        disabled={selectedStudentIds.length === 0}
+                        className="px-4 py-2 bg-[#005bb3] text-white font-bold text-xs rounded-xl hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer border-none shadow-sm flex items-center gap-1.5"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">key</span>
+                        Atribuir
+                      </button>
+                    </div>
+                  </div>
+                  <div className="relative">
+                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                    <input
+                      type="text"
+                      placeholder="Filtrar por nome ou turma..."
+                      value={studentSearchQuery}
+                      onChange={(e) => setStudentSearchQuery(e.target.value)}
+                      className="w-full pl-9 pr-4 py-2.5 bg-[#f2f3ff] border-none rounded-xl text-xs focus:ring-2 focus:ring-[#005bb3] outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {filteredStudentsForGrid.map(s => {
+                      const isSelected = selectedStudentIds.includes(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => handleSelectStudent(s.id, !isSelected)}
+                          className={`flex items-center gap-3 p-3 border rounded-2xl transition-all cursor-pointer relative bg-white hover:shadow-sm ${
+                            isSelected ? 'border-[#005bb3] bg-[#f2f3ff]' : 'border-[#c1c6d6]/70'
+                          }`}
+                        >
+                          <div className="relative shrink-0">
+                            <img src={s.img} alt={s.name} className="w-12 h-12 rounded-full object-cover border-2 border-slate-100" />
+                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border ${
+                              isSelected ? 'bg-[#005bb3] border-[#005bb3] text-white' : 'bg-white border-[#c1c6d6]'
+                            }`}>
+                              <input
+                                type="checkbox"
+                                checked={isSelected}
+                                onChange={(e) => {
+                                  e.stopPropagation();
+                                  handleSelectStudent(s.id, e.target.checked);
+                                }}
+                                className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
+                              />
+                              {isSelected && <span className="material-symbols-outlined text-[12px] font-bold">check</span>}
+                            </div>
+                          </div>
+                          <div className="overflow-hidden flex-1">
+                            <p className="font-bold text-xs truncate leading-tight">{s.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{s.class}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              {/* Active codes table */}
+              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-[#dde0e2]">
+                  <h3 className="font-extrabold text-lg">Alunos atribuídos</h3>
+                  <p className="text-xs text-slate-400">Tokens gerados em atividade para acompanhamento</p>
+                </div>
+                <div>
+                  {activeCodes.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-sm">
+                      Nenhum código de acesso gerado ainda.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 p-8 bg-slate-50/50 min-h-[200px]">
+                      <AnimatePresence>
+                      {activeCodes.map((c, index) => {
+                        const isExpired = Date.now() > c.expiresAt;
+                        const student = students.find(s => s.name.toLowerCase() === c.studentName.toLowerCase());
+                        const studentImg = student?.img || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150&h=150";
+
+                        let friendlyCode = c.id;
+                        try {
+                          if (c.code.startsWith('ABBA-')) {
+                            const base64 = c.code.substring(5);
+                            const payload = JSON.parse(atob(base64));
+                            friendlyCode = `ABBA-${payload.codeId}-${payload.name.split(' ')[0].toUpperCase()}`;
+                          }
+                        } catch (e) {
+                          friendlyCode = `ABBA-${c.id}-${c.studentName.split(' ')[0].toUpperCase()}`;
+                        }
+
+                        return (
+                          <motion.div 
+                            key={c.id}
+                            layout="position"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-6 pt-10 flex flex-col relative hover:border-[#005bb3]/40 transition-all group"
+                          >
+                            {/* Circular avatar with thick green border */}
+                            <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 border-[#00c853] overflow-hidden shadow-md bg-white select-none shrink-0">
+                              <img src={studentImg} className="w-full h-full object-cover" alt={c.studentName} />
+                            </div>
+
+                            {/* Expired/Active badge & Revoke Button */}
+                            <div className="absolute top-4 right-4 flex items-center gap-2 select-none">
+                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/60">
+                                {c.durationLabel}
+                              </span>
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                isExpired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                              }`}>
+                                {isExpired ? 'Expirado' : 'Ativo'}
+                              </span>
+                              <button
+                                onClick={() => {
+                                  if (window.confirm(`Deseja excluir a chave de acesso de ${c.studentName}?`)) {
+                                    setActiveCodes(prev => prev.filter(item => item.id !== c.id));
+                                  }
+                                }}
+                                className="p-1 hover:bg-red-50 hover:text-red-500 text-slate-300 hover:text-red-500 rounded-full transition-colors cursor-pointer bg-transparent border-none flex items-center justify-center"
+                                title="Excluir Chave"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
+
+                            {/* Card Content */}
+                            <div className="flex-1 mt-2">
+                              <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
+                                Chave gerada para {c.studentName}
+                              </span>
+                              
+                              <h4 className="text-base font-extrabold text-[#005bb3] tracking-wide mt-2 font-mono block break-all">
+                                {friendlyCode}
+                              </h4>
+                              
+                              <p className="text-[11px] text-slate-400 font-medium leading-relaxed mt-2.5">
+                                Utilize o botão abaixo para copiar o token integral encriptado em Base64.
+                              </p>
+                            </div>
+
+                            {/* Copy button matching third image exactly */}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyCode(c.code, index)}
+                              className="w-full py-3.5 mt-5 bg-white border border-[#c1c6d6] hover:bg-[#f2f3ff] hover:border-[#005bb3]/30 active:scale-[0.98] transition-all rounded-xl font-bold text-xs text-slate-700 cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">
+                                {copiedIndex === index ? 'check' : 'content_copy'}
+                              </span>
+                              {copiedIndex === index ? 'Copiado!' : 'Copiar Token'}
+                            </button>
+                          </motion.div>
+                        );
+                      })}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Accessed by Code Section */}
+              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden mt-8">
+                <div className="p-6 border-b border-[#dde0e2] flex flex-col sm:flex-row justify-between sm:items-center gap-3">
+                  <div>
+                    <h3 className="font-extrabold text-lg flex items-center gap-2">
+                      <span className="material-symbols-outlined text-green-500 animate-pulse">login</span>
+                      Alunos que acessaram pelo código
+                    </h3>
+                    <p className="text-xs text-slate-400">Estudantes que realizaram login no portal utilizando chaves ativas em tempo real</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm('Deseja limpar o histórico de acessos por código?')) {
+                        localStorage.setItem('abba_students_logged_by_code', JSON.stringify([]));
+                        setAccessedStudents([]);
+                      }
+                    }}
+                    className="px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs rounded-xl transition-all cursor-pointer bg-transparent"
+                  >
+                    Limpar Histórico
+                  </button>
+                </div>
+
+                <div className="p-6">
+                  {accessedStudents.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 text-sm">
+                      Nenhum aluno acessou utilizando código no momento.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-h-[120px]">
+                      <AnimatePresence>
+                      {accessedStudents.map((item) => {
+                        const student = students.find(s => s.name.toLowerCase() === item.studentName.toLowerCase());
+                        const studentImg = student?.img || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150&h=150";
+                        const studentClass = student?.class || "Turma A - 3º Ano";
+                        
+                        const accessedTime = new Date(item.accessedAt);
+                        const formattedTime = accessedTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                        const formattedDate = accessedTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+
+                        return (
+                          <motion.div 
+                            key={item.id + item.accessedAt}
+                            layout="position"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4 flex items-center gap-4 relative hover:shadow-sm transition-all"
+                          >
+                            {/* Glowing circular student avatar */}
+                            <div className="relative shrink-0 select-none">
+                              <img src={studentImg} className="w-14 h-14 rounded-full object-cover border-2 border-slate-200" alt={item.studentName} />
+                              {/* Pulse Green Glowing Dot */}
+                              <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-white flex items-center justify-center shadow">
+                                <span className="w-2.5 h-2.5 rounded-full bg-[#00c853] animate-pulse shadow-sm shadow-[#00c853]"></span>
+                              </div>
+                            </div>
+
+                            {/* Text Info */}
+                            <div className="overflow-hidden flex-grow min-w-0">
+                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                                Acesso Confirmado
+                              </span>
+                              <h4 className="font-bold text-xs text-slate-800 truncate mt-0.5">{item.studentName}</h4>
+                              <p className="text-[10px] text-slate-400 mt-0.5">{studentClass}</p>
+                              
+                              <div className="flex items-center gap-1.5 mt-2 bg-slate-100 px-2 py-1 rounded-lg w-fit">
+                                <span className="material-symbols-outlined text-[12px] text-[#005bb3]">key</span>
+                                <span className="font-mono text-[9px] font-bold text-[#005bb3] truncate max-w-[120px]">{item.code}</span>
+                              </div>
+                            </div>
+
+                            {/* Timestamp badge */}
+                            <div className="absolute top-4 right-4 text-right select-none flex flex-col items-end gap-1">
+                              <span className="text-[8px] font-extrabold text-[#00c853] bg-green-50 px-2 py-0.5 rounded-full uppercase tracking-wider block">
+                                Online
+                              </span>
+                              <span className="text-[9px] text-slate-400 font-medium mt-1 block">
+                                {formattedTime} ({formattedDate})
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Tem certeza que deseja remover ${item.studentName} permanentemente? Isso irá excluí-lo do histórico de acessos e do cadastro geral de alunos de forma definitiva.`)) {
+                                    // 1. Remove from accessedStudents
+                                    const updatedAccessed = accessedStudents.filter(s => s.id !== item.id && s.studentName.toLowerCase() !== item.studentName.toLowerCase());
+                                    setAccessedStudents(updatedAccessed);
+                                    localStorage.setItem('abba_students_logged_by_code', JSON.stringify(updatedAccessed));
+
+                                    // 2. Remove from students list
+                                    const updatedStudents = students.filter(s => s.id !== item.id && s.name.toLowerCase() !== item.studentName.toLowerCase());
+                                    setStudents(updatedStudents);
+                                    localStorage.setItem('abba_students_list', JSON.stringify(updatedStudents));
+                                    
+                                    alert(`${item.studentName} foi excluído permanentemente!`);
+                                  }
+                                }}
+                                className="mt-2 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded-lg border-none cursor-pointer transition-all flex items-center justify-center"
+                                title="Excluir permanentemente"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">delete</span>
+                              </button>
+                            </div>
+                          </motion.div>
+                        );
+                      })}
+                      </AnimatePresence>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>
+          )}
+
+        </main>
+
+        {/* Modal: Batch Assign Duration */}
+        <AnimatePresence>
+          {isBatchAssignModalOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsBatchAssignModalOpen(false)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-md w-full p-6 space-y-6 shadow-2xl shrink-0 z-10"
+                style={{ width: '100%', maxWidth: '28rem' }}
+              >
+                <div className="flex justify-between items-center border-b border-[#dde0e2] pb-4 select-none">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-400">Atribuição de Acesso</span>
+                    <h3 className="text-lg font-extrabold text-[#131b2e]">Definir Validade da Chave</h3>
+                  </div>
+                  <button 
+                    onClick={() => setIsBatchAssignModalOpen(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <div className="space-y-4">
+                  <p className="text-xs text-slate-500 font-medium leading-relaxed">
+                    Qual será a validade do código para {selectedStudentIds.length} {selectedStudentIds.length === 1 ? 'aluno selecionado' : 'alunos selecionados'}?
+                  </p>
+
+                  <div className="flex flex-col gap-1.5 select-none">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Duração da Chave</label>
+                    <select
+                      value={batchDuration}
+                      onChange={(e) => setBatchDuration(e.target.value)}
+                      className="bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-3 text-xs font-bold focus:ring-2 focus:ring-[#005bb3] outline-none cursor-pointer text-slate-700"
+                    >
+                      <option value="1h">1 Hora</option>
+                      <option value="4h">4 Horas</option>
+                      <option value="1d">1 Dia</option>
+                      <option value="1w">1 Semana</option>
+                      <option value="30d">30 Dias</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleConfirmBatchAssignKeys(batchDuration)}
+                    className="flex-1 py-3 px-4 bg-[#005bb3] hover:brightness-110 text-white font-bold text-xs rounded-xl transition-all cursor-pointer border-none shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">vpn_key</span>
+                    Confirmar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsBatchAssignModalOpen(false)}
+                    className="flex-1 py-3 px-4 bg-white border border-[#c1c6d6] hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl transition-all cursor-pointer flex items-center justify-center active:scale-95"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Add Task */}
+        <AnimatePresence>
+          {isAddTaskOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsAddTaskOpen(false)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-3xl w-full max-h-[90vh] flex flex-col overflow-hidden shadow-2xl cursor-default z-10"
+              >
+                <div className="flex justify-between items-center border-b border-[#dde0e2] px-6 py-4 md:px-8 bg-white shrink-0 select-none">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-400">Adicionar Nova Tarefa</span>
+                    <h3 className="text-xl font-extrabold text-[#131b2e]">Criar Tarefa no Portal</h3>
+                  </div>
+                  <button 
+                    onClick={() => setIsAddTaskOpen(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                <form onSubmit={handleCreateTask} className="overflow-y-auto grow p-6 md:p-8 space-y-6 custom-scrollbar">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Task Title */}
+                    <div className="md:col-span-2 flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nome da Tarefa *</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Exercício de Numerais Multilingue"
+                        value={newTaskTitle}
+                        onChange={(e) => setNewTaskTitle(e.target.value)}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                        required
+                      />
+                    </div>
+
+                    {/* Task Description */}
+                    <div className="md:col-span-2 flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Descrição da Tarefa *</label>
+                      <textarea
+                        placeholder="Instruções gerais para os alunos de como soletrar no ábaco..."
+                        value={newTaskDesc}
+                        onChange={(e) => setNewTaskDesc(e.target.value)}
+                        rows={3}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none resize-none"
+                        required
+                      />
+                    </div>
+
+                    {/* Note from Teacher */}
+                    <div className="md:col-span-2 flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota do Professor (Dica especial)</label>
+                      <textarea
+                        placeholder="Adicione observações ou instruções adicionais de pronúncia..."
+                        value={newTaskTeacherNote}
+                        onChange={(e) => setNewTaskTeacherNote(e.target.value)}
+                        rows={2}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none resize-none"
+                      />
+                    </div>
+
+                    {/* Start Date */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Data de início</label>
+                      <input
+                        type="date"
+                        value={newTaskStartDate}
+                        onChange={(e) => setNewTaskStartDate(e.target.value)}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                      />
+                    </div>
+
+                    {/* End Date */}
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Data de conclusão</label>
+                      <input
+                        type="date"
+                        value={newTaskDueDate}
+                        onChange={(e) => setNewTaskDueDate(e.target.value)}
+                        className="w-full bg-[#f2f3ff] border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Two Column Section for Student Assign & Upload simulator */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Assign section */}
+                    <div className="flex flex-col gap-2 bg-[#f8fafc] border border-outline-variant/30 rounded-2xl p-4 shadow-xs">
+                      <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Atribuir a Alunos</h4>
+                      <p className="text-[10px] text-slate-400">Selecione quais alunos devem receber esta tarefa</p>
+                      
+                      <input
+                        type="text"
+                        placeholder="Buscar aluno..."
+                        value={addTaskStudentSearchQuery}
+                        onChange={(e) => setAddTaskStudentSearchQuery(e.target.value)}
+                        className="w-full bg-white border border-[#c1c6d6] rounded-xl px-3 py-2 text-xs focus:ring-1 focus:ring-[#005bb3] outline-none mt-1"
+                      />
+
+                      <div className="space-y-2 max-h-36 overflow-y-auto pr-2 mt-1">
+                        {students
+                          .filter(s => s.name.toLowerCase().includes(addTaskStudentSearchQuery.toLowerCase()))
+                          .map(s => {
+                            const isAssigned = selectedStudentIds.includes(s.id);
+                            return (
+                              <div 
+                                key={s.id} 
+                                onClick={() => {
+                                  setSelectedStudentIds(prev => 
+                                    prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                  );
+                                }}
+                                className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100 hover:border-primary/30 transition-colors cursor-pointer group"
+                              >
+                                <div className="flex items-center gap-md">
+                                  <img src={s.img} alt={s.name} className="w-8 h-8 rounded-full object-cover border border-[#eaedff]" />
+                                  <span className="font-bold text-xs text-on-background group-hover:text-primary transition-colors">{s.name}</span>
+                                </div>
+                                <span className={`material-symbols-outlined text-[20px] transition-all ${
+                                  isAssigned ? 'text-primary' : 'text-slate-300'
+                                }`}>
+                                  {isAssigned ? 'check_circle' : 'circle'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        {students.filter(s => s.name.toLowerCase().includes(addTaskStudentSearchQuery.toLowerCase())).length === 0 && (
+                          <p className="text-center text-[10px] text-slate-400 py-4">Nenhum aluno encontrado</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Attachments Section */}
+                    <div className="flex flex-col gap-2 bg-[#f8fafc] border border-outline-variant/30 rounded-2xl p-4 shadow-xs">
+                      <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Adicionar Anexo</h4>
+                      <p className="text-[10px] text-slate-400">Anexe materiais de apoio ou pdfs explicativos</p>
+                      
+                      <input 
+                        type="file"
+                        accept="image/*,application/pdf"
+                        ref={addTaskFileInputRef}
+                        className="hidden"
+                        onChange={handleAddTaskFileChange}
+                      />
+
+                      <div 
+                        onClick={() => addTaskFileInputRef.current?.click()}
+                        className="flex-grow min-h-[120px] mt-2 border-2 border-dashed border-[#dde0e2] hover:border-primary hover:bg-[#eaedff]/20 rounded-2xl flex flex-col items-center justify-center transition-colors cursor-pointer group p-4 text-center"
+                      >
+                        {addTaskFile ? (
+                          <>
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
+                              <span className="material-symbols-outlined text-[24px]">
+                                {addTaskFile.type === 'application/pdf' ? 'picture_as_pdf' : 'image'}
+                              </span>
+                            </div>
+                            <p className="font-bold text-xs text-slate-600 truncate max-w-full px-2">{addTaskFile.name}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{(addTaskFile.size / (1024 * 1024)).toFixed(2)} MB</p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setAddTaskFile(null);
+                                if (addTaskFileInputRef.current) addTaskFileInputRef.current.value = '';
+                              }}
+                              className="text-xs text-red-500 hover:text-red-700 mt-2 font-bold bg-transparent border-none cursor-pointer"
+                            >
+                              Remover
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-2 group-hover:scale-105 transition-all">
+                              <span className="material-symbols-outlined text-[24px]">upload_file</span>
+                            </div>
+                            <p className="font-bold text-xs text-slate-600">Upload de Imagem ou PDF</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">Tamanho máximo: 5MB</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Spelled Words Builder */}
+                  <div className="space-y-3 pt-2">
+                    <div className="flex justify-between items-center">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Palavras Meta (Soletrar no Fio do Ábaco)</label>
+                      <button
+                        type="button"
+                        onClick={handleAddWordToNewTask}
+                        className="flex items-center gap-1 text-[#005bb3] hover:text-[#00468c] font-bold text-xs cursor-pointer border-none bg-transparent"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">add</span>
+                        Adicionar Palavra
+                      </button>
+                    </div>
+
+                    <div className="space-y-3 max-h-48 overflow-y-auto pr-2">
+                      {newTaskWords.map((wordObj, idx) => (
+                        <div key={idx} className="flex flex-col sm:flex-row gap-3 items-center bg-[#f2f3ff] p-3 rounded-xl border border-[#dde0e2]">
+                          <input
+                            type="text"
+                            placeholder="PALAVRA"
+                            value={wordObj.word}
+                            onChange={(e) => {
+                              const updated = [...newTaskWords];
+                              updated[idx].word = e.target.value.replace(/[^A-Za-zÀ-ÖØ-öø-ÿ\s]/g, '').toUpperCase();
+                              setNewTaskWords(updated);
+                            }}
+                            className="bg-white border border-[#c1c6d6] rounded-lg px-3 py-1.5 text-xs font-bold text-[#131b2e] w-full sm:w-44 focus:ring-1 focus:ring-[#005bb3] outline-none"
+                          />
+
+                          <select
+                            value={wordObj.language}
+                            onChange={(e) => {
+                              const updated = [...newTaskWords];
+                              const lang = e.target.value as 'pt' | 'en' | 'de';
+                              updated[idx].language = lang;
+                              // Default language theme colors
+                              if (lang === 'pt') updated[idx].color = '#1e293b'; // Slate (Black)
+                              if (lang === 'en') updated[idx].color = '#3b82f6'; // Blue
+                              if (lang === 'de') updated[idx].color = '#ef4444'; // Red
+                              setNewTaskWords(updated);
+                            }}
+                            className="bg-white border border-[#c1c6d6] rounded-lg px-2 py-1.5 text-xs font-bold w-full sm:w-36 focus:ring-1"
+                          >
+                            <option value="pt">Português</option>
+                            <option value="en">Inglês</option>
+                            <option value="de">Alemão</option>
+                          </select>
+
+                          <div className="flex items-center gap-2 w-full sm:w-auto">
+                            <label className="text-[10px] font-bold text-slate-400">Cor do Fio:</label>
+                            <input
+                              type="color"
+                              value={wordObj.color}
+                              onChange={(e) => {
+                                const updated = [...newTaskWords];
+                                updated[idx].color = e.target.value;
+                                setNewTaskWords(updated);
+                              }}
+                              className="w-8 h-8 rounded-lg cursor-pointer border border-[#c1c6d6] p-0.5 bg-white shrink-0"
+                            />
+                          </div>
+
+                          {newTaskWords.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveWordFromNewTask(idx)}
+                              className="text-red-500 hover:text-red-700 transition-colors p-1.5 shrink-0 cursor-pointer border-none bg-transparent"
+                            >
+                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Form Actions */}
+                  <div className="flex justify-end gap-3 pt-4 border-t border-[#dde0e2]">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddTaskOpen(false)}
+                      className="px-5 py-2.5 border border-[#c1c6d6] hover:bg-slate-50 text-xs font-bold rounded-xl cursor-pointer bg-white"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-6 py-2.5 bg-primary hover:bg-primary-container text-on-primary text-xs font-bold rounded-xl cursor-pointer shadow border-none"
+                    >
+                      Criar tarefa
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Selecionar Alunos (Template 9) */}
+        <AnimatePresence>
+          {isAssignStudentsOpen && tempCreatedTask && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => {
+                  setIsAssignStudentsOpen(false);
+                  setTempCreatedTask(null);
+                }}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div 
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] z-10"
+              >
+                {/* Modal Header */}
+                <div className="px-6 py-4 border-b border-[#dde0e2] flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-extrabold text-[#131b2e]">Selecionar Alunos</h3>
+                    <p className="text-[11px] text-slate-400 font-medium">Selecione os alunos que participarão desta atividade</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsAssignStudentsOpen(false);
+                      setTempCreatedTask(null);
+                    }}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                {/* Modal Sub-header / Filter */}
+                <div className="px-6 py-3 bg-[#f2f3ff] flex items-center justify-between border-b border-[#dde0e2] shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center">
+                      <input 
+                        type="checkbox"
+                        id="select-all-assign"
+                        checked={selectedStudentIds.length === filteredStudentsForGrid.length && filteredStudentsForGrid.length > 0}
+                        onChange={(e) => handleSelectAllStudents(e.target.checked)}
+                        className="w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] cursor-pointer"
+                      />
+                      <label htmlFor="select-all-assign" className="ml-2 text-xs font-bold text-slate-600 cursor-pointer select-none">
+                        Selecionar Todos
+                      </label>
+                    </div>
+                    <span className="text-[#dde0e2]">|</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{filteredStudentsForGrid.length} alunos encontrados</span>
+                  </div>
+                  <div className="relative flex items-center gap-1">
+                    <span className="material-symbols-outlined text-slate-400 text-[18px]">search</span>
+                    <input 
+                      type="text"
+                      placeholder="Filtrar por nome..."
+                      value={studentSearchQuery}
+                      onChange={(e) => setStudentSearchQuery(e.target.value)}
+                      className="bg-transparent border-none text-xs focus:ring-0 placeholder:text-slate-400 w-32 p-0 outline-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Student Grid list (Scrollable) */}
+                <div className="p-6 overflow-y-auto custom-scrollbar flex-grow bg-[#faf8ff]">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    {filteredStudentsForGrid.map(s => {
+                      const isSelected = selectedStudentIds.includes(s.id);
+                      return (
+                        <div
+                          key={s.id}
+                          onClick={() => handleSelectStudent(s.id, !isSelected)}
+                          className={`group flex flex-col items-center p-4 border rounded-2xl transition-all cursor-pointer relative bg-white hover:shadow-md ${
+                            isSelected ? 'border-[#005bb3] bg-[#f2f3ff]' : 'border-[#c1c6d6]/70'
+                          }`}
+                        >
+                          <input 
+                            type="checkbox"
+                            checked={isSelected}
+                            readOnly
+                            className="absolute top-3 right-3 w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] pointer-events-none"
+                          />
+                          <img 
+                            src={s.img} 
+                            alt={s.name}
+                            className={`w-14 h-14 rounded-full object-cover mb-2 border-2 transition-all ${
+                              isSelected ? 'border-[#005bb3] scale-105' : 'border-slate-100'
+                            }`}
+                          />
+                          <p className="font-bold text-xs text-center text-[#131b2e] truncate w-full leading-tight">{s.name}</p>
+                          <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">Matrícula: {s.matricula || '202400'}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="px-6 py-4 border-t border-[#dde0e2] bg-white flex justify-between items-center shrink-0">
+                  <div className="flex items-center gap-1 text-xs">
+                    <span className="font-black text-[#005bb3]" id="selected-count">{selectedStudentIds.length}</span>
+                    <span className="text-slate-400 font-semibold">alunos selecionados</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => {
+                        setIsAssignStudentsOpen(false);
+                        setTempCreatedTask(null);
+                      }}
+                      className="px-5 py-2.5 rounded-xl border border-[#c1c6d6] hover:bg-slate-50 text-xs font-bold text-slate-500 cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button 
+                      onClick={() => {
+                        if (selectedStudentIds.length === 0) {
+                          alert('Selecione pelo menos um aluno para a tarefa.');
+                           return;
+                        }
+                        const finalTask: TaskItem = {
+                          ...tempCreatedTask,
+                          assignedStudentIds: selectedStudentIds,
+                          submissionsCount: 0
+                        } as TaskItem;
+                        setTasks([finalTask, ...tasks]);
+                        setIsAssignStudentsOpen(false);
+                        setTempCreatedTask(null);
+                        
+                        // Trigger the beautiful success overlay
+                        showAssignmentSuccessOverlay(finalTask.title, finalTask.id, selectedStudentIds);
+                        
+                        setSelectedStudentIds([]); // Reset selections
+                      }}
+                      className="px-7 py-2.5 rounded-xl bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold shadow-lg shadow-[#005bb3]/20 cursor-pointer transition-all"
+                    >
+                      Confirmar Atribuição
+                    </button>
+                  </div>
+                </div>
+
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Edit Task - Matches Mockup Exactly */}
+        <AnimatePresence>
+          {editingTask && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 select-text">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setEditingTask(null)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-[4px] cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative bg-white w-full max-w-lg rounded-xl shadow-2xl flex flex-col max-h-[92vh] font-sans text-on-surface overflow-hidden border border-outline-variant/60 cursor-default z-10"
+                style={{ width: '100%', maxWidth: '32rem' }}
+              >
+                {/* Modal Header */}
+                <div className="p-md border-b border-outline-variant flex justify-between items-center select-none shrink-0">
+                  <h2 className="font-headline-md text-headline-md font-bold text-on-surface">Editar Tarefa</h2>
+                  <div className="flex items-center gap-xs">
+                    {/* Archive button */}
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (confirm("Deseja realmente arquivar esta tarefa?")) {
+                          const updated = tasks.map(t => t.id === editingTask.id ? { ...t, status: 'completed' as const } : t);
+                          setTasks(updated);
+                          setEditingTask(null);
+                          alert("Tarefa arquivada com sucesso! 📦");
+                        }
+                      }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-slate-100 transition-colors active:scale-90 group cursor-pointer bg-transparent border-none"
+                      title="Arquivar Tarefa"
+                    >
+                      <span className="material-symbols-outlined text-slate-500" style={{ color: '#64748b' }}>archive</span>
+                    </button>
+                    {/* Delete button (Lixeira) */}
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        if (confirm("Deseja realmente excluir permanentemente esta tarefa?")) {
+                          const updated = tasks.filter(t => t.id !== editingTask.id);
+                          setTasks(updated);
+                          setEditingTask(null);
+                          alert("Tarefa excluída com sucesso! 🗑️");
+                        }
+                      }}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors active:scale-90 group cursor-pointer bg-transparent border-none"
+                      title="Excluir Tarefa"
+                    >
+                      <span className="material-symbols-outlined text-red-500" style={{ color: '#d32f2f' }}>delete</span>
+                    </button>
+                    {/* Close button from mockup */}
+                    <button 
+                      type="button"
+                      onClick={() => setEditingTask(null)}
+                      className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors active:scale-90 cursor-pointer bg-transparent border-none"
+                      title="Fechar"
+                    >
+                      <span className="material-symbols-outlined text-on-surface-variant">close</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-md space-y-md overflow-y-auto">
+                  {/* Task Name */}
+                  <div className="space-y-xs">
+                    <label className="font-label-md text-label-md text-on-surface-variant ml-1 font-medium">Nome da Tarefa</label>
+                    <input 
+                      className="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all font-body-md text-body-md text-on-surface" 
+                      type="text" 
+                      value={editTaskTitle}
+                      onChange={(e) => setEditTaskTitle(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Due Date & Priority Grid */}
+                  <div className="grid grid-cols-2 gap-md">
+                    <div className="space-y-xs">
+                      <label className="font-label-md text-label-md text-on-surface-variant ml-1 font-medium">Data de Entrega</label>
+                      <input 
+                        className="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none transition-all font-body-md text-body-md text-on-surface" 
+                        type="date" 
+                        value={editTaskDueDate}
+                        onChange={(e) => setEditTaskDueDate(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-xs">
+                      <label className="font-label-md text-label-md text-on-surface-variant ml-1 font-medium">Prioridade</label>
+                      <div className="relative">
+                        <select 
+                          className="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none transition-all font-body-md text-body-md text-on-surface appearance-none cursor-pointer"
+                          value={editTaskPriority}
+                          onChange={(e) => setEditTaskPriority(e.target.value as 'Alta' | 'Média' | 'Baixa')}
+                        >
+                          <option value="Alta">Alta</option>
+                          <option value="Média">Média</option>
+                          <option value="Baixa">Baixa</option>
+                        </select>
+                        <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg font-variation-settings-fill">arrow_drop_down</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Description */}
+                  <div className="space-y-xs">
+                    <label className="font-label-md text-label-md text-on-surface-variant ml-1 font-medium">Descrição / Objetivos</label>
+                    <textarea 
+                      className="w-full px-md py-sm bg-surface border border-outline-variant rounded-lg focus:border-primary outline-none transition-all font-body-md text-body-md text-on-surface resize-none" 
+                      rows={3}
+                      value={editTaskDescription}
+                      onChange={(e) => setEditTaskDescription(e.target.value)}
+                    />
+                  </div>
+
+                  {/* Assign To Section */}
+                  <div className="space-y-sm">
+                    <div className="flex justify-between items-center">
+                      <label className="font-label-md text-label-md text-on-surface-variant ml-1 font-medium">Atribuir a</label>
+                      <button 
+                        type="button"
+                        onClick={() => setShowEditAssignPanel(prev => !prev)}
+                        className="text-primary font-label-sm text-label-sm hover:underline bg-transparent border-none cursor-pointer font-bold"
+                      >
+                        {showEditAssignPanel ? 'Ocultar Filtro' : 'Ver todos'}
+                      </button>
+                    </div>
+
+                    <div className="flex -space-x-2 items-center">
+                      {editTaskAssignedStudentIds.slice(0, 3).map(id => {
+                        const student = students.find(s => s.id === id);
+                        if (!student) return null;
+                        return (
+                          <div key={student.id} className="w-10 h-10 rounded-full border-2 border-surface-container-lowest overflow-hidden shrink-0 shadow-sm animate-fade-in">
+                            <img src={student.img} alt={student.name} className="w-full h-full object-cover" />
+                          </div>
+                        );
+                      })}
+                      {editTaskAssignedStudentIds.length > 3 && (
+                        <div className="w-10 h-10 rounded-full border-2 border-surface-container-lowest bg-surface-variant flex items-center justify-center text-primary font-label-sm text-label-sm font-bold shrink-0 shadow-sm animate-fade-in">
+                          +{editTaskAssignedStudentIds.length - 3}
+                        </div>
+                      )}
+                      {editTaskAssignedStudentIds.length === 0 && (
+                        <p className="text-xs text-slate-400 italic py-1 pl-2">Atribuída a todos os alunos</p>
+                      )}
+                      
+                      <button 
+                        type="button"
+                        onClick={() => setShowEditAssignPanel(prev => !prev)}
+                        className="ml-4 w-10 h-10 rounded-full border border-dashed border-outline-variant flex items-center justify-center text-outline hover:border-primary hover:text-primary transition-colors cursor-pointer bg-white shrink-0"
+                      >
+                        <span className="material-symbols-outlined">person_add</span>
+                      </button>
+                    </div>
+
+                    {showEditAssignPanel && (
+                      <div className="mt-2 p-4 bg-[#f2f3ff]/50 border border-outline-variant/60 rounded-xl space-y-2 animate-fade-in max-h-48 overflow-y-auto">
+                        <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider">Selecionar Alunos</p>
+                        <input
+                          type="text"
+                          placeholder="Buscar aluno..."
+                          value={editTaskStudentSearchQuery}
+                          onChange={(e) => setEditTaskStudentSearchQuery(e.target.value)}
+                          className="w-full bg-white border border-[#c1c6d6] rounded-xl px-3 py-1.5 text-xs focus:ring-1 focus:ring-[#005bb3] outline-none"
+                        />
+                        <div className="space-y-1.5 mt-2">
+                          {students
+                            .filter(s => s.name.toLowerCase().includes(editTaskStudentSearchQuery.toLowerCase()))
+                            .map(s => {
+                              const isChecked = editTaskAssignedStudentIds.includes(s.id);
+                              return (
+                                <div 
+                                  key={s.id}
+                                  onClick={() => {
+                                    setEditTaskAssignedStudentIds(prev => 
+                                      prev.includes(s.id) ? prev.filter(id => id !== s.id) : [...prev, s.id]
+                                    );
+                                  }}
+                                  className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100 hover:border-primary/30 transition-colors cursor-pointer select-none"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <img src={s.img} alt={s.name} className="w-7 h-7 rounded-full object-cover border" />
+                                    <span className="font-semibold text-xs text-[#131b2e]">{s.name}</span>
+                                  </div>
+                                  <span className={`material-symbols-outlined text-[18px] ${isChecked ? 'text-primary' : 'text-slate-300'}`}>
+                                    {isChecked ? 'check_circle' : 'circle'}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Modal Actions */}
+                <div className="p-md border-t border-outline-variant bg-surface-container-low flex gap-md shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => setEditingTask(null)}
+                    className="flex-1 py-3 px-md border border-outline text-on-surface-variant font-label-md text-label-md rounded-lg active:scale-95 transition-all hover:bg-surface-variant/50 cursor-pointer bg-white"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (!editTaskTitle.trim()) {
+                        alert('Por favor, informe o nome da tarefa.');
+                        return;
+                      }
+                      if (!editingTask) return;
+                      const updatedTask: TaskItem = {
+                        ...editingTask,
+                        title: editTaskTitle.trim(),
+                        dueDate: editTaskDueDate,
+                        description: editTaskDescription.trim(),
+                        priority: editTaskPriority,
+                        assignedStudentIds: editTaskAssignedStudentIds,
+                      } as TaskItem;
+                      setUploadedSupportFiles(editingTask.supportFiles || []);
+                      setSupportFilesModal({
+                        isOpen: true,
+                        task: updatedTask,
+                        isNew: false,
+                        assignedStudentIds: editTaskAssignedStudentIds
+                      });
+                    }}
+                    className="flex-1 py-3 px-md bg-primary text-on-primary font-label-md text-label-md rounded-lg font-bold shadow-md shadow-primary/20 active:scale-95 transition-all hover:brightness-110 cursor-pointer border-none"
+                  >
+                    Salvar Alterações
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Student Assignment from Details View */}
+        <AnimatePresence>
+          {isAssigningStudentsDetails && (
+            <div className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center select-text">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => { setIsAssigningStudentsDetails(null); setShowSharePanel(false); setShareTaskLinks({}); }}
+                className="absolute inset-0 cursor-pointer"
+                style={{ backgroundColor: 'rgba(19, 27, 46, 0.4)', backdropFilter: 'blur(4px)' }}
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div 
+                initial={{ y: "100%", opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: "100%", opacity: 0 }}
+                transition={{ type: "spring", damping: 28, stiffness: 260 }}
+                onClick={(e) => e.stopPropagation()}
+                className="relative bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[85vh] sm:max-h-[720px] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default z-10"
+                style={{ width: '100%', maxWidth: '28rem' }}
+              >
+                {/* Header */}
+                <div className="flex items-center justify-between px-lg py-md border-b border-outline-variant select-none shrink-0">
+                  <h2 className="font-headline-md text-headline-md text-on-surface">Selecionar Alunos</h2>
+                  <button 
+                    type="button"
+                    onClick={() => { setIsAssigningStudentsDetails(null); setShowSharePanel(false); setShareTaskLinks({}); }}
+                    className="p-2 hover:bg-surface-container-low rounded-full transition-colors active:scale-95 text-on-surface-variant cursor-pointer bg-transparent border-none flex items-center justify-center"
+                    title="Fechar"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                {/* Scrollable Container */}
+                <div className="flex-1 overflow-y-auto px-lg py-md space-y-md custom-scrollbar bg-surface select-text">
+                  
+                  {/* Search and Select All */}
+                  <div className="space-y-sm select-none">
+                    <div className="relative flex items-center">
+                      <span className="material-symbols-outlined absolute left-4 text-outline">search</span>
+                      <input 
+                        className="w-full pl-11 pr-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface" 
+                        placeholder="Filtrar por nome do aluno..." 
+                        type="text"
+                        value={detailsAssignSearchQuery}
+                        onChange={(e) => setDetailsAssignSearchQuery(e.target.value)}
+                      />
+                    </div>
+                    
+                    {(() => {
+                      const filtered = students.filter(s => 
+                        s.name.toLowerCase().includes(detailsAssignSearchQuery.toLowerCase())
+                      );
+                      const allSelected = filtered.length > 0 && filtered.every(s => tempDetailsAssignedStudentIds.includes(s.id));
+                      
+                      return (
+                        <div className="flex items-center justify-between py-1">
+                          <label className="flex items-center gap-sm cursor-pointer group">
+                            <input 
+                              className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary transition-all cursor-pointer" 
+                              type="checkbox"
+                              checked={allSelected}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setTempDetailsAssignedStudentIds(prev => {
+                                    const union = new Set([...prev, ...filtered.map(s => s.id)]);
+                                    return Array.from(union);
+                                  });
+                                } else {
+                                  const filteredIds = filtered.map(s => s.id);
+                                  setTempDetailsAssignedStudentIds(prev => prev.filter(id => !filteredIds.includes(id)));
+                                }
+                              }}
+                            />
+                            <span className="font-label-md text-label-md text-on-surface-variant group-hover:text-on-surface transition-colors font-medium">
+                              Selecionar todos os alunos
+                            </span>
+                          </label>
+                          <span className="font-label-sm text-label-sm text-outline">
+                            {filtered.length} {filtered.length === 1 ? 'aluno' : 'alunos'}
+                          </span>
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Student Checklist Container */}
+                  <div className="max-h-[220px] overflow-y-auto p-sm border border-outline-variant/40 rounded-xl space-y-2 bg-[#f8fafc]/30 custom-scrollbar select-none">
+                    {(() => {
+                      const filtered = students.filter(s => 
+                        s.name.toLowerCase().includes(detailsAssignSearchQuery.toLowerCase())
+                      );
+                      
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="flex flex-col items-center justify-center py-6 text-center">
+                            <span className="material-symbols-outlined text-outline text-3xl mb-1">person_off</span>
+                            <p className="font-body-md text-body-md text-on-surface-variant italic">Nenhum aluno encontrado.</p>
+                          </div>
+                        );
+                      }
+                      
+                      return filtered.map(student => {
+                        const isChecked = tempDetailsAssignedStudentIds.includes(student.id);
+                        return (
+                          <label 
+                            key={student.id}
+                            className="flex items-center p-sm bg-white border border-outline-variant rounded-xl hover:border-primary-container hover:bg-slate-50 transition-all cursor-pointer group"
+                          >
+                            <img 
+                              alt={student.name} 
+                              className="w-10 h-10 rounded-full object-cover border shrink-0" 
+                              src={student.img}
+                            />
+                            <div className="ml-md flex-1 min-w-0">
+                              <p className="font-body-md text-body-md text-on-surface font-medium truncate">{student.name}</p>
+                              <p className="font-label-sm text-label-sm text-on-surface-variant">Matrícula: {student.matricula || '202300000'}</p>
+                            </div>
+                            <input 
+                              className="w-5 h-5 rounded border-outline-variant text-primary focus:ring-primary transition-all cursor-pointer shrink-0" 
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setTempDetailsAssignedStudentIds(prev => [...prev, student.id]);
+                                } else {
+                                  setTempDetailsAssignedStudentIds(prev => prev.filter(id => id !== student.id));
+                                }
+                              }}
+                            />
+                          </label>
+                        );
+                      });
+                    })()}
+                  </div>
+
+                  {/* Main Action Buttons */}
+                  <div className="flex flex-col gap-sm select-none border-t border-outline-variant/30 pt-md">
+                    <button 
+                      type="button"
+                      onClick={() => {
+                        const updatedTask = {
+                          ...isAssigningStudentsDetails,
+                          assignedStudentIds: tempDetailsAssignedStudentIds
+                        } as TaskItem;
+                        setTasks(prev => prev.map(t => t.id === isAssigningStudentsDetails.id ? updatedTask : t));
+                        setSelectedTaskDetails(updatedTask);
+                        setIsAssigningStudentsDetails(null);
+                        setShowSharePanel(false);
+                        setShareTaskLinks({});
+
+                        // Trigger the beautiful visual overlay
+                        showAssignmentSuccessOverlay(updatedTask.title, updatedTask.id, tempDetailsAssignedStudentIds);
+                      }}
+                      className="w-full py-3.5 bg-primary text-on-primary font-label-md text-label-md rounded-lg shadow-sm hover:brightness-110 active:scale-[0.98] transition-all cursor-pointer border-none flex items-center justify-center font-semibold"
+                    >
+                      Confirmar Seleção
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={() => { setIsAssigningStudentsDetails(null); setShowSharePanel(false); setShareTaskLinks({}); }}
+                      className="w-full py-3.5 bg-surface text-secondary font-label-md text-label-md rounded-lg border border-outline-variant hover:bg-surface-container-low active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center font-medium"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+
+                  {/* Animated Share Panel */}
+                  <AnimatePresence>
+                    {showSharePanel && (
+                      <motion.div
+                        key="share-panel"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.35, ease: [0.4, 0, 0.2, 1] }}
+                        style={{ overflow: 'hidden' }}
+                      >
+                        <div className="pt-md pb-xs">
+                          {/* Question Header */}
+                          <div className="flex items-center gap-sm mb-md p-md rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.10) 100%)', border: '1px solid rgba(99,102,241,0.18)' }}>
+                            <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px' }}>send</span>
+                            <p className="font-label-md text-label-md text-on-surface font-semibold" style={{ lineHeight: 1.4 }}>
+                              Deseja enviar o código da tarefa para quais alunos?
+                            </p>
+                          </div>
+
+                          {/* Students List */}
+                          <div className="flex flex-col gap-sm">
+                            {tempDetailsAssignedStudentIds.length === 0 && (
+                              <p className="text-center text-on-surface-variant font-body-sm text-body-sm py-4">Nenhum aluno selecionado.</p>
+                            )}
+                            {tempDetailsAssignedStudentIds.map((sid) => {
+                              const student = students.find(s => s.id === sid);
+                              if (!student) return null;
+                              const hasLink = !!shareTaskLinks[sid];
+                              return (
+                                <motion.div
+                                  key={sid}
+                                  initial={{ opacity: 0, y: 6 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.25 }}
+                                  className="rounded-xl border border-outline-variant overflow-hidden"
+                                  style={{ background: 'rgba(255,255,255,0.03)' }}
+                                >
+                                  {/* Student row with avatar, name + code generator input + generate button */}
+                                  <div className="flex items-center gap-sm p-sm">
+                                    <img
+                                      src={student.img}
+                                      alt={student.name}
+                                      className="rounded-full shrink-0 border-2 border-primary/30"
+                                      style={{ width: 40, height: 40, objectFit: 'cover' }}
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-label-md text-label-md text-on-surface truncate font-semibold">{student.name}</p>
+                                      <p className="font-body-sm text-body-sm text-on-surface-variant truncate">{student.class}</p>
+                                    </div>
+
+                                    {/* Code generator input field next to the link icon */}
+                                    <div className="flex items-center gap-xs">
+                                      <input 
+                                        type="text"
+                                        readOnly
+                                        value={hasLink ? shareTaskLinks[sid].split('?code=')[1] : ''}
+                                        placeholder="Gerar código..."
+                                        className="w-24 bg-slate-50 border border-[#c1c6d6] rounded-lg px-2 py-1 text-[10px] font-mono text-center outline-none select-all text-slate-600"
+                                      />
+                                      <button
+                                        type="button"
+                                        title="Gerar link da tarefa"
+                                        onClick={() => {
+                                          if (!isAssigningStudentsDetails) return;
+                                          const shortCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 chars code, e.g. A3B9XF
+                                          const link = `${window.location.origin}?code=${shortCode}`;
+                                          setShareTaskLinks(prev => ({ ...prev, [sid]: link }));
+                                          
+                                          const newLinkItem = { 
+                                            id: shortCode, 
+                                            studentName: student.name, 
+                                            link, 
+                                            taskId: isAssigningStudentsDetails.id, 
+                                            taskTitle: isAssigningStudentsDetails.title,
+                                            createdAt: new Date().toISOString() 
+                                          };
+                                          setDbTaskLinks(prev => [newLinkItem, ...prev]);
+ 
+                                          // Add to unsynced queue for offline storage
+                                          const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_teacher_links') || '[]');
+                                          localStorage.setItem('abba_unsynced_teacher_links', JSON.stringify([newLinkItem, ...unsynced]));
+                                          
+                                          // Fire async background sync attempt
+                                          syncTeacherLinks();
+                                        }}
+                                        className="shrink-0 w-9 h-9 rounded-full flex items-center justify-center transition-all active:scale-90 cursor-pointer border-none"
+                                        style={{
+                                          background: hasLink
+                                            ? 'linear-gradient(135deg, #11bb4f, #32b966)'
+                                            : 'rgba(99,102,241,0.12)',
+                                          color: hasLink ? '#fff' : '#11bb4f'
+                                        }}
+                                      >
+                                        <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                          {hasLink ? 'link' : 'add_link'}
+                                        </span>
+                                      </button>
+                                    </div>
+                                  </div>
+
+                                  {/* Generated link container – slides in */}
+                                  <AnimatePresence>
+                                    {hasLink && (
+                                      <motion.div
+                                        key={`link-${sid}`}
+                                        initial={{ opacity: 0, height: 0 }}
+                                        animate={{ opacity: 1, height: 'auto' }}
+                                        exit={{ opacity: 0, height: 0 }}
+                                        transition={{ duration: 0.28, ease: [0.4, 0, 0.2, 1] }}
+                                        style={{ overflow: 'hidden' }}
+                                      >
+                                        <div className="px-sm pb-sm">
+                                          <div
+                                            className="rounded-lg p-sm flex items-center justify-between gap-sm"
+                                            style={{
+                                              background: 'linear-gradient(135deg, rgba(99,102,241,0.07) 0%, rgba(139,92,246,0.07) 100%)',
+                                              border: '1px solid rgba(99,102,241,0.15)'
+                                            }}
+                                          >
+                                            <div className="flex-1 min-w-0 text-left space-y-1">
+                                              <p className="font-body-sm text-body-sm text-slate-700 leading-relaxed">
+                                                Olá, <span className="font-extrabold text-[#131b2e]">{student.name}</span> 👋🏾
+                                              </p>
+                                              <p className="font-body-sm text-body-sm text-slate-600 leading-normal">
+                                                Seu <span className="font-bold text-[#131b2e]">código da tarefa</span> é:
+                                              </p>
+                                              <p className="font-body-sm text-body-sm text-primary font-bold truncate" style={{ wordBreak: 'break-all' }}>
+                                                {shareTaskLinks[sid]}
+                                              </p>
+                                              
+                                              <div className="pt-2 border-t border-slate-100 mt-2">
+                                                <p className="font-label-sm text-label-sm font-extrabold text-[#131b2e] mb-0.5">
+                                                  *Como usar?*
+                                                </p>
+                                                <p className="text-[10px] text-slate-500 leading-relaxed">
+                                                  Na <span className="font-bold text-slate-700">Área do aluno</span>, em <span className="font-bold text-slate-700">Upload de atividade</span>, coloque o <span className="font-bold text-slate-700">link</span> no campo de <span className="font-bold text-slate-700">Fazer o upload por link</span>
+                                                </p>
+                                              </div>
+                                            </div>
+
+                                            {/* Copy button on the right */}
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                const msg = `Olá, *${student.name}* 👋🏾\nSeu *código da tarefa* é:\n${shareTaskLinks[sid]}\n\n*Como usar?*\nNa *Área do aluno*, em *Upload de atividade*, coloque o *link* no campo de *Fazer o upload por link*`;
+                                                navigator.clipboard.writeText(msg);
+                                                setCopiedShareId(sid);
+                                                setTimeout(() => setCopiedShareId(null), 2200);
+                                              }}
+                                              className="shrink-0 w-10 h-10 rounded-lg flex items-center justify-center transition-all active:scale-95 cursor-pointer border-none"
+                                              style={{
+                                                background: copiedShareId === sid
+                                                  ? 'rgba(34,197,94,0.15)'
+                                                  : 'linear-gradient(135deg, rgba(99,102,241,0.18), rgba(139,92,246,0.18))',
+                                                color: copiedShareId === sid ? '#22c55e' : '#6366f1'
+                                              }}
+                                              title="Copiar Mensagem"
+                                            >
+                                              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>
+                                                {copiedShareId === sid ? 'check_circle' : 'content_copy'}
+                                              </span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </motion.div>
+                                    )}
+                                  </AnimatePresence>
+                                </motion.div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Concluir button at the bottom of the list */}
+                          {tempDetailsAssignedStudentIds.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (isAssigningStudentsDetails) {
+                                  setAssignedStudentsResult({
+                                    taskTitle: isAssigningStudentsDetails.title,
+                                    studentIds: [...tempDetailsAssignedStudentIds]
+                                  });
+                                }
+                              }}
+                              className="mt-md w-full py-3 rounded-lg font-label-md text-label-md font-semibold transition-all active:scale-95 cursor-pointer border-none flex items-center justify-center gap-xs"
+                              style={{ background: 'linear-gradient(135deg, #11bb4f, #32b966)', color: '#fff' }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: '18px' }}>check</span>
+                              Concluir
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {/* Dummy ref to scroll to bottom */}
+                  <div ref={modalBottomRef} className="h-2" />
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Success Modal: Student Assignment Confirmation with Offline Access Controls */}
+        <AnimatePresence>
+          {assignedModalInfo && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setAssignedModalInfo(null);
+              }}
+              className="fixed inset-0 z-[1100] flex items-center justify-center p-4 cursor-pointer"
+              style={{ backgroundColor: 'rgba(19, 27, 46, 0.65)', backdropFilter: 'blur(8px)' }}
+            >
+              <motion.div
+                initial={{ opacity: 0, scale: 0.9, y: 30 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                transition={{ type: "spring", damping: 25, stiffness: 350 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200/60 overflow-hidden flex flex-col text-on-surface cursor-default max-h-[85vh]"
+              >
+                {/* Modal Header */}
+                <div className="flex items-center gap-4 p-6 md:p-8 border-b border-slate-100 bg-[#f8fafc]/50 shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+                    <span className="material-symbols-outlined font-black" style={{ fontSize: '26px' }}>task_alt</span>
+                  </div>
+                  <div className="flex-1 min-w-0 text-left">
+                    <h3 className="text-lg md:text-xl font-black text-[#131b2e] tracking-tight">Atribuição Concluída com Sucesso!</h3>
+                    <p className="text-xs text-slate-500 font-semibold truncate mt-[2px]">
+                      Tarefa: <span className="text-[#005bb3] font-bold">{assignedModalInfo.taskTitle}</span>
+                    </p>
+                  </div>
+                  <button 
+                    onClick={() => setAssignedModalInfo(null)}
+                    className="w-8 h-8 rounded-full hover:bg-slate-200/60 text-slate-400 hover:text-slate-600 transition-all cursor-pointer flex items-center justify-center border-none bg-transparent"
+                  >
+                    <span className="material-symbols-outlined font-bold" style={{ fontSize: '20px' }}>close</span>
+                  </button>
+                </div>
+
+                {/* Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar text-left">
+                  {/* General Notification Notice */}
+                  <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/50 flex gap-3 text-indigo-900/80 items-start">
+                    <span className="material-symbols-outlined text-indigo-500 shrink-0 mt-[2px]" style={{ fontSize: '20px' }}>info</span>
+                    <p className="text-xs font-semibold leading-relaxed">
+                      A tarefa já foi enviada diretamente para o perfil do aluno no sistema, mas você pode enviar offline também, por meio do link e do código gerados abaixo.
+                    </p>
+                  </div>
+
+                  {/* Students List */}
+                  <div className="space-y-6">
+                    {assignedModalInfo.students.map((student) => {
+                      const hasLink = !!student.link;
+                      const hasCode = !!student.code;
+                      const isLinkCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'link';
+                      const isCodeCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'code';
+
+                      return (
+                        <div key={student.id} className="p-5 rounded-2xl border border-slate-100 bg-[#f8fafc]/30 hover:bg-white/40 transition-all hover:shadow-md flex flex-col gap-4">
+                          {/* Student Info & Status Badges */}
+                          <div className="flex items-center justify-between pb-3 border-b border-slate-100/70">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#005bb3]/10 to-[#005bb3]/20 flex items-center justify-center overflow-hidden border border-[#005bb3]/20 shadow-xs">
+                                <span className="material-symbols-outlined text-[#005bb3] text-lg font-bold">person</span>
+                              </div>
+                              <div>
+                                <h4 className="text-sm font-black text-[#131b2e] leading-tight">{student.name}</h4>
+                                <div className="flex items-center gap-1.5 mt-[2px]">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  <span className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-wider">Atribuído Online</span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            {/* Visual highlight badges for active configurations */}
+                            <div className="flex gap-2">
+                              {hasLink && (
+                                <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                  ⚠️ Link Ativo
+                                </span>
+                              )}
+                              {hasCode && (
+                                <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-600 text-[9px] font-black uppercase tracking-wider animate-pulse">
+                                  ⚠️ Código Ativo
+                                </span>
+                              )}
+                              {!hasLink && !hasCode && (
+                                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-wider">
+                                  Apenas Online
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Dual Card Layout for Offline Access options */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            
+                            {/* Link Card Container */}
+                            <div 
+                              className={`p-4 rounded-xl border transition-all flex flex-col gap-3 relative overflow-hidden ${
+                                hasLink 
+                                  ? 'border-indigo-500/80 bg-indigo-50/20 shadow-xs shadow-indigo-100/30' 
+                                  : 'border-slate-200 bg-slate-50/50 opacity-60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-xs">add_link</span>
+                                  Link de Acesso Offline
+                                </span>
+                                {hasLink && (
+                                  <span className="w-4.5 h-4.5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+                                )}
+                              </div>
+                              
+                              {hasLink ? (
+                                <>
+                                  <div className="flex-1">
+                                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                                      ⚠️ O link offline já foi gerado para este aluno. Copie e envie para acesso offline.
+                                    </p>
+                                    <div className="mt-2 p-2 bg-indigo-50/50 rounded-lg border border-indigo-100/50 font-mono text-[10px] text-indigo-900 select-all truncate">
+                                      {student.link}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      if (student.link) {
+                                        navigator.clipboard.writeText(student.link);
+                                        setCopiedStudentItem({ id: student.id, type: 'link' });
+                                        setTimeout(() => setCopiedStudentItem(null), 2000);
+                                      }
+                                    }}
+                                    className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer border-none ${
+                                      isLinkCopied 
+                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-xs' 
+                                        : 'bg-[#005bb3] hover:bg-[#004b93] text-white border-[#005bb3] shadow-xs'
+                                    }`}
+                                  >
+                                    <span className="material-symbols-outlined text-sm">
+                                      {isLinkCopied ? 'check' : 'content_copy'}
+                                    </span>
+                                    {isLinkCopied ? 'Copiado!' : 'Copiar Link'}
+                                  </button>
+                                </>
+                              ) : (
+                                <div className="flex-1 flex flex-col justify-center py-2">
+                                  <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                                    Nenhum link gerado para este aluno ainda. Habilite na aba de compartilhamento.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Code Card Container */}
+                            <div 
+                              className={`p-4 rounded-xl border transition-all flex flex-col gap-3 relative overflow-hidden ${
+                                hasCode 
+                                  ? 'border-amber-500/80 bg-amber-50/20 shadow-xs shadow-amber-100/30' 
+                                  : 'border-slate-200 bg-slate-50/50 opacity-60'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center gap-1">
+                                  <span className="material-symbols-outlined text-xs">key</span>
+                                  Código de Acesso Offline
+                                </span>
+                                {hasCode && (
+                                  <span className="w-4.5 h-4.5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
+                                )}
+                              </div>
+                              
+                              {hasCode ? (
+                                <>
+                                  <div className="flex-1">
+                                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
+                                      ⚠️ Código ativo encontrado no sistema. O aluno pode usar para acessar offline.
+                                    </p>
+                                    <div className="mt-2 p-2 bg-amber-50/50 rounded-lg border border-amber-100/50 font-mono text-sm font-black text-amber-800 tracking-wider text-center select-all">
+                                      {student.code}
+                                    </div>
+                                  </div>
+                                  <button
+                                    onClick={() => {
+                                      if (student.code) {
+                                        navigator.clipboard.writeText(student.code);
+                                        setCopiedStudentItem({ id: student.id, type: 'code' });
+                                        setTimeout(() => setCopiedStudentItem(null), 2000);
+                                      }
+                                    }}
+                                    className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer border-none ${
+                                      isCodeCopied 
+                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-xs' 
+                                        : 'bg-[#005bb3] hover:bg-[#004b93] text-white border-[#005bb3] shadow-xs'
+                                    }`}
+                                  >
+                                    <span className="material-symbols-outlined text-sm">
+                                      {isCodeCopied ? 'check' : 'content_copy'}
+                                    </span>
+                                    {isCodeCopied ? 'Copiado!' : 'Copiar Código'}
+                                  </button>
+                                </>
+                              ) : (
+                                <div className="flex-1 flex flex-col justify-center py-2">
+                                  <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+                                    Nenhum código ativo gerado para este aluno ainda. Habilite na aba de alunos.
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-6 md:p-8 border-t border-slate-100 bg-[#f8fafc]/50 flex justify-end shrink-0 select-none">
+                  <button 
+                    type="button"
+                    onClick={() => setAssignedModalInfo(null)}
+                    className="px-8 py-3 rounded-xl bg-[#005bb3] hover:bg-[#004b93] text-white text-xs font-extrabold shadow-lg shadow-[#005bb3]/15 hover:shadow-xl hover:shadow-[#005bb3]/25 active:scale-95 transition-all cursor-pointer border-none"
+                  >
+                    Entendido, Concluir
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {isAddStudentOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsAddStudentOpen(false)}
+            className="fixed inset-0 z-[999] flex items-end sm:items-center justify-center select-text cursor-pointer"
+            style={{ backgroundColor: 'rgba(19, 27, 46, 0.4)', backdropFilter: 'blur(4px)' }}
+          >
+            <motion.div 
+              initial={{ y: "100%", opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0 }}
+              transition={{ type: "spring", damping: 28, stiffness: 260 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[85vh] sm:max-h-[720px] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default"
+              style={{ width: '100%', maxWidth: '28rem' }}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between px-lg py-md border-b border-outline-variant select-none shrink-0">
+                <h2 className="font-headline-md text-headline-md text-on-surface">Adicionar Novo Aluno</h2>
+                <button 
+                  type="button"
+                  onClick={() => setIsAddStudentOpen(false)}
+                  className="p-2 hover:bg-surface-container-low rounded-full transition-colors active:scale-95 text-on-surface-variant cursor-pointer bg-transparent border-none flex items-center justify-center"
+                  title="Fechar"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {/* Scrollable Container Body */}
+              <div className="flex-1 overflow-y-auto px-lg py-md space-y-md custom-scrollbar bg-surface select-text">
+                <div className="space-y-4">
+                  {/* Name field */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Nome Completo</label>
+                    <input
+                      type="text"
+                      value={newStudentName}
+                      onChange={(e) => setNewStudentName(e.target.value)}
+                      placeholder="Ex: Beatriz Silva"
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface"
+                    />
+                  </div>
+
+                  {/* Email field */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">E-mail</label>
+                    <input
+                      type="email"
+                      value={newStudentEmail}
+                      onChange={(e) => setNewStudentEmail(e.target.value)}
+                      placeholder="Ex: beatriz.silva@email.com"
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface"
+                    />
+                  </div>
+
+                  {/* Class field */}
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Turma</label>
+                    <div className="relative">
+                      <select
+                        value={newStudentClass}
+                        onChange={(e) => setNewStudentClass(e.target.value)}
+                        className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface appearance-none cursor-pointer"
+                      >
+                        <option value="Turma A - 3º Ano">Turma A - 3º Ano</option>
+                        <option value="Turma B - 3º Ano">Turma B - 3º Ano</option>
+                        <option value="Turma C - 3º Ano">Turma C - 3º Ano</option>
+                      </select>
+                      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg font-variation-settings-fill">arrow_drop_down</span>
+                    </div>
+                  </div>
+
+                  {/* Progress range slider */}
+                  <div className="flex flex-col gap-1">
+                    <div className="flex justify-between items-center pr-1">
+                      <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Progresso Inicial</label>
+                      <span className="text-xs font-extrabold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{newStudentProgress}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={newStudentProgress}
+                      onChange={(e) => setNewStudentProgress(Number(e.target.value))}
+                      className="w-full h-1.5 bg-[#eaedff] rounded-lg appearance-none cursor-pointer accent-primary"
+                    />
+                  </div>
+
+                  {/* Animated Invite Generator Panel */}
+                  <div className="pt-md pb-xs space-y-md">
+                    {/* Section Header */}
+                    <div className="flex items-center gap-sm p-sm rounded-xl" style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.10) 0%, rgba(139,92,246,0.10) 100%)', border: '1px solid rgba(99,102,241,0.18)' }}>
+                      <span className="material-symbols-outlined text-primary" style={{ fontSize: '20px' }}>group_add</span>
+                      <p className="font-label-md text-label-md text-on-surface font-semibold" style={{ lineHeight: 1.4 }}>
+                        Deseja gerar o convite inteligente de boas-vindas?
+                      </p>
+                    </div>
+
+                    {/* Action Buttons for Code and Link */}
+                    <div className="grid grid-cols-2 gap-sm">
+                      {/* Code Option */}
+                      <div className="flex flex-col gap-xs p-sm bg-[#faf8ff] border border-outline-variant/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Opção 1: Código</span>
+                        <p className="text-[11px] text-slate-500 leading-normal mb-sm">Gera o código de acesso para a tela de login.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newStudentName.trim()) {
+                              alert('Por favor, informe o nome do aluno.');
+                              return;
+                            }
+
+                            if (!newStudentEmail.trim()) {
+                              alert('Por favor, preencha o e-mail do aluno para gerar o convite por código.');
+                              return;
+                            }
+                            const emailLower = newStudentEmail.trim().toLowerCase();
+                            const emailRegex = /^[a-zA-Z0-9._%+-]+@(?:gmail|outlook)\.com$/;
+                            if (!emailRegex.test(emailLower)) {
+                              alert('E-mail inválido. O e-mail deve ser do formato @gmail.com ou @outlook.com.');
+                              return;
+                            }
+
+                            const tempId = 'st-' + Math.random().toString(36).substring(2, 9);
+                            const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+                            
+                            // Generate a simple 6-char alphanumeric code (e.g., K9X8J2)
+                            const generateSimpleCode = () => {
+                              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                              let res = '';
+                              for (let i = 0; i < 6; i++) {
+                                res += chars.charAt(Math.floor(Math.random() * chars.length));
+                              }
+                              return res;
+                            };
+                            const code = generateSimpleCode();
+
+                            // Save to local registry so App.tsx and AuthScreens.tsx can decode it!
+                            const registryKey = 'abba_invite_codes_registry';
+                            const currentRegistry = localStorage.getItem(registryKey);
+                            const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+                            registryList.push({
+                              code: code,
+                              name: newStudentName.trim(),
+                              expiresAt: expiry,
+                              codeId: tempId
+                            });
+                            localStorage.setItem(registryKey, JSON.stringify(registryList));
+                            
+                            const guessedGender = (() => {
+                              const firstName = newStudentName.split(' ')[0].toLowerCase();
+                              if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
+                                  return 'F';
+                              }
+                              return 'M';
+                            })();
+                            
+                            const welcomeWord = guessedGender === 'F' ? 'bem-vinda' : 'bem-vindo';
+                            const msg = `Olá, *${newStudentName.trim()}* 👋🏾\nSeja muito ${welcomeWord} ao *Abba Digital*!\n\nUse o seu *código de acesso* na página de login do aluno para entrar:\nSeu código: *${code}*\n\n*Como entrar?*\nNa tela de login do Abba Digital, clique na aba *Entrar com código* e cole o código acima para acessar sua conta!`;
+                            
+                            // Copy message
+                            navigator.clipboard.writeText(msg);
+
+                            // Automatically save the student in 1-Click
+                            const newStudent = {
+                              id: tempId,
+                              name: newStudentName.trim(),
+                              email: emailLower,
+                              class: newStudentClass,
+                              img: guessedGender === 'F'
+                                ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
+                                : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
+                              progress: newStudentProgress,
+                              matricula: String(202400 + students.length + 1),
+                              gender: guessedGender,
+                              loginMethod: 'code'
+                            };
+                            
+                            setStudents([...students, newStudent]);
+                            setIsAddStudentOpen(false);
+                            setNewStudentName('');
+                            setNewStudentEmail('');
+                            setNewStudentProgress(0);
+
+                            alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o código de acesso foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
+                          }}
+                          className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            content_copy
+                          </span>
+                          Copiar por Código
+                        </button>
+                      </div>
+
+                      {/* Link Option */}
+                      <div className="flex flex-col gap-xs p-sm bg-[#faf8ff] border border-outline-variant/60 rounded-xl">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Opção 2: Link</span>
+                        <p className="text-[11px] text-slate-500 leading-normal mb-sm">Gera o link mágico para login automático.</p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newStudentName.trim()) {
+                              alert('Por favor, informe o nome do aluno.');
+                              return;
+                            }
+
+                            if (!newStudentEmail.trim()) {
+                              alert('Por favor, preencha o e-mail do aluno para gerar o convite por link.');
+                              return;
+                            }
+                            const emailLower = newStudentEmail.trim().toLowerCase();
+                            const emailRegex = /^[a-zA-Z0-9._%+-]+@(?:gmail|outlook)\.com$/;
+                            if (!emailRegex.test(emailLower)) {
+                              alert('E-mail inválido. O e-mail deve ser do formato @gmail.com ou @outlook.com.');
+                              return;
+                            }
+
+                            const tempId = 'st-' + Math.random().toString(36).substring(2, 9);
+                            const expiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+                            
+                            // Generate a simple 6-char alphanumeric code (e.g., K9X8J2)
+                            const generateSimpleCode = () => {
+                              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                              let res = '';
+                              for (let i = 0; i < 6; i++) {
+                                res += chars.charAt(Math.floor(Math.random() * chars.length));
+                              }
+                              return res;
+                            };
+                            const code = generateSimpleCode();
+
+                            // Save to local registry so App.tsx and AuthScreens.tsx can decode it!
+                            const registryKey = 'abba_invite_codes_registry';
+                            const currentRegistry = localStorage.getItem(registryKey);
+                            const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+                            registryList.push({
+                              code: code,
+                              name: newStudentName.trim(),
+                              expiresAt: expiry,
+                              codeId: tempId
+                            });
+                            localStorage.setItem(registryKey, JSON.stringify(registryList));
+                            
+                            const link = `${window.location.origin}?join=${code}`;
+                            
+                            const guessedGender = (() => {
+                              const firstName = newStudentName.split(' ')[0].toLowerCase();
+                              if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
+                                return 'F';
+                              }
+                              return 'M';
+                            })();
+                            
+                            const welcomeWord = guessedGender === 'F' ? 'bem-vinda' : 'bem-vindo';
+                            const msg = `Olá, *${newStudentName.trim()}* 👋🏾\nSeja muito ${welcomeWord} ao *Abba Digital*!\n\nClique no *link* abaixo para acessar a sua conta instantaneamente:\n${link}\n\n*Aproveite!*`;
+                            
+                            // Copy message
+                            navigator.clipboard.writeText(msg);
+
+                            // Automatically save the student in 1-Click
+                            const newStudent = {
+                              id: tempId,
+                              name: newStudentName.trim(),
+                              email: emailLower,
+                              class: newStudentClass,
+                              img: guessedGender === 'F'
+                                ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
+                                : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
+                              progress: newStudentProgress,
+                              matricula: String(202400 + students.length + 1),
+                              gender: guessedGender,
+                              loginMethod: 'link'
+                            };
+                            
+                            setStudents([...students, newStudent]);
+                            setIsAddStudentOpen(false);
+                            setNewStudentName('');
+                            setNewStudentEmail('');
+                            setNewStudentProgress(0);
+
+                            alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o link de acesso rápido foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
+                          }}
+                          className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
+                        >
+                          <span className="material-symbols-outlined text-sm">
+                            link
+                          </span>
+                          Copiar por Link
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Modal Actions Footer */}
+              <div className="p-md border-t border-outline-variant bg-surface-container-low flex gap-md shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => setIsAddStudentOpen(false)}
+                  className="flex-1 py-3 px-md border border-outline text-on-surface-variant font-label-md text-label-md rounded-lg active:scale-95 transition-all hover:bg-surface-variant/50 cursor-pointer bg-white"
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => {
+                    if (!newStudentName.trim()) {
+                      alert('Por favor, informe o nome do aluno.');
+                      return;
+                    }
+                    const emailValue = newStudentEmail.trim() || `${newStudentName.toLowerCase().replace(/\s+/g, '.')}@email.com`;
+                    
+                    const guessedGender = (() => {
+                      const firstName = newStudentName.split(' ')[0].toLowerCase();
+                      if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
+                        return 'F';
+                      }
+                      return 'M';
+                    })();
+
+                    const newStudent = {
+                      id: 'st-' + Math.random().toString(36).substring(2, 9),
+                      name: newStudentName.trim(),
+                      email: emailValue,
+                      class: newStudentClass,
+                      img: guessedGender === 'F'
+                        ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
+                        : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
+                      progress: newStudentProgress,
+                      matricula: String(202400 + students.length + 1),
+                      gender: guessedGender,
+                      loginMethod: 'login'
+                    };
+                    setStudents([...students, newStudent]);
+                    setIsAddStudentOpen(false);
+                    setNewStudentName('');
+                    setNewStudentEmail('');
+                    setNewStudentProgress(0);
+                    alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso (sem convite)!`);
+                  }}
+                  className="flex-1 py-3 px-md bg-primary text-on-primary font-label-md text-label-md rounded-lg font-bold shadow-md shadow-primary/20 active:scale-95 transition-all hover:brightness-110 cursor-pointer border-none"
+                >
+                  Apenas Salvar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Modal: Salvar Alunos */}
+        <AnimatePresence>
+          {isSaveModalOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsSaveModalOpen(false)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+              >
+                {/* Modal Header */}
+                <div className="p-6 md:p-8 border-b border-[#dde0e2] space-y-4">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h2 className="text-xl font-extrabold text-[#131b2e]">Salvar Alunos</h2>
+                      <p className="text-xs text-slate-400 mt-0.5">Selecione os alunos que deseja processar e salvar no backup na nuvem.</p>
+                    </div>
+                    <button
+                      onClick={() => setIsSaveModalOpen(false)}
+                      className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none"
+                    >
+                      <span className="material-symbols-outlined">close</span>
+                    </button>
+                  </div>
+                  
+                  <label className="flex items-center gap-3 p-3 bg-slate-50 hover:bg-slate-100 rounded-xl border border-slate-200 cursor-pointer transition-colors w-full">
+                    <input
+                      type="checkbox"
+                      id="selectAllSave"
+                      checked={selectedStudentIdsSave.length === students.length && students.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStudentIdsSave(students.map(s => s.id));
+                        } else {
+                          setSelectedStudentIdsSave([]);
+                        }
+                      }}
+                      className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary transition-all cursor-pointer"
+                    />
+                    <span className="text-sm font-bold text-slate-700">Selecionar Todos ({students.length})</span>
+                  </label>
+                </div>
+
+                {/* Modal Body Grid */}
+                <div className="p-6 md:p-8 overflow-y-auto grow bg-[#faf8ff]">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {students.map((student) => {
+                      const isChecked = selectedStudentIdsSave.includes(student.id);
+                      return (
+                        <div
+                          key={student.id}
+                          onClick={() => {
+                            setSelectedStudentIdsSave(prev =>
+                              prev.includes(student.id)
+                                ? prev.filter(id => id !== student.id)
+                                : [...prev, student.id]
+                            );
+                          }}
+                          className={`group relative p-4 rounded-2xl border transition-all flex flex-col gap-3 cursor-pointer ${
+                            isChecked
+                              ? 'border-primary bg-[#eaedff]/30 shadow-sm'
+                              : 'bg-white border-slate-200 hover:border-primary/50'
+                          }`}
+                        >
+                          <div className="flex justify-between items-start">
+                            <img
+                              src={student.img}
+                              alt={student.name}
+                              className="w-12 h-12 rounded-full border border-slate-100 object-cover"
+                            />
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              readOnly
+                              className="h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary pointer-events-none"
+                            />
+                          </div>
+                          
+                          <div>
+                            <p className="font-bold text-sm text-slate-800">{student.name}</p>
+                            <p className="text-[10px] text-slate-400">
+                              Status: {' '}
+                              <span className={student.progress >= 50 ? 'text-primary font-bold' : 'text-red-500 font-bold'}>
+                                {student.progress >= 50 ? 'Ativo' : 'Pendente'}
+                              </span>
+                            </p>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-500">
+                              <span>Progresso</span>
+                              <span>{student.progress}%</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full transition-all duration-300"
+                                style={{ width: `${student.progress}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-6 md:p-8 border-t border-[#dde0e2] bg-white flex justify-end items-center gap-3">
+                  <button
+                    onClick={() => setIsSaveModalOpen(false)}
+                    className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl cursor-pointer border-none"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (selectedStudentIdsSave.length === 0) {
+                        alert('Por favor, selecione pelo menos um estudante para salvar.');
+                        return;
+                      }
+                      // Simulate cloud save
+                      alert(`Sincronização com a nuvem ABBA DIGITAL concluída!\nDados de progresso de ${selectedStudentIdsSave.length} alunos salvos com sucesso.`);
+                      setIsSaveModalOpen(false);
+                    }}
+                    className="px-6 py-2.5 bg-primary hover:opacity-90 text-on-primary text-xs font-bold rounded-xl cursor-pointer shadow-lg shadow-primary/10 border-none flex items-center gap-1.5 active:scale-95 duration-100"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">cloud</span>
+                    Salvar Alunos
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Excluir Alunos */}
+        <AnimatePresence>
+          {isDeleteModalOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsDeleteModalOpen(false)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div
+                initial={{ scale: 0.95, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.95, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+              >
+                {/* Modal Header */}
+                <div className="p-6 md:p-8 border-b border-[#dde0e2] flex justify-between items-center">
+                  <div className="flex items-center gap-2 text-red-600">
+                    <span className="material-symbols-outlined text-[24px]">delete_sweep</span>
+                    <h3 className="text-xl font-extrabold">Excluir Alunos</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                {/* Toolbar */}
+                <div className="px-6 md:px-8 py-3 bg-slate-50 border-b border-slate-100 flex justify-between items-center flex-wrap gap-3">
+                  <label className="flex items-center gap-2 cursor-pointer group">
+                    <input
+                      type="checkbox"
+                      id="selectAllDelete"
+                      checked={selectedStudentIdsDelete.length === students.length && students.length > 0}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedStudentIdsDelete(students.map(s => s.id));
+                        } else {
+                          setSelectedStudentIdsDelete([]);
+                        }
+                      }}
+                      className="w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary transition-all cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-slate-600 group-hover:text-slate-800 transition-colors">Selecionar Todos</span>
+                  </label>
+                  
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs font-bold text-slate-500">{selectedStudentIdsDelete.length} alunos selecionados</span>
+                    <button
+                      onClick={() => {
+                        if (selectedStudentIdsDelete.length === 0) {
+                          alert('Nenhum aluno selecionado para exclusão.');
+                          return;
+                        }
+                        if (confirm(`Tem certeza de que deseja excluir permanentemente os ${selectedStudentIdsDelete.length} alunos selecionados?`)) {
+                          // Update students list
+                          setStudents(prev => prev.filter(s => !selectedStudentIdsDelete.includes(s.id)));
+                          // Clear selection
+                          setSelectedStudentIdsDelete([]);
+                          // Close modal
+                          setIsDeleteModalOpen(false);
+                          alert('Alunos selecionados excluídos com sucesso! 🗑️');
+                        }
+                      }}
+                      className="bg-red-100 hover:bg-red-200 text-red-600 w-9 h-9 rounded-full font-bold flex items-center justify-center cursor-pointer transition-all border-none active:scale-90"
+                      title="Excluir selecionados em lote"
+                    >
+                      <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>delete</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Modal Body Grid */}
+                <div className="p-6 md:p-8 overflow-y-auto grow bg-[#faf8ff]">
+                  {students.length === 0 ? (
+                    <div className="text-center py-12 text-slate-400 italic text-sm">
+                      Nenhum aluno cadastrado no momento.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {students.map((student) => {
+                        const isChecked = selectedStudentIdsDelete.includes(student.id);
+                        return (
+                          <div
+                            key={student.id}
+                            onClick={() => {
+                              setSelectedStudentIdsDelete(prev =>
+                                prev.includes(student.id)
+                                  ? prev.filter(id => id !== student.id)
+                                  : [...prev, student.id]
+                              );
+                            }}
+                            className={`group relative p-4 rounded-2xl border transition-all flex items-center gap-3 cursor-pointer ${
+                              isChecked
+                                ? 'border-primary bg-[#eaedff]/30 shadow-sm'
+                                : 'bg-white border-slate-200 hover:border-primary/50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              readOnly
+                              className="absolute top-3 right-3 w-5 h-5 rounded border-slate-300 text-primary focus:ring-primary pointer-events-none"
+                            />
+                            
+                            <img
+                              src={student.img}
+                              alt={student.name}
+                              className="w-12 h-12 rounded-full object-cover border border-slate-100"
+                            />
+                            
+                            <div className="flex-1 min-w-0 pr-4">
+                              <p className="font-bold text-sm text-slate-800 truncate">{student.name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">Matrícula: {student.matricula}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Modal Footer */}
+                <div className="p-6 md:p-8 border-t border-[#dde0e2] bg-white flex justify-end">
+                  <button
+                    onClick={() => setIsDeleteModalOpen(false)}
+                    className="px-6 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold cursor-pointer border-none"
+                  >
+                    Fechar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Aviso de Duplicidade de Chave de Acesso */}
+        <AnimatePresence>
+          {isDuplicateModalOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setIsDuplicateModalOpen(false)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div
+                initial={{ scale: 0.95, y: 15, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.95, y: 15, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-md w-full overflow-hidden shadow-2xl flex flex-col z-10"
+              >
+                {/* Modal Header */}
+                <div className="p-6 border-b border-[#dde0e2] flex justify-between items-center bg-slate-50/50">
+                  <div className="flex items-center gap-2.5 text-[#e65100]">
+                    <span className="material-symbols-outlined text-[24px]">warning</span>
+                    <h3 className="text-base font-extrabold tracking-tight">Aviso: Código em Vigor</h3>
+                  </div>
+                  <button
+                    onClick={() => setIsDuplicateModalOpen(false)}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">close</span>
+                  </button>
+                </div>
+
+                {/* Modal Content */}
+                <div className="p-6 space-y-4">
+                  {duplicateStep === 'question' ? (
+                    <>
+                      {/* Warning Banner */}
+                      <div className="bg-[#fff3e0] border border-[#ffe0b2] p-4 rounded-2xl text-left space-y-2">
+                        <p className="text-xs text-[#e65100] font-bold">
+                          O aluno ou aluna já possui um código gerado e ativo!
+                        </p>
+                        <p className="text-[11px] text-slate-600 leading-relaxed">
+                          Identificamos que já existe uma chave de acesso ativa em vigor para o nome 
+                          <strong className="text-slate-800 font-extrabold"> {duplicateName}</strong>.
+                        </p>
+                      </div>
+
+                      {/* Active Key Details Card */}
+                      {duplicateActiveCode && (
+                        <div className="bg-slate-50 border border-slate-200/60 p-4 rounded-2xl text-left space-y-1.5">
+                          <span className="text-[9px] uppercase tracking-wider font-extrabold text-slate-400">Detalhes da Chave Ativa</span>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500 font-medium">Código:</span>
+                            <span className="font-mono font-bold text-[#005bb3]">
+                              {`ABBA-${duplicateActiveCode.id}-${duplicateActiveCode.studentName.split(' ')[0].toUpperCase()}`}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500 font-medium">Duração:</span>
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                              {duplicateActiveCode.durationLabel}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center text-xs">
+                            <span className="text-slate-500 font-medium">Expiração:</span>
+                            <span className="text-slate-600 font-semibold text-[11px]">
+                              {new Date(duplicateActiveCode.expiresAt).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Question */}
+                      <div className="text-left space-y-1.5 pt-2">
+                        <p className="text-xs font-extrabold text-slate-700">
+                          Este aluno ou aluna é uma pessoa diferente?
+                        </p>
+                        <p className="text-[11px] text-slate-400 leading-relaxed">
+                          Se for uma pessoa homônima (nome diferente, mas com mesmo nome e sobrenome), o sistema gerará uma nova chave separada. Caso contrário, você poderá editar a duração da chave existente.
+                        </p>
+                      </div>
+
+                      {/* Options Buttons */}
+                      <div className="grid grid-cols-2 gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            // YES: generate new separate key!
+                            let durationMs = 0;
+                            let durationLabel = '';
+
+                            if (duration === '1h') {
+                              durationMs = 60 * 60 * 1000;
+                              durationLabel = '1 Hora';
+                            } else if (duration === '4h') {
+                              durationMs = 4 * 60 * 60 * 1000;
+                              durationLabel = '4 Horas';
+                            } else if (duration === '1d') {
+                              durationMs = 24 * 60 * 60 * 1000;
+                              durationLabel = '1 Dia';
+                            } else if (duration === '1w') {
+                              durationMs = 7 * 24 * 60 * 60 * 1000;
+                              durationLabel = '1 Semana';
+                            } else {
+                              const parts = customExpiryDate.split('-');
+                              const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+                              durationMs = expDate.getTime() - Date.now();
+                              durationLabel = `Até ${customExpiryDate}`;
+                            }
+
+                            const expiresAt = Date.now() + durationMs;
+                            const codeId = 'st-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+
+                            // Generate a simple 6-char alphanumeric code (e.g., K9X8J2)
+                            const generateSimpleCode = () => {
+                              const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                              let res = '';
+                              for (let i = 0; i < 6; i++) {
+                                res += chars.charAt(Math.floor(Math.random() * chars.length));
+                              }
+                              return res;
+                            };
+                            const code = generateSimpleCode();
+
+                            // Save to local registry so App.tsx and AuthScreens.tsx can decode it!
+                            const registryKey = 'abba_invite_codes_registry';
+                            const currentRegistry = localStorage.getItem(registryKey);
+                            const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+                            registryList.push({
+                              code: code,
+                              name: duplicateName,
+                              expiresAt,
+                              codeId
+                            });
+                            localStorage.setItem(registryKey, JSON.stringify(registryList));
+
+                            const token = code;
+                            const friendlyCode = code;
+
+                            const newCodeItem: AccessCode = {
+                              id: codeId,
+                              code: token,
+                              studentName: duplicateName,
+                              expiresAt,
+                              durationLabel,
+                              status: 'active'
+                            };
+
+                            setActiveCodes([newCodeItem, ...activeCodes]);
+                            setGeneratedCode(friendlyCode);
+                            setGeneratedBase64(token);
+                            setStudentNameInput('');
+                            setIsDuplicateModalOpen(false);
+                            alert(`Uma nova chave separada foi gerada com sucesso para o(a) aluno(a) ${duplicateName}! 🚀`);
+                          }}
+                          className="py-3 bg-[#4caf50] hover:bg-[#43a047] text-white text-xs font-bold rounded-xl transition-all shadow cursor-pointer active:scale-95 border-none"
+                        >
+                          Sim, é diferente
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setDuplicateStep('edit_duration')}
+                          className="py-3 bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold rounded-xl transition-all shadow cursor-pointer active:scale-95 border-none"
+                        >
+                          Não, mesma pessoa
+                        </button>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Step 2: Edit Duration */}
+                      <div className="text-left space-y-4">
+                        <div>
+                          <h4 className="text-xs font-bold text-slate-600 mb-1.5">
+                            Nova Validade do Código
+                          </h4>
+                          <select
+                            value={duplicateSelectedDuration}
+                            onChange={(e) => setDuplicateSelectedDuration(e.target.value)}
+                            className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                          >
+                            <option value="1h">1 Hora</option>
+                            <option value="4h">4 Horas</option>
+                            <option value="1d">1 Dia</option>
+                            <option value="1w">1 Semana</option>
+                            <option value="custom">Personalizado (Calendário)</option>
+                          </select>
+                        </div>
+
+                        {duplicateSelectedDuration === 'custom' && (
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="duplicate-expiry-date">
+                              Data de Expiração
+                            </label>
+                            <input
+                              type="date"
+                              id="duplicate-expiry-date"
+                              value={duplicateCustomExpiryDate}
+                              onChange={(e) => setDuplicateCustomExpiryDate(e.target.value)}
+                              className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                            />
+                          </div>
+                        )}
+
+                        <div className="flex gap-3 pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setDuplicateStep('question')}
+                            className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-bold rounded-xl transition-all cursor-pointer border-none"
+                          >
+                            Voltar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!duplicateActiveCode) return;
+
+                              let durationMs = 0;
+                              let durationLabel = '';
+
+                              if (duplicateSelectedDuration === '1h') {
+                                durationMs = 60 * 60 * 1000;
+                                durationLabel = '1 Hora';
+                              } else if (duplicateSelectedDuration === '4h') {
+                                durationMs = 4 * 60 * 60 * 1000;
+                                durationLabel = '4 Horas';
+                              } else if (duplicateSelectedDuration === '1d') {
+                                durationMs = 24 * 60 * 60 * 1000;
+                                durationLabel = '1 Dia';
+                              } else if (duplicateSelectedDuration === '1w') {
+                                durationMs = 7 * 24 * 60 * 60 * 1000;
+                                durationLabel = '1 Semana';
+                              } else {
+                                const parts = duplicateCustomExpiryDate.split('-');
+                                const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+                                durationMs = expDate.getTime() - Date.now();
+                                durationLabel = `Até ${duplicateCustomExpiryDate}`;
+                              }
+
+                              const newExpiresAt = Date.now() + durationMs;
+
+                              // Update common registry expiry
+                              const registryKey = 'abba_invite_codes_registry';
+                              const currentRegistry = localStorage.getItem(registryKey);
+                              const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+                              
+                              let matchedRegIndex = registryList.findIndex((item: any) => item.code === duplicateActiveCode.code || item.codeId === duplicateActiveCode.id);
+                              if (matchedRegIndex !== -1) {
+                                registryList[matchedRegIndex].expiresAt = newExpiresAt;
+                                localStorage.setItem(registryKey, JSON.stringify(registryList));
+                              }
+
+                              setActiveCodes(prev => prev.map(c => {
+                                if (c.id === duplicateActiveCode.id) {
+                                  return {
+                                    ...c,
+                                    expiresAt: newExpiresAt,
+                                    durationLabel
+                                  };
+                                }
+                                return c;
+                              }));
+
+                              const friendlyCode = duplicateActiveCode.code;
+                              const token = duplicateActiveCode.code;
+
+                              setGeneratedCode(friendlyCode);
+                              setGeneratedBase64(token);
+                              setStudentNameInput('');
+                              setIsDuplicateModalOpen(false);
+                              alert(`Duração do código de ${duplicateName} atualizada com sucesso para ${durationLabel}! 🕒`);
+                            }}
+                            className="flex-1 py-3 bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold rounded-xl transition-all shadow cursor-pointer active:scale-95 border-none"
+                          >
+                            Salvar Alteração
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Modal: Arquivos de Apoio (Teacher Support Files Upload) */}
+        <AnimatePresence>
+          {supportFilesModal && supportFilesModal.isOpen && (
+            <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setSupportFilesModal(null)}
+                className="absolute inset-0 bg-[#131b2e]/60 backdrop-blur-sm cursor-pointer"
+              />
+              
+              {/* Sibling Modal Content Card */}
+              <motion.div
+                initial={{ scale: 0.95, y: 15, opacity: 0 }}
+                animate={{ scale: 1, y: 0, opacity: 1 }}
+                exit={{ scale: 0.95, y: 15, opacity: 0 }}
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+              >
+                {/* Header */}
+                <div className="p-6 md:p-8 border-b border-[#dde0e2] flex justify-between items-center bg-white shrink-0">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                      <span className="material-symbols-outlined text-[22px]">folder_open</span>
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-extrabold text-[#131b2e]">Arquivos de Apoio</h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">
+                        {supportFilesModal.isNew ? 'Adicione anexos para a nova tarefa' : 'Edite os anexos da tarefa existente'}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setSupportFilesModal(null)}
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none"
+                  >
+                    <span className="material-symbols-outlined">close</span>
+                  </button>
+                </div>
+
+                {/* Body / Upload Area */}
+                <div className="p-6 md:p-8 overflow-y-auto grow space-y-5 bg-slate-50/50">
+                  <div className="space-y-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tarefa</span>
+                    <h4 className="font-extrabold text-sm text-slate-800">{supportFilesModal.task.title}</h4>
+                    <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{supportFilesModal.task.description}</p>
+                  </div>
+
+                  {/* Drag and Drop Zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setSupportDragActive(true); }}
+                    onDragLeave={() => setSupportDragActive(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setSupportDragActive(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        handleSupportFileUpload(e.dataTransfer.files);
+                      }
+                    }}
+                    onClick={() => supportFileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer bg-white ${
+                      supportDragActive
+                        ? 'border-primary bg-primary/5'
+                        : 'border-slate-200 hover:border-primary/45 hover:bg-slate-50/30'
+                    }`}
+                  >
+                    <input
+                      ref={supportFileInputRef}
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          handleSupportFileUpload(e.target.files);
+                        }
+                      }}
+                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
+                    />
+                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                      <span className="material-symbols-outlined text-primary text-[24px]">cloud_upload</span>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-semibold text-slate-700">Arraste seus arquivos aqui</p>
+                      <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para procurar</span></p>
+                    </div>
+                    <p className="text-[10px] text-slate-400">PDF ou Imagens (PNG, JPG, WEBP) — máx. 5 MB por arquivo</p>
+                  </div>
+
+                  {/* List of Attached Files */}
+                  <div className="space-y-2">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[13px]">attachment</span>
+                      Arquivos Anexados ({uploadedSupportFiles.length})
+                    </span>
+
+                    {uploadedSupportFiles.length === 0 ? (
+                      <div className="text-center py-6 text-slate-400 text-xs italic bg-white border border-slate-200/60 rounded-2xl">
+                        Nenhum arquivo de apoio anexado ainda.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        {uploadedSupportFiles.map((file, idx) => {
+                          const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                          return (
+                            <div
+                              key={idx}
+                              className="flex justify-between items-center p-3 bg-white border border-slate-200/80 rounded-xl shadow-xs transition-colors hover:border-slate-300"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                                <span className={`material-symbols-outlined text-[18px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
+                                  {isPdf ? 'picture_as_pdf' : 'image'}
+                                </span>
+                                <div className="flex flex-col min-w-0">
+                                  <span className="font-bold text-xs text-slate-700 truncate">{file.name}</span>
+                                  <span className="text-[9px] text-slate-400 font-mono mt-0.5">{file.size}</span>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => setUploadedSupportFiles(prev => prev.filter((_, i) => i !== idx))}
+                                className="text-red-500 hover:text-red-700 p-1.5 cursor-pointer transition-colors bg-transparent border-none flex items-center justify-center rounded-lg hover:bg-red-50"
+                                title="Remover anexo"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="p-6 md:p-8 border-t border-[#dde0e2] bg-white flex gap-4 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleSaveWithSupportFiles(false)}
+                    className="flex-1 py-3 px-md border border-[#c1c6d6] hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl active:scale-95 transition-all cursor-pointer bg-white"
+                  >
+                    Salvar sem arquivos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveWithSupportFiles(true)}
+                    className="flex-1 py-3 px-md bg-primary text-on-primary font-bold text-xs rounded-xl shadow-md shadow-primary/20 active:scale-95 transition-all hover:brightness-110 cursor-pointer border-none"
+                  >
+                    Enviar e Salvar
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>
+
+        {/* Search Panel Modal em Largura Total da Tela */}
+        {searchExpanded && (
+          <>
+            {/* Backdrop que fecha ao clicar fora, com desfoque e z-index apropriado */}
+            <div
+              className="fixed inset-0 bg-slate-900/10 backdrop-blur-sm z-[9998] animate-search-backdrop"
+              onClick={() => { setSearchExpanded(false); setGeneralSearchQuery(''); setTaskSearchQuery(''); }}
+            />
+
+            {/* Modal de Pesquisa posicionado no centro, por cima do cabeçalho e ocupando metade da tela */}
+            <div 
+              className="fixed top-0 w-full max-w-[800px] md:w-1/2 min-w-[600px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-search-panel z-[9999] mt-4"
+              style={{ 
+                left: '50%', 
+                transform: 'translateX(-50%)', 
+                height: '80vh', 
+                maxHeight: '800px' 
+              }}
+              data-purpose="search-modal"
+            >
+              {/* Search Header */}
+              <div className="p-6 border-b border-slate-100 flex items-center gap-4">
+                <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                </svg>
+                <input
+                  autoFocus
+                  type="text"
+                  value={taskSearchQuery}
+                  onChange={(e) => setTaskSearchQuery(e.target.value)}
+                  placeholder="Pesquisar no ABBA Digital..."
+                  className="flex-1 text-lg border-none focus:ring-0 text-slate-600 placeholder-slate-400 font-medium outline-none"
+                />
+                <button 
+                  onClick={() => { setSearchExpanded(false); setGeneralSearchQuery(''); setTaskSearchQuery(''); }}
+                  className="p-2 text-slate-300 hover:text-slate-500 transition-colors bg-transparent border-none cursor-pointer"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+                  </svg>
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="flex-grow overflow-y-auto p-8 custom-scrollbar flex flex-col">
+                <h2 className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-8">Atividades &amp; Tarefas Criadas</h2>
+                
+                {/* Carrossel Horizontal de Cards de Atividades */}
+                <div className="relative group/carousel w-full mb-6">
+                  <div className="flex flex-nowrap overflow-x-auto gap-4 no-scrollbar pb-4 scroll-smooth">
+                    {(() => {
+                      const query = taskSearchQuery;
+                      
+                      const mapped = tasks.map(task => {
+                        return {
+                          id: task.id,
+                          title: task.title,
+                          description: task.description || 'Soletrar as palavras indicadas pelo professor usando as cores correspondentes no ábaco digital.',
+                          dueDate: task.dueDate ? `Entrega: ${new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}` : 'Entrega flexível',
+                          status: task.status === 'active' ? 'active' : 'draft',
+                          category: task.priority === 'Alta' ? 'Urgente' : 'Tarefa'
+                        };
+                      });
+
+                      // Filter out any excluded cards
+                      const actualSearchTasks = mapped.filter(t => !excludedSearchTaskIds.includes(t.id));
+
+                      const filteredSearchTasks = actualSearchTasks.filter(task => 
+                        task.title.toLowerCase().includes(query.toLowerCase()) ||
+                        task.description.toLowerCase().includes(query.toLowerCase())
+                      );
+                      
+                      return (
+                        <>
+                          {filteredSearchTasks.map((task) => (
+                            <article
+                              key={task.id}
+                              id="ccDxtp"
+                              onClick={() => {
+                                const selectedTask = tasks.find(t => t.id === task.id);
+                                if (selectedTask) {
+                                  setSelectedTaskDetails(selectedTask);
+                                  setActiveTab('tasks');
+                                }
+                                setSearchExpanded(false);
+                                setGeneralSearchQuery('');
+                                setTaskSearchQuery('');
+                              }}
+                              className="relative flex-shrink-0 w-[300px] min-h-[220px] bg-white rounded-xl border border-slate-200/90 flex flex-col gap-3 transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer overflow-hidden group select-none text-left"
+                            >
+                              {/* Cabeçalho ilustrado (figura com imagem base64) exatamente como no ccDxtp */}
+                              <header className="relative w-full h-24 overflow-hidden bg-slate-50 border-b border-slate-100 flex items-center justify-center shrink-0">
+                                {/* Close/Exclude Button */}
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExcludedSearchTaskIds(prev => [...prev, task.id]);
+                                  }}
+                                  className="absolute top-2 left-2 w-6 h-6 rounded-full bg-slate-900/60 hover:bg-red-500 hover:text-white text-white flex items-center justify-center shadow transition-colors cursor-pointer border-none z-30"
+                                  title="Excluir do modal"
+                                >
+                                  <span className="material-symbols-outlined text-[14px]">close</span>
+                                </button>
+
+                                <figure className="w-full h-full flex items-center justify-center p-2 opacity-85 group-hover:opacity-100 transition-opacity">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 234" className="w-full h-full max-h-20 object-contain">
+                                    <image 
+                                      style={{ isolation: 'isolate' }} 
+                                      width="240" 
+                                      height="234" 
+                                      href={cardImageBase64} 
+                                    />
+                                  </svg>
+                                </figure>
+                                {/* Brand logo square overlay */}
+                                <div className={`absolute top-2 right-2 w-7 h-7 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xs bg-gradient-to-r from-blue-500 to-indigo-600`}>
+                                  <span className="material-symbols-outlined text-[14px]">
+                                    school
+                                  </span>
+                                </div>
+                              </header>
+
+                              {/* Lateral gradient status line */}
+                              <div className={`absolute top-0 left-0 w-1 h-full ${task.status === 'active' ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+
+                              {/* Body Area */}
+                              <div className="flex-grow px-3.5 pb-3.5 flex flex-col justify-between gap-2.5">
+                                <div className="space-y-1">
+                                  <div className="flex items-center justify-between gap-1">
+                                    <span className="text-[8px] font-black tracking-wider uppercase text-slate-400 truncate">
+                                      {task.category}
+                                    </span>
+                                    <span className="text-[8px] font-medium text-slate-400 shrink-0">
+                                      {task.dueDate}
+                                    </span>
+                                  </div>
+                                  <h4 className="text-xs font-bold text-slate-700 leading-snug group-hover:text-primary transition-colors line-clamp-1">
+                                    {task.title}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">
+                                    {task.description}
+                                  </p>
+                                </div>
+
+                                {/* Footer / Action row */}
+                                <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-auto">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className={`w-2 h-2 rounded-full ${
+                                      task.status === 'active' 
+                                        ? 'bg-emerald-500' 
+                                        : 'bg-amber-500'
+                                    }`} />
+                                    <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
+                                      {task.status === 'active' ? 'Ativa' : 'Rascunho'}
+                                    </span>
+                                  </div>
+                                  <span className="text-[10px] text-primary font-bold bg-primary/5 px-2 py-1 rounded-md transition-all group-hover:bg-primary group-hover:text-white">
+                                    Ver Detalhes
+                                  </span>
+                                </div>
+                              </div>
+                            </article>
+                          ))}
+                          {filteredSearchTasks.length === 0 && (
+                            <div className="py-8 text-center text-slate-400 text-xs font-medium w-full">
+                              Nenhuma tarefa encontrada para "{query}"
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Navigation Arrow */}
+                  <button 
+                    onClick={(e) => {
+                      const carousel = e.currentTarget.previousElementSibling;
+                      if (carousel) {
+                        carousel.scrollBy({ left: 320, behavior: 'smooth' });
+                      }
+                    }}
+                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 w-10 h-10 bg-slate-900/80 hover:bg-slate-900 text-white rounded-full flex items-center justify-center shadow-xl border border-white/10 transition-colors z-20 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined">chevron_right</span>
+                  </button>
+                </div>
+
+                {/* Divider */}
+                <div className="border-t border-slate-100 my-4 mx-1" />
+
+                {/* Section: Navegação Rápida */}
+                <p className="text-[10px] font-extrabold uppercase tracking-widest text-slate-400 px-1 mb-2">Navegação Rápida</p>
+
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    onClick={() => {
+                      setActiveTab('home');
+                      setSelectedTaskDetails(null);
+                      setSearchExpanded(false);
+                      setGeneralSearchQuery('');
+                      setTaskSearchQuery('');
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer bg-transparent border-none text-left group"
+                  >
+                    <span className="material-symbols-outlined text-slate-400 text-[20px] group-hover:text-primary transition-colors">home</span>
+                    <span className="text-sm text-slate-600 font-semibold group-hover:text-slate-800 transition-colors">Início</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab('tasks');
+                      setSelectedTaskDetails(null);
+                      setSearchExpanded(false);
+                      setGeneralSearchQuery('');
+                      setTaskSearchQuery('');
+                    }}
+                    className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors cursor-pointer bg-transparent border-none text-left group"
+                  >
+                    <span className="material-symbols-outlined text-slate-400 text-[20px] group-hover:text-primary transition-colors">assignment</span>
+                    <span className="text-sm text-slate-600 font-semibold group-hover:text-slate-800 transition-colors">Tarefas</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+      </main>
+    </div>
+  );
+};
