@@ -297,9 +297,47 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user]);
 
-  // Process import link query parameter on mount
+  // Process import link query parameter or auto fixed code login on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
+    
+    // 1. Fixed codes auto login
+    const code = params.get('code');
+    if (code) {
+      const upperCode = code.trim().toUpperCase();
+      if (upperCode === 'PROF123') {
+        const teacherUser: User = {
+          name: 'Professor Décio Silva',
+          email: 'teacher@abba.com',
+          role: 'teacher'
+        };
+        setUser(teacherUser);
+        localStorage.setItem('abba_logged_in_user', JSON.stringify(teacherUser));
+        setCurrentScreen('teacher-dashboard');
+        setShowLanding(false);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      } else if (upperCode === 'ALUNO123') {
+        const studentUser: User = {
+          name: 'Aluno Fixo',
+          email: 'alunofixo@gmail.com',
+          role: 'student',
+          codeSession: {
+            code: 'ALUNO123',
+            expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+            codeId: 'student-fixed-id'
+          }
+        };
+        setUser(studentUser);
+        localStorage.setItem('abba_logged_in_user', JSON.stringify(studentUser));
+        setCurrentScreen('student-dashboard');
+        setShowLanding(false);
+        window.history.replaceState({}, document.title, window.location.pathname);
+        return;
+      }
+    }
+
+    // 2. Import Magic link
     const importParam = params.get('import');
     if (importParam) {
       try {

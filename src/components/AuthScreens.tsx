@@ -182,12 +182,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     // 2. First, check if this matches our 6-char alphanumeric registry!
     const registryKey = 'abba_invite_codes_registry';
     let matchedRecord = null;
-    try {
-      const localRegistry = localStorage.getItem(registryKey);
-      const registryList = localRegistry ? JSON.parse(localRegistry) : [];
-      matchedRecord = registryList.find((item: any) => item.code === cleanCode);
-    } catch (err) {
-      console.error('Error looking up registry code:', err);
+    if (cleanCode === 'ALUNO123') {
+      matchedRecord = {
+        code: 'ALUNO123',
+        name: 'Aluno Fixo',
+        codeId: 'student-fixed-id',
+        expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000
+      };
+    } else {
+      try {
+        const localRegistry = localStorage.getItem(registryKey);
+        const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+        matchedRecord = registryList.find((item: any) => item.code === cleanCode);
+      } catch (err) {
+        console.error('Error looking up registry code:', err);
+      }
     }
 
     if (matchedRecord) {
@@ -391,7 +400,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       return;
     }
 
-    if (trimmed === 'ABC123DEF') {
+    if (trimmed === 'ABC123DEF' || trimmed === 'PROF123') {
       const teacherUser: User = {
         name: 'Professor Décio Silva',
         email: 'teacher@abba.com',
@@ -402,7 +411,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         onLoginSuccess(teacherUser);
       }, 1000);
     } else {
-      setErrorMsg('Código incorreto. Tente "ABC123DEF" para demonstração.');
+      setErrorMsg('Código incorreto. Tente "PROF123" para demonstração.');
     }
   };
 
