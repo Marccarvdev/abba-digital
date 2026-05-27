@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 @font-face {
   font-family: 'Humanist777';
   src: url('https://res.cloudinary.com/dudmozd8z/raw/upload/v1779392549/humanist_777_black_condensed_regular-webfont_ualkjw.woff2') format('woff2');
@@ -37,8 +39,6 @@
   font-style: normal;
   font-display: block;
 }
-
-@import "tailwindcss";
 
 /* Prevent tap flashing / blinking on mobile devices and disable callouts */
 * {
