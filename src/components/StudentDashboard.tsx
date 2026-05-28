@@ -35,6 +35,7 @@ interface StudentDashboardProps {
   onRemoveCompletedWord: (index: number) => void;
   onClearCompletedWords: () => void;
   onGoToAbacus?: (title?: string, summary?: string) => void;
+  onGoToLanding?: () => void;
 }
 
 // Preset list of 27 bilingual numerical items (0-9 in Portuguese, English, German)
@@ -77,7 +78,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   completedSpelledWords,
   onRemoveCompletedWord,
   onClearCompletedWords,
-  onGoToAbacus
+  onGoToAbacus,
+  onGoToLanding
 }) => {
   const [filterLanguage, setFilterLanguage] = useState<'all' | 'pt' | 'en' | 'de'>('all');
   const [showShareModal, setShowShareModal] = useState(false);
@@ -737,7 +739,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
       } lg:translate-x-0`}>
         <div className="flex items-center gap-sm mb-xl px-sm justify-between">
-          <div className="flex items-center gap-sm">
+          <div 
+            onClick={() => onGoToLanding && onGoToLanding()}
+            className="flex items-center gap-sm cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+            title="Voltar para a página principal"
+          >
             <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
             <div>
               <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>

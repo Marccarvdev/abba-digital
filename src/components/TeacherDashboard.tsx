@@ -30,6 +30,7 @@ interface TeacherDashboardProps {
   user: User;
   onLogout: () => void;
   onLaunchReviewMode: (submission: StudentSubmission) => void;
+  onGoToLanding?: () => void;
 }
 
 // Initial Mock Data
@@ -169,7 +170,7 @@ const INITIAL_SUBMISSIONS: StudentSubmission[] = [
   }
 ];
 
-export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode }) => {
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode, onGoToLanding }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsSounds, setSettingsSounds] = useState(() => {
@@ -1721,7 +1722,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         >
           <div>
             <div className="flex items-center justify-between pb-6 border-b border-gray-100">
-              <div className="flex items-center gap-2.5">
+              <div 
+                onClick={() => onGoToLanding && onGoToLanding()}
+                className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                title="Voltar para a página principal"
+              >
                 <img src={abbaLogo} alt="ABBA Logo" className="w-10 h-10 object-contain" />
                 <div>
                   <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>
@@ -1796,7 +1801,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       {/* Desktop Navigation Sidebar (Original, untouched) */}
       <aside className="hidden md:flex fixed left-0 top-0 bottom-0 flex-col p-6 z-40 bg-white border-r border-gray-100 h-screen w-64 justify-between">
         <div className="space-y-8 flex-1 flex flex-col">
-          <div className="flex items-center gap-3 px-2">
+          <div 
+            onClick={() => onGoToLanding && onGoToLanding()}
+            className="flex items-center gap-3 px-2 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+            title="Voltar para a página principal"
+          >
             <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-10 h-10 object-contain shrink-0" />
             <div>
               <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>

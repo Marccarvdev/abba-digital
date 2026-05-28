@@ -2277,6 +2277,11 @@ export default function App() {
           setShowLanding(true);
         }}
         onLaunchReviewMode={handleLaunchReviewMode}
+        onGoToLanding={() => {
+          setShowLanding(true);
+          setCurrentScreen('abacus');
+          setActiveTab('app');
+        }}
       />
     );
   }
@@ -2307,6 +2312,11 @@ export default function App() {
         }}
         onClearCompletedWords={() => {
           setCompletedSpelledWords([]);
+        }}
+        onGoToLanding={() => {
+          setShowLanding(true);
+          setCurrentScreen('abacus');
+          setActiveTab('app');
         }}
       />
     );
@@ -2570,12 +2580,23 @@ export default function App() {
               </StyledHamburger>
             </button>
 
-            <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
-            <div>
-              <h1 className="font-display font-extrabold text-xl tracking-tight text-gray-950 flex items-center gap-1.5">
-                ABBA DIGITAL
-              </h1>
-              <p className="text-[10px] font-medium text-gray-500 h-[15px] flex items-center">Ábaco Brasileiro de Alfabetização Bilingue</p>
+            <div 
+              onClick={() => {
+                setShowLanding(true);
+                setCurrentScreen('abacus');
+                setActiveTab('app');
+                setIsMenuOpen(false);
+              }}
+              className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+              title="Voltar para a página principal"
+            >
+              <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
+              <div>
+                <h1 className="font-display font-extrabold text-xl tracking-tight text-gray-950 flex items-center gap-1.5">
+                  ABBA DIGITAL
+                </h1>
+                <p className="text-[10px] font-medium text-gray-500 h-[15px] flex items-center">Ábaco Brasileiro de Alfabetização Bilingue</p>
+              </div>
             </div>
           </div>
         </div>
