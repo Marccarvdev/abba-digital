@@ -1079,60 +1079,7 @@ export default function App() {
     };
   }, [updateElementPositions]);
 
-  // Continuous smooth hardware-accelerated auto-scrolling loop during active drag-and-drop
-  useEffect(() => {
-    const isDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
-    if (!isDragging) return;
 
-    let animFrameId: number;
-
-    const tick = () => {
-      const eX = dragLastMouseRef.current.x;
-      const eY = dragLastMouseRef.current.y;
-      if (eX === 0 && eY === 0) {
-        animFrameId = requestAnimationFrame(tick);
-        return;
-      }
-
-      // 1. Scroll the Board container vertically if dragging inside the board
-      if (boardRef.current) {
-        const boardRect = boardRef.current.getBoundingClientRect();
-        // Check horizontal bounds with 35px safety margin
-        if (eX >= boardRect.left - 35 && eX <= boardRect.right + 35) {
-          const bottomThreshold = boardRect.bottom - 75;
-          const topThreshold = boardRect.top + 75;
-
-          if (eY > bottomThreshold && eY < boardRect.bottom + 50) {
-            // Smoothly calculate scroll intensity based on proximity to bottom
-            const intensity = Math.min(16, Math.max(2, (eY - bottomThreshold) / 3));
-            boardRef.current.scrollBy({ top: intensity });
-          } else if (eY < topThreshold && eY > boardRect.top - 50) {
-            // Smoothly calculate scroll intensity based on proximity to top
-            const intensity = Math.min(16, Math.max(2, (topThreshold - eY) / 3));
-            boardRef.current.scrollBy({ top: -intensity });
-          }
-        }
-      }
-
-      // 2. Scroll the Window page vertically if dragging near viewport edges
-      const winHeight = window.innerHeight;
-      const winThreshold = 140;
-      if (eY < winThreshold) {
-        const winIntensity = Math.min(20, Math.max(3, (winThreshold - eY) / 2.5));
-        window.scrollBy({ top: -winIntensity });
-      } else if (eY > winHeight - winThreshold) {
-        const winIntensity = Math.min(20, Math.max(3, (eY - (winHeight - winThreshold)) / 2.5));
-        window.scrollBy({ top: winIntensity });
-      }
-
-      animFrameId = requestAnimationFrame(tick);
-    };
-
-    animFrameId = requestAnimationFrame(tick);
-    return () => {
-      cancelAnimationFrame(animFrameId);
-    };
-  }, [draggedCube, draggedTrayIndex, draggedShelfIndex]);
 
   // Siga fluidamente e instantaneamente o último bloco adicionado
   useEffect(() => {
@@ -2981,7 +2928,7 @@ export default function App() {
             {/* SINGLE BOARD CONTAINER (Original style matching the grey dashed card, growing internally) */}
             <motion.div 
               ref={boardRef}
-              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5 max-h-[460px] overflow-y-auto md:max-h-none"
+              className="w-full relative rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 p-4 sm:p-5 flex flex-col gap-5"
             >
               
               <AnimatePresence mode="popLayout">
