@@ -1263,6 +1263,54 @@ export default function App() {
     return () => cancelAnimationFrame(animId);
   }, [draggedCube, draggedBoardLetter, pointerPos]);
 
+  // Window/Viewport fluid and dynamic auto-scrolling when dragging block near the screen edges
+  useEffect(() => {
+    const isDragging = (draggedCube !== null && draggedLetter !== null) || 
+                       (draggedTrayIndex !== null && draggedBoardLetter !== null) || 
+                       (draggedShelfIndex !== null);
+    if (!isDragging) return;
+
+    let animId: number;
+    const scrollWindowStep = () => {
+      const pointerY = pointerPos.y;
+      const pointerX = pointerPos.x;
+      const viewHeight = window.innerHeight;
+      const viewWidth = window.innerWidth;
+      
+      const threshold = 120; // 120px zone near the edges of the viewport
+      const maxScrollSpeed = 24; // max scroll speed in pixels per frame
+
+      // Vertical auto-scroll
+      if (pointerY < threshold && pointerY >= 0) {
+        // Dragging near the top edge -> scroll up
+        const intensity = (threshold - pointerY) / threshold; // 0 to 1
+        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        window.scrollBy(0, -speed);
+      } else if (pointerY > viewHeight - threshold && pointerY <= viewHeight) {
+        // Dragging near the bottom edge -> scroll down
+        const intensity = (pointerY - (viewHeight - threshold)) / threshold; // 0 to 1
+        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        window.scrollBy(0, speed);
+      }
+
+      // Horizontal auto-scroll for window
+      if (pointerX < threshold && pointerX >= 0) {
+        const intensity = (threshold - pointerX) / threshold;
+        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        window.scrollBy(-speed, 0);
+      } else if (pointerX > viewWidth - threshold && pointerX <= viewWidth) {
+        const intensity = (pointerX - (viewWidth - threshold)) / threshold;
+        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        window.scrollBy(speed, 0);
+      }
+
+      animId = requestAnimationFrame(scrollWindowStep);
+    };
+
+    animId = requestAnimationFrame(scrollWindowStep);
+    return () => cancelAnimationFrame(animId);
+  }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex, pointerPos]);
+
   // Auto-scrolling is handled seamlessly during the active drag operation instead of jumping to the end on drops.
 
   // Pointer move handler to track active drags / lines / reorders
@@ -3684,26 +3732,27 @@ export default function App() {
         {!isReorderCubesActive && draggedBoardLetter && draggedTrayIndex !== null && (
           (() => {
             const startKey = draggedBoardLetter.originCubeId || draggedBoardLetter.id;
-            const start = elementPositions[startKey] || elementPositions[draggedBoardLetter.id];
-            if (!start) return null;
+            const startEl = document.getElementById(startKey);
+            if (!startEl) return null;
 
+            const startRect = startEl.getBoundingClientRect();
             const currentDragPageX = pointerPos.x + window.scrollX;
             const currentDragPageY = pointerPos.y + window.scrollY;
 
-            const startW = start.width ?? 66;
-            const startH = start.height ?? 66;
+            const startW = startRect.width;
+            const startH = startRect.height;
             const endW = 66;
             const endH = 66;
 
             const isStart3D = startKey.startsWith('cube-');
-            let startCenterX = start.x;
-            let startCenterY = start.y;
+            let startCenterX = startRect.left + startW / 2 + window.scrollX;
+            let startCenterY = startRect.top + startH / 2 + window.scrollY;
             let startFaceW = startW;
             let startFaceH = startH;
 
             if (isStart3D) {
-              startCenterX = start.x + 0.1244 * startW;
-              startCenterY = start.y + 0.1244 * startH;
+              startCenterX = startRect.left + startW / 2 + window.scrollX + 0.1244 * startW;
+              startCenterY = startRect.top + startH / 2 + window.scrollY + 0.1244 * startH;
               startFaceW = 0.720 * startW;
               startFaceH = 0.720 * startH;
             }
@@ -3753,13 +3802,17 @@ export default function App() {
         {/* Real-time dragging elastic wire connection line */}
         {!isReorderCubesActive && draggedCube && draggedLetter && (
           (() => {
+            const startEl = document.getElementById(`cube-${draggedCube.id}`);
+            if (!startEl) return null;
+
+            const startRect = startEl.getBoundingClientRect();
             const currentDragPageX = pointerPos.x + window.scrollX;
             const currentDragPageY = pointerPos.y + window.scrollY;
-            const startCubePos = elementPositions[`cube-${draggedCube.id}`];
-            const startW = startCubePos?.width ?? 66;
-            const startH = startCubePos?.height ?? 66;
-            const startX = startCubePos?.x ?? dragStartPosCenter.x;
-            const startY = startCubePos?.y ?? dragStartPosCenter.y;
+            
+            const startW = startRect.width;
+            const startH = startRect.height;
+            const startX = startRect.left + startW / 2 + window.scrollX;
+            const startY = startRect.top + startH / 2 + window.scrollY;
 
             // startCubePos represents a 3D shelf cube
             const startCenterX = startX + 0.1244 * startW;
