@@ -1287,6 +1287,7 @@ export default function App() {
       const threshold = 170; // 170px zone near the edges of the viewport (increased sensitivity)
       const maxScrollSpeed = 58; // max scroll speed in pixels per frame (increased for extreme speed)
 
+      let didScroll = false;
       // Vertical auto-scroll - robustly handle pointer coordinates that go beyond viewport edges (e.g. negative or > viewHeight)
       // Removed the limit (capping) of 1.6 to allow infinite scroll speed when the user drags the block far outside the viewport!
       if (pointerY < threshold) {
@@ -1295,6 +1296,7 @@ export default function App() {
         const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(0, -speed);
+          didScroll = true;
         }
       } else if (pointerY > viewHeight - threshold) {
         // Dragging near or beyond the bottom edge -> scroll down
@@ -1302,6 +1304,7 @@ export default function App() {
         const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(0, speed);
+          didScroll = true;
         }
       }
 
@@ -1311,13 +1314,22 @@ export default function App() {
         const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(-speed, 0);
+          didScroll = true;
         }
       } else if (pointerX > viewWidth - threshold) {
         const intensity = Math.max(0, (pointerX - (viewWidth - threshold)) / threshold);
         const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(speed, 0);
+          didScroll = true;
         }
+      }
+
+      if (didScroll) {
+        // Force synchronous element positions update.
+        // This is crucial on mobile viewports since iOS Safari and Android Chrome throttle/defer default 'scroll' events
+        // during touch dragging, causing wires and visual bounds to lag behind or drift.
+        updateElementPositions();
       }
 
       animId = requestAnimationFrame(scrollWindowStep);
@@ -1325,7 +1337,7 @@ export default function App() {
 
     animId = requestAnimationFrame(scrollWindowStep);
     return () => cancelAnimationFrame(animId);
-  }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex]);
+  }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex, updateElementPositions]);
 
   // Auto-scrolling is handled seamlessly during the active drag operation instead of jumping to the end on drops.
 
