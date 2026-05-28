@@ -1206,19 +1206,25 @@ export default function App() {
     };
   }, [spelledRows, updateElementPositions]);
 
-  // Lock document touch action when dragging to avoid page shifting on mobile
+  // Lock document touch action when dragging to avoid page shifting on mobile and disable smooth scroll to allow instant scrolling
   useEffect(() => {
     const isDragging = (draggedCube !== null && draggedLetter !== null) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null);
     if (isDragging) {
       document.body.style.touchAction = 'none';
       document.documentElement.style.touchAction = 'none';
+      document.documentElement.classList.add('dragging-active');
+      document.body.classList.add('dragging-active');
     } else {
       document.body.style.touchAction = '';
       document.documentElement.style.touchAction = '';
+      document.documentElement.classList.remove('dragging-active');
+      document.body.classList.remove('dragging-active');
     }
     return () => {
       document.body.style.touchAction = '';
       document.documentElement.style.touchAction = '';
+      document.documentElement.classList.remove('dragging-active');
+      document.body.classList.remove('dragging-active');
     };
   }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex]);
 
