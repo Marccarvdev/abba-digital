@@ -942,6 +942,7 @@ export default function App() {
   const dragVelocityRef = useRef({ x: 0, y: 0 });
   const dragLastMouseRef = useRef({ x: 0, y: 0 });
   const dragLastTimeRef = useRef(0);
+  const pointerPosRef = useRef({ x: 0, y: 0 });
 
   // Dynamic layout positions of all elements on screen to draw perfect 3D wires
   const [elementPositions, setElementPositions] = useState<Record<string, { x: number; y: number; width?: number; height?: number }>>({});
@@ -1233,8 +1234,8 @@ export default function App() {
       scrollers.forEach((el) => {
         const scrollerEl = el as HTMLElement;
         const rect = scrollerEl.getBoundingClientRect();
-        const pointerX = pointerPos.x;
-        const pointerY = pointerPos.y;
+        const pointerX = pointerPosRef.current.x;
+        const pointerY = pointerPosRef.current.y;
 
         // Check if pointer is vertically within/near this row box container (+/- 45px padding)
         const isVerticallyNear = pointerY >= rect.top - 45 && pointerY <= rect.bottom + 45;
@@ -1261,7 +1262,7 @@ export default function App() {
 
     animId = requestAnimationFrame(scrollStep);
     return () => cancelAnimationFrame(animId);
-  }, [draggedCube, draggedBoardLetter, pointerPos]);
+  }, [draggedCube, draggedBoardLetter]);
 
   // Window/Viewport fluid and dynamic auto-scrolling when dragging block near the screen edges
   useEffect(() => {
@@ -1272,8 +1273,8 @@ export default function App() {
 
     let animId: number;
     const scrollWindowStep = () => {
-      const pointerY = pointerPos.y;
-      const pointerX = pointerPos.x;
+      const pointerY = pointerPosRef.current.y;
+      const pointerX = pointerPosRef.current.x;
       const viewHeight = window.innerHeight;
       const viewWidth = window.innerWidth;
       
@@ -1317,7 +1318,7 @@ export default function App() {
 
     animId = requestAnimationFrame(scrollWindowStep);
     return () => cancelAnimationFrame(animId);
-  }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex, pointerPos]);
+  }, [draggedCube, draggedLetter, draggedTrayIndex, draggedBoardLetter, draggedShelfIndex]);
 
   // Auto-scrolling is handled seamlessly during the active drag operation instead of jumping to the end on drops.
 
@@ -1446,6 +1447,7 @@ export default function App() {
       // Map pointer coordinates directly and milimetrically to eliminate drag latency,
       // ensuring the dragging cube coordinates align instantly with the finger.
       setPointerPos({ x: e.clientX, y: e.clientY });
+      pointerPosRef.current = { x: e.clientX, y: e.clientY };
 
       // Calculate velocity and time intervals
       const now = performance.now();
@@ -2259,6 +2261,7 @@ export default function App() {
     dragVelocityRef.current = { x: 0, y: 0 };
     
     setPointerPos({ x: e.clientX, y: e.clientY });
+    pointerPosRef.current = { x: e.clientX, y: e.clientY };
     setDragScribblePoints([{ x: startX, y: startY }]);
 
     if (trayRef.current) {
@@ -2923,6 +2926,7 @@ export default function App() {
                       dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
                       dragVelocityRef.current = { x: 0, y: 0 };
                       setPointerPos({ x: e.clientX, y: e.clientY });
+                      pointerPosRef.current = { x: e.clientX, y: e.clientY };
                     } else {
                       let activeLetter = cube.primaryLetter;
                       if (cube.isSplit) {
