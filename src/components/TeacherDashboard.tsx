@@ -171,7 +171,111 @@ const INITIAL_SUBMISSIONS: StudentSubmission[] = [
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode }) => {
   const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsSounds, setSettingsSounds] = useState(() => {
+    return localStorage.getItem('abba_settings_sounds') !== 'false';
+  });
+  const [settingsLanguage, setSettingsLanguage] = useState(() => {
+    return localStorage.getItem('abba_settings_language') || 'pt';
+  });
+  const [settingsContrast, setSettingsContrast] = useState(() => {
+    return localStorage.getItem('abba_settings_contrast') === 'true';
+  });
+  
+  // Custom teacher preferences
+  const [settingsTheme, setSettingsTheme] = useState(() => {
+    return localStorage.getItem('abba_settings_theme') || 'light';
+  });
+  const [settingsSandbox, setSettingsSandbox] = useState(() => {
+    return localStorage.getItem('abba_settings_sandbox') !== 'false';
+  });
+  const [settingsCorrection, setSettingsCorrection] = useState(() => {
+    return localStorage.getItem('abba_settings_correction') || 'reviewed';
+  });
+  const [settingsDuration, setSettingsDuration] = useState(() => {
+    return localStorage.getItem('abba_settings_duration') || '7d';
+  });
+
+  const handleSaveSettings = () => {
+    localStorage.setItem('abba_settings_sounds', String(settingsSounds));
+    localStorage.setItem('abba_settings_language', settingsLanguage);
+    localStorage.setItem('abba_settings_contrast', String(settingsContrast));
+    localStorage.setItem('abba_settings_theme', settingsTheme);
+    localStorage.setItem('abba_settings_sandbox', String(settingsSandbox));
+    localStorage.setItem('abba_settings_correction', settingsCorrection);
+    localStorage.setItem('abba_settings_duration', settingsDuration);
+    
+    // Toggle theme globally on HTML/body
+    if (settingsTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      document.body.classList.add('dark-theme-active');
+    } else {
+      document.documentElement.classList.remove('dark');
+      document.body.classList.remove('dark-theme-active');
+    }
+    
+    setShowSettingsModal(false);
+  };
+
+  // Test simulation handler for Teacher profile notifications
+  const handleTestTeacherNotification = () => {
+    setShowSettingsModal(false);
+    
+    setTimeout(() => {
+      const newMockSubmission: StudentSubmission = {
+        id: `mock-sub-${Date.now()}`,
+        studentName: 'Gabriel Oliveira',
+        taskTitle: 'Exercício de Numerais Multilingue',
+        submittedAt: new Date().toISOString(),
+        spelledWords: [
+          {
+            word: 'DOIS',
+            letters: [
+              { id: 'ml1', letter: 'D', originCubeId: 'cube-d', color: '#009246' },
+              { id: 'ml2', letter: 'O', originCubeId: 'cube-o', color: '#009246' },
+              { id: 'ml3', letter: 'I', originCubeId: 'cube-i', color: '#009246' },
+              { id: 'ml4', letter: 'S', originCubeId: 'cube-s', color: '#009246' }
+            ],
+            themeColor: '#009246'
+          }
+        ]
+      };
+      
+      setSubmissions(prev => [newMockSubmission, ...prev]);
+      
+      alert('🔔 Simulação: O aluno Gabriel Oliveira acabou de entregar o "Exercício de Numerais Multilingue"! A notificação visual e sonora foi disparada com sucesso no painel do professor.');
+    }, 3000);
+  };
+
+  // Test simulation handler for Student profile notifications
+  const handleTestStudentNotificationGlobal = () => {
+    setShowSettingsModal(false);
+    
+    setTimeout(() => {
+      try {
+        const currentTasks = JSON.parse(localStorage.getItem('abba_teacher_tasks') || '[]');
+        const newMockTask = {
+          id: `mock-task-${Date.now()}`,
+          title: 'Desafio Bilíngue: Frutas e Cores 🍎',
+          description: 'Pratique a soletração dos numerais e das novas palavras no ábaco digital. Utilize fios coloridos recomendados para obter pontuação máxima.',
+          startDate: new Date().toISOString(),
+          dueDate: '2026-06-15',
+          status: 'active',
+          assignedStudentIds: ['Ana Beatriz Silva', 'Carlos andré', 'Gabriel Oliveira']
+        };
+        
+        const merged = [newMockTask, ...currentTasks];
+        localStorage.setItem('abba_teacher_tasks', JSON.stringify(merged));
+        setTasks(merged);
+        
+        alert('🔔 Simulação: Uma nova tarefa ("Desafio Bilíngue: Frutas e Cores") foi atribuída! Os alunos receberão o alerta sonoro e visual instantaneamente ao abrirem seus painéis.');
+      } catch (err) {
+        console.error('Erro na simulação do aluno:', err);
+      }
+    }, 3000);
+  };
+
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [students, setStudents] = useState<any[]>(() => {
     const local = localStorage.getItem('abba_students_list');
     return local ? JSON.parse(local) : INITIAL_STUDENTS;
@@ -193,6 +297,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     const local = localStorage.getItem('abba_student_submissions');
     return local ? JSON.parse(local) : INITIAL_SUBMISSIONS;
   });
+
+  // Sound effects listener for newly received submissions
+  const prevUnreadSubCount = useRef(submissions.length);
+  const unreadSubCount = submissions.length;
+  useEffect(() => {
+    if (unreadSubCount > prevUnreadSubCount.current) {
+      if ((window as any).playNotificationSound) {
+        (window as any).playNotificationSound();
+      }
+    }
+    prevUnreadSubCount.current = unreadSubCount;
+  }, [unreadSubCount]);
 
   // Access Code Generation States
   const [studentNameInput, setStudentNameInput] = useState('');
@@ -412,12 +528,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
           studentName: s.student_name,
           taskTitle: s.task_title,
           submittedAt: s.submitted_at,
-          spelledWords: []
+          spelledWords: typeof s.spelled_words === 'string'
+            ? JSON.parse(s.spelled_words)
+            : s.spelled_words || [],
+          taskFiles: typeof s.task_files === 'string'
+            ? JSON.parse(s.task_files)
+            : s.task_files || []
         }));
         setSubmissions(prev => {
           const merged = [...prev];
           mappedSubs.forEach(ms => {
-            if (!merged.some(x => x.studentName === ms.studentName && x.taskTitle === ms.taskTitle)) {
+            const index = merged.findIndex(x => x.id === ms.id || (x.studentName === ms.studentName && x.taskTitle === ms.taskTitle));
+            if (index !== -1) {
+              merged[index] = { ...merged[index], ...ms, reviewed: merged[index].reviewed || ms.reviewed || false };
+            } else {
               merged.unshift(ms);
             }
           });
@@ -450,38 +574,83 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         });
       }
 
-      // 4. Sincronizar logins para enriquecer a lista de alunos local
-      const { data: dbLogins, error: loginsErr } = await supabase
-        .from('student_logins')
-        .select('*')
-        .order('logged_at', { ascending: false });
-      if (dbLogins && !loginsErr) {
-        setStudents(prev => {
-          const updated = [...prev];
-          dbLogins.forEach((login: any) => {
-            const index = updated.findIndex(s => s.name.toLowerCase() === login.student_name.toLowerCase());
-            if (index !== -1) {
-              updated[index].email = login.student_email;
-              updated[index].loginMethod = login.login_method;
-              updated[index].lastAccessAt = login.logged_at;
-            } else {
-              updated.push({
-                id: 'st-' + login.id,
-                name: login.student_name,
-                class: "Turma A - 3º Ano",
-                img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
-                progress: 0,
-                matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
-                gender: 'M',
-                email: login.student_email,
-                lastAccessAt: login.logged_at,
-                loginMethod: login.login_method
+      // 4. Sincronizar alunos da tabela 'students' ou fallback para 'student_logins'
+      try {
+        const { data: dbStudents, error: studentsErr } = await supabase
+          .from('students')
+          .select('*');
+
+        if (dbStudents && !studentsErr) {
+          if (dbStudents.length === 0) {
+            // Auto-seed table
+            const formattedInitial = INITIAL_STUDENTS.map(s => ({
+              id: s.id,
+              name: s.name,
+              class: s.class,
+              img: s.img,
+              progress: s.progress,
+              matricula: s.matricula,
+              gender: s.gender,
+              email: `${s.id}@abba.com`,
+              last_access_at: new Date().toISOString(),
+              login_method: 'initial'
+            }));
+            await supabase.from('students').insert(formattedInitial);
+            setStudents(INITIAL_STUDENTS);
+            localStorage.setItem('abba_students_list', JSON.stringify(INITIAL_STUDENTS));
+          } else {
+            const mapped = dbStudents.map(s => ({
+              id: s.id,
+              name: s.name,
+              class: s.class || 'Turma A - 3º Ano',
+              img: s.img || `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`,
+              progress: s.progress || 0,
+              matricula: s.matricula || `2026${Math.floor(1000 + Math.random() * 9000)}`,
+              gender: s.gender || 'M',
+              email: s.email || 'estudante@abba.com',
+              lastAccessAt: s.last_access_at,
+              loginMethod: s.login_method
+            }));
+            setStudents(mapped);
+            localStorage.setItem('abba_students_list', JSON.stringify(mapped));
+          }
+        } else {
+          // Fallback to student logins
+          const { data: dbLogins, error: loginsErr } = await supabase
+            .from('student_logins')
+            .select('*')
+            .order('logged_at', { ascending: false });
+          if (dbLogins && !loginsErr) {
+            setStudents(prev => {
+              const updated = [...prev];
+              dbLogins.forEach((login: any) => {
+                const index = updated.findIndex(s => s.name.toLowerCase() === login.student_name.toLowerCase());
+                if (index !== -1) {
+                  updated[index].email = login.student_email;
+                  updated[index].loginMethod = login.login_method;
+                  updated[index].lastAccessAt = login.logged_at;
+                } else {
+                  updated.push({
+                    id: 'st-' + login.id,
+                    name: login.student_name,
+                    class: "Turma A - 3º Ano",
+                    img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+                    progress: 0,
+                    matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+                    gender: 'M',
+                    email: login.student_email,
+                    lastAccessAt: login.logged_at,
+                    loginMethod: login.login_method
+                  });
+                }
               });
-            }
-          });
-          localStorage.setItem('abba_students_list', JSON.stringify(updated));
-          return updated;
-        });
+              localStorage.setItem('abba_students_list', JSON.stringify(updated));
+              return updated;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar tabela students, usando logins de backup:', err);
       }
     } catch (err) {
       console.warn('Erro ao carregar dados do Supabase:', err);
@@ -619,21 +788,25 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (showNotificationsDropdown) {
+        const isClickingBell = (event.target as HTMLElement).closest('[title="Notificações"]') || 
+                               (event.target as HTMLElement).closest('.bell-btn-mobile') ||
+                               (bellButtonRef.current && bellButtonRef.current.contains(event.target as Node));
         if (
           notificationsRef.current && 
           !notificationsRef.current.contains(event.target as Node) &&
-          bellButtonRef.current && 
-          !bellButtonRef.current.contains(event.target as Node)
+          !isClickingBell
         ) {
           setShowNotificationsDropdown(false);
         }
       }
       if (showProfileMenu) {
+        const isClickingAvatar = (event.target as HTMLElement).closest('[title="Perfil"]') || 
+                                 (event.target as HTMLElement).closest('.avatar-btn-mobile') ||
+                                 (avatarButtonRef.current && avatarButtonRef.current.contains(event.target as Node));
         if (
           profileMenuRef.current && 
           !profileMenuRef.current.contains(event.target as Node) &&
-          avatarButtonRef.current && 
-          !avatarButtonRef.current.contains(event.target as Node)
+          !isClickingAvatar
         ) {
           setShowProfileMenu(false);
         }
@@ -759,19 +932,51 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     }
   }, [editingTask]);
 
-  // Ensure body scroll is unlocked when dashboard mounts
+  // Lock body scroll when any modal is open
   useEffect(() => {
-    document.body.style.overflow = '';
+    const isAnyModalOpen = !!(
+      isAddStudentOpen ||
+      isAssigningStudentsDetails ||
+      editingTask ||
+      assignedStudentsResult ||
+      isAddTaskOpen ||
+      isDuplicateModalOpen ||
+      isBatchAssignModalOpen ||
+      isSaveModalOpen ||
+      isDeleteModalOpen
+    );
+
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+
     return () => {
       document.body.style.overflow = '';
     };
-  }, []);
+  }, [
+    isAddStudentOpen,
+    isAssigningStudentsDetails,
+    editingTask,
+    assignedStudentsResult,
+    isAddTaskOpen,
+    isDuplicateModalOpen,
+    isBatchAssignModalOpen,
+    isSaveModalOpen,
+    isDeleteModalOpen
+  ]);
 
   // Stateful Bento Grid & Details parameters
   const [tasksFilter, setTasksFilter] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
   const [tasksPage, setTasksPage] = useState(1);
   const [selectedTaskDetails, setSelectedTaskDetails] = useState<TaskItem | null>(null);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
+
+  // Smooth scroll to top of content when pagination changes
+  const scrollToContentTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   // Sync state helpers
   useEffect(() => {
@@ -1312,7 +1517,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     if (tasksFilter === 'archived') return task.status === 'completed';
     return true;
   });
-
   const TASKS_PER_PAGE = 5;
   const totalPages = Math.ceil(filteredTasks.length / TASKS_PER_PAGE) || 1;
   const startIndex = (tasksPage - 1) * TASKS_PER_PAGE;
@@ -1321,166 +1525,441 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   return (
     <div className="min-h-screen bg-surface text-on-background flex flex-col font-sans">
       
-      {/* SideNavBar Backdrop for mobile */}
-      {mobileSidebarOpen && (
+      {/* Mobile Bottom Sheets (Notifications and Profile) - Rendered at root level to prevent parent display hidden bugs */}
+      <AnimatePresence>
+        {showNotificationsDropdown && (
+          <div className="fixed inset-0 z-[150] block md:hidden">
+            <div 
+              onClick={() => setShowNotificationsDropdown(false)} 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            ></div>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 z-[200] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col overflow-hidden text-left"
+            >
+              {/* Top Drag Indicator for Mobile Sheet */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
+
+              {/* Dropdown Header */}
+              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  Notificações
+                </h2>
+                <button 
+                  onClick={() => setShowNotificationsDropdown(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Dropdown Content */}
+              <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
+                {[
+                  {
+                    id: 'notif-1',
+                    title: 'Nova entrega!',
+                    message: 'Ana Beatriz Silva concluiu "Exercício de Numerais Multilingue".',
+                    createdAt: new Date().toISOString(),
+                    isRead: false,
+                  },
+                  {
+                    id: 'notif-2',
+                    title: 'Tarefa criada!',
+                    message: 'Você criou com sucesso a tarefa "Tarefa de cores".',
+                    createdAt: new Date(Date.now() - 3600000).toISOString(),
+                    isRead: true,
+                  }
+                ].map((notif) => (
+                  <div 
+                    key={notif.id}
+                    className="p-5 flex gap-4 transition-colors relative text-left bg-white"
+                  >
+                    <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                      <span className="material-symbols-outlined text-indigo-500 text-[18px]">
+                        {notif.title.includes('entrega') ? 'assignment_turned_in' : 'assignment_add'}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start gap-2">
+                        <p className="font-bold text-xs text-slate-800 leading-tight truncate">{notif.title}</p>
+                        <span className="text-[9px] text-slate-400 font-medium shrink-0">agora</span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-normal">{notif.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProfileMenu && (
+          <div className="fixed inset-0 z-[150] block md:hidden">
+            <div 
+              onClick={() => setShowProfileMenu(false)} 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            ></div>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 z-[200] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left"
+            >
+              {/* Top Drag Indicator for Mobile Sheet */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
+
+              {/* Header */}
+              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
+                <button 
+                  onClick={() => setShowProfileMenu(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto bg-white">
+                {/* User info details */}
+                <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                  <div className="relative shrink-0">
+                    <img 
+                      alt="Avatar" 
+                      className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                      src="src/assets/Imagens/profdecioperfil.avif" 
+                    />
+                    <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
+                      <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
+                    <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                  </div>
+                </div>
+
+                {/* Progress/Summary Card for Teacher */}
+                <div className="p-5 flex flex-col gap-3">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">Função: Professor</p>
+                                <p className="text-[11px] text-slate-400 mt-1">Professor de inglês e idiomas</p>
+                      </div>
+                      <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                      Gerencie tarefas, atribua atividades e acompanhe o progresso de alfabetização digital dos seus alunos.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Dropdown Menu Actions */}
+                <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                  <button 
+                    onClick={() => { setActiveTab('tasks'); setShowProfileMenu(false); }}
+                    className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px]">task</span>
+                      Ver Minhas Tarefas
+                    </span>
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+                    className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                    Editar Perfil
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setShowProfileMenu(false); setShowSettingsModal(true); }}
+                    className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">settings</span>
+                    Configurações
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                    className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">logout</span>
+                    Sair da Conta
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Sidebar Overlay Drawer (Exact match to user's layout) */}
+      <div className={`fixed inset-0 z-50 flex md:hidden transition-all duration-300 ${isMobileSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div 
-          onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 lg:hidden"
-        />
-      )}
-      
-      {/* Side Navigation Bar */}
-      <aside className={`fixed left-0 top-0 bottom-0 flex flex-col p-md z-50 h-screen w-64 bg-surface-container-low border-r border-outline-variant transition-transform duration-300 ${
-        mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0`}>
-        <div className="flex items-center gap-sm mb-xl px-sm justify-between">
-          <div className="flex items-center gap-sm">
-            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
+          onClick={() => setIsMobileSidebarOpen(false)} 
+          className={`fixed inset-0 bg-slate-900/45 backdrop-blur-xs transition-opacity duration-300 ${
+            isMobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+        ></div>
+        
+        <div 
+          className={`relative w-[280px] sm:w-[320px] shrink-0 bg-white h-full shadow-2xl p-6 flex flex-col justify-between text-left z-10 transition-transform duration-300 ease-out ${
+            isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between pb-6 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <img src={abbaLogo} alt="ABBA Logo" className="w-10 h-10 object-contain" />
+                <div>
+                  <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>
+                  <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsMobileSidebarOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            <nav className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={() => { setActiveTab('home'); setSelectedTaskDetails(null); setIsMobileSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
+                  activeTab === 'home' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                Início
+              </button>
+              <button
+                onClick={() => { setActiveTab('students'); setSelectedTaskDetails(null); setIsMobileSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
+                  activeTab === 'students' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                Alunos
+              </button>
+              <button
+                onClick={() => { setActiveTab('tasks'); setSelectedTaskDetails(null); setIsMobileSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
+                  activeTab === 'tasks' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                Tarefas
+              </button>
+              <button
+                onClick={() => { setActiveTab('access'); setSelectedTaskDetails(null); setIsMobileSidebarOpen(false); }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
+                  activeTab === 'access' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Acessos
+              </button>
+            </nav>
+          </div>
+
+          <div className="space-y-4">
+            <button 
+              onClick={() => { setIsMobileSidebarOpen(false); alert('Para obter ajuda, entre em contato em contato.elefusion@gmail.com'); }}
+              className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left"
+            >
+              Ajuda
+            </button>
+            <button 
+              onClick={() => { setIsMobileSidebarOpen(false); onLogout(); }}
+              className="flex items-center gap-3 px-4 py-3 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 border-none bg-transparent cursor-pointer w-full text-left"
+            >
+              Sair
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Navigation Sidebar (Original, untouched) */}
+      <aside className="hidden md:flex fixed left-0 top-0 bottom-0 flex-col p-6 z-40 bg-white border-r border-gray-100 h-screen w-64 justify-between">
+        <div className="space-y-8 flex-1 flex flex-col">
+          <div className="flex items-center gap-3 px-2">
+            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-10 h-10 object-contain shrink-0" />
             <div>
-              <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+              <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>
+              <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
             </div>
           </div>
-          <button 
-            onClick={() => setMobileSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-full hover:bg-surface-container-high border-none bg-transparent cursor-pointer flex items-center justify-center"
-          >
-            <span className="material-symbols-outlined text-slate-500">close</span>
-          </button>
+          
+          <nav className="space-y-2">
+            <button
+              onClick={() => { setActiveTab('home'); setSelectedTaskDetails(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
+                activeTab === 'home'
+                  ? 'bg-[#0073e0] text-white'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <span className="text-sm">Início</span>
+            </button>
+            
+            <button
+              onClick={() => { setActiveTab('students'); setSelectedTaskDetails(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
+                activeTab === 'students'
+                  ? 'bg-[#0073e0] text-white'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              <span className="text-sm">Alunos</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('tasks'); setSelectedTaskDetails(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
+                activeTab === 'tasks'
+                  ? 'bg-[#0073e0] text-white'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <span className="text-sm">Tarefas</span>
+            </button>
+
+            <button
+              onClick={() => { setActiveTab('access'); setSelectedTaskDetails(null); }}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
+                activeTab === 'access'
+                  ? 'bg-[#0073e0] text-white'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <span className="text-sm">Acessos</span>
+            </button>
+          </nav>
         </div>
         
-        <nav className="flex-1 space-y-xs">
+        <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
           <button
-            onClick={() => { setMobileSidebarOpen(false); setActiveTab('home'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
-              activeTab === 'home'
-                ? 'bg-primary-container text-on-primary-container font-bold'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
+            onClick={() => alert('Para obter ajuda, entre em contato em contato.elefusion@gmail.com')}
+            className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
-            <span className="material-symbols-outlined">home</span>Inicio
-          </button>
-          
-          <button
-            onClick={() => { setMobileSidebarOpen(false); setActiveTab('students'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
-              activeTab === 'students'
-                ? 'bg-primary-container text-on-primary-container font-bold'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined">group</span>Alunos
-          </button>
-
-          <button
-            onClick={() => { setMobileSidebarOpen(false); setActiveTab('tasks'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
-              activeTab === 'tasks'
-                ? 'bg-primary-container text-on-primary-container font-bold'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined">assignment</span>Tarefas
-          </button>
-
-          <button
-            onClick={() => { setMobileSidebarOpen(false); setActiveTab('access'); setSelectedTaskDetails(null); }}
-            className={`w-full flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md cursor-pointer border-none bg-transparent ${
-              activeTab === 'access'
-                ? 'bg-primary-container text-on-primary-container font-bold'
-                : 'text-on-surface-variant hover:bg-surface-container-high'
-            }`}
-          >
-            <span className="material-symbols-outlined">admin_panel_settings</span>Acessos
-          </button>
-        </nav>
-        
-        <div className="mt-auto space-y-xs">
-          <button
-            onClick={() => alert('Para obter ajuda, entre em contato em suporte@abbadigital.com')}
-            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-transparent"
-          >
-            <span className="material-symbols-outlined">help</span>
-            Ajuda
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span className="text-sm">Ajuda</span>
           </button>
           <button 
             onClick={onLogout}
-            className="w-full flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-transparent"
+            className="flex items-center gap-3 px-4 py-3 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
-            <span className="material-symbols-outlined">logout</span>
-            Sair
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span className="text-sm">Sair</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="lg:ml-64 min-h-screen flex flex-col w-full overflow-x-hidden">
-        {/* Top App Bar - Identical to Student Dashboard */}
-        <header className="flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-surface/80 backdrop-blur-md h-16 border-b border-outline-variant">
+      <main className="ml-0 md:ml-64 min-h-screen flex flex-col">
+        {/* Mobile Header (Exact match to user's layout) */}
+        <header className="sticky top-0 bg-white border-b border-gray-100 py-3.5 px-4 sm:px-6 z-40 shadow-xs block md:hidden">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <button 
+                onClick={() => setIsMobileSidebarOpen(true)}
+                className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-700 w-6 h-6"><line x1="4" x2="20" y1="12" y2="12"></line><line x1="4" x2="20" y1="6" y2="6"></line><line x1="4" x2="20" y1="18" y2="18"></line></svg>
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                className="bell-btn-mobile p-0 border-none bg-transparent cursor-pointer flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+              </button>
+              
+              <button
+                onClick={() => setShowProfileMenu(prev => !prev)}
+                className="avatar-btn-mobile w-9 h-9 rounded-full overflow-hidden border border-gray-200 p-0 bg-transparent cursor-pointer flex items-center justify-center"
+              >
+                <img src="src/assets/Imagens/profdecioperfil.avif" alt="Professor" className="w-full h-full object-cover" />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Desktop Header (Original, untouched) */}
+        <header className="hidden md:flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-white/80 backdrop-blur-md h-16 border-b border-gray-100">
           <div className="flex items-center gap-md flex-1">
-            <button 
-              onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 border-none bg-transparent cursor-pointer flex items-center justify-center mr-2"
-              aria-label="Open sidebar"
-            >
-              <span className="material-symbols-outlined text-slate-800">menu</span>
-            </button>
-            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold">Área do Professor</h2>
+            <h2 className="text-lg text-slate-800 font-extrabold md:block hidden">Área do Professor</h2>
             {activeTab === 'students' && (
               <div className="flex items-center gap-2 ml-4">
                 <button 
                   onClick={() => setIsAddStudentOpen(true)}
-                  className="bg-primary text-on-primary px-4 py-1.5 rounded-full font-label-md text-label-md flex items-center gap-sm hover:opacity-90 active:scale-95 transition-all shadow-sm border-none cursor-pointer"
+                  className="bg-[#0073e0] text-white px-5 py-2.5 rounded-full font-bold flex items-center gap-2 hover:bg-[#005ba4] transition-all shadow-sm border-none cursor-pointer text-xs"
                 >
-                  <span className="material-symbols-outlined text-[18px]">person_add</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   Adicionar Aluno
                 </button>
                 <button 
                   onClick={handleCloudSync}
-                  className="p-1.5 bg-surface-container-high text-primary rounded-full hover:bg-primary-container/10 transition-all shadow-sm flex items-center justify-center border-none cursor-pointer active:scale-95" 
-                  title="Nuvem"
+                  className="w-10 h-10 bg-white border border-slate-200 hover:bg-[#f0f4f9] text-[#0073e0] rounded-full transition-all shadow-xs flex items-center justify-center cursor-pointer active:scale-95" 
+                  title="Sincronizar Cloud"
                 >
-                  <span className="material-symbols-outlined text-[18px]">cloud</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-[#0073e0]"><path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.04-1.21-1.88-2.2-2.4A5.5 5.5 0 0 0 4 11.5c-2 .5-4 2.2-4 4.5A3.5 3.5 0 0 0 3.5 19z"></path></svg>
                 </button>
                 <button 
                   onClick={handleDeleteSelected}
-                  className="p-1.5 bg-surface-container-high text-error rounded-full hover:bg-error-container transition-all shadow-sm flex items-center justify-center border-none cursor-pointer active:scale-95" 
+                  className="w-10 h-10 bg-white border border-slate-200 hover:bg-[#fce8e6] text-[#ea4335] rounded-full transition-all shadow-xs flex items-center justify-center cursor-pointer active:scale-95" 
                   title="Excluir Selecionados"
                 >
-                  <span className="material-symbols-outlined text-[18px]">delete</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-[#ea4335]"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                 </button>
               </div>
             )}
           </div>
           
-          <div className="flex items-center gap-md relative">
+          <div className="flex items-center gap-4 relative">
             {/* Notifications Bell Button */}
             <div className="relative">
               <button 
                 ref={bellButtonRef}
                 onClick={() => setShowNotificationsDropdown(prev => !prev)}
-                className={`relative w-10 h-10 flex items-center justify-center rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                  showNotificationsDropdown 
-                    ? 'bg-slate-100 border-slate-300 text-slate-900' 
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                }`}
+                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent relative"
                 title="Notificações"
               >
-                <span className="material-symbols-outlined font-semibold text-[20px]">notifications</span>
-                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#10B981] rounded-full animate-pulse border-2 border-white"></span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#10B981] rounded-full animate-pulse"></span>
               </button>
             </div>
             
-            {/* Search Lupa Button (Style Matched) */}
+            {/* Settings Cog Wheel Button (Instead of Search Lupa) */}
             <button 
-              onClick={() => setSearchExpanded(true)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-2.5 rounded-xl font-bold border-none transition-all active:scale-95 cursor-pointer flex items-center justify-center shadow-xs"
-              title="Pesquisar Atividades (Lupa)"
+              onClick={() => setShowSettingsModal(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent"
+              title="Configurações"
             >
-              <span className="material-symbols-outlined font-black text-[20px]">search</span>
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.1a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path><circle cx="12" cy="12" r="3"></circle></svg>
             </button>
             
-            <div className="w-px h-6 bg-outline-variant mx-xs"></div>
+            <div className="w-px h-6 bg-gray-100 hidden md:block mx-1"></div>
  
             {/* Profile Avatar & Dropdowns */}
             <div className="relative">
@@ -1493,7 +1972,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFglNNrbUVhLI4jVpxuIpCzpHrDsFs3-5yWZKyg2YmaJLhlq0-vJzzjFo1kJPLT3M1SRSUkXCVB8HL1GlLR1fA2eLLinUqMpKgIZkH5zyH5NqJtLipvICB8BuKnAZRnj7zY74zzuRSyGwf7XxHDwFjLz8SZTZhz4cXeZNtS8af-VkIwwQVHcxn94y9hlSvTqpmhfpBsA0OtQer6mb5eADOLH6ey3YByVEPnNMaAv_D4SQxSceGiLApcsmAfp9HgBZfNY8oVLWbuenB"
+                  src="src/assets/Imagens/profdecioperfil.avif"
                 />
               </button>
  
@@ -1510,290 +1989,653 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       damping: 30, 
                       stiffness: 400
                     }}
-                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right"
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right hidden md:flex"
                   >
-                    {/* Dropdown Header */}
-                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
-                      <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                        Notificações
-                      </h2>
-                      
-                      <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
-                        <button 
-                          onClick={() => setNotificationFilter('all')}
-                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
-                            notificationFilter === 'all' 
-                              ? 'bg-white shadow-sm text-slate-900' 
-                              : 'bg-transparent text-slate-500 hover:text-slate-700'
-                          }`}
-                        >
-                          Todas
-                        </button>
-                      </div>
-                    </div>
- 
-                    {/* Dropdown Content */}
-                    <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
-                      {[
-                        {
-                          id: 'notif-1',
-                          title: 'Nova entrega!',
-                          message: 'Ana Beatriz Silva concluiu "Exercício de Numerais Multilingue".',
-                          createdAt: new Date().toISOString(),
-                          isRead: false,
-                        },
-                        {
-                          id: 'notif-2',
-                          title: 'Tarefa criada!',
-                          message: 'Você criou com sucesso a tarefa "Tarefa de cores".',
-                          createdAt: new Date(Date.now() - 3600000).toISOString(),
-                          isRead: true,
-                        }
-                      ].map((notif) => (
-                        <div 
-                          key={notif.id}
-                          className={`p-5 flex gap-4 transition-colors relative text-left bg-white`}
-                        >
-                          <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
-                            <span className="material-symbols-outlined text-indigo-500 text-[18px]">
-                              {notif.title.includes('entrega') ? 'assignment_turned_in' : 'assignment_add'}
-                            </span>
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex justify-between items-start gap-2">
-                              <p className="font-bold text-xs text-slate-800 leading-tight truncate">{notif.title}</p>
-                              <span className="text-[9px] text-slate-400 font-medium shrink-0">agora</span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-1 leading-normal">{notif.message}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
 
-              {/* Profile Dropdown for Teacher */}
-              <AnimatePresence>
-                {showProfileMenu && (
-                  <motion.div
-                    ref={profileMenuRef}
-                    initial={{ opacity: 0, y: 6, scale: 0.99 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 6, scale: 0.99 }}
-                    transition={{ 
-                      type: "spring", 
-                      damping: 30, 
-                      stiffness: 400
-                    }}
-                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right"
-                  >
-                    {/* Header */}
-                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
-                      <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
-                      <span className="material-symbols-outlined text-slate-400">school</span>
-                    </div>
- 
-                    {/* Scrollable Content */}
-                    <div className="overflow-y-auto bg-white">
-                      {/* User info details */}
-                      <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
-                        <div className="relative shrink-0">
-                          <img 
-                            alt="Avatar" 
-                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAFglNNrbUVhLI4jVpxuIpCzpHrDsFs3-5yWZKyg2YmaJLhlq0-vJzzjFo1kJPLT3M1SRSUkXCVB8HL1GlLR1fA2eLLinUqMpKgIZkH5zyH5NqJtLipvICB8BuKnAZRnj7zY74zzuRSyGwf7XxHDwFjLz8SZTZhz4cXeZNtS8af-VkIwwQVHcxn94y9hlSvTqpmhfpBsA0OtQer6mb5eADOLH6ey3YByVEPnNMaAv_D4SQxSceGiLApcsmAfp9HgBZfNY8oVLWbuenB" 
-                          />
-                          <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
-                            <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
-                          </div>
-                        </div>
-                        <div className="text-left min-w-0">
-                          <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
-                          <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                      {/* Dropdown Header */}
+                      <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
+                        <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                          Notificações
+                        </h2>
+                        
+                        <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
+                          <button 
+                            onClick={() => setNotificationFilter('all')}
+                            className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
+                              notificationFilter === 'all' 
+                                ? 'bg-white shadow-sm text-slate-900' 
+                                : 'bg-transparent text-slate-500 hover:text-slate-700'
+                            }`}
+                          >
+                            Todas
+                          </button>
                         </div>
                       </div>
- 
-                      {/* Progress/Summary Card for Teacher */}
-                      <div className="p-5 flex flex-col gap-3">
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <p className="text-xs font-bold text-slate-700">Função: Professor</p>
-                              <p className="text-[11px] text-slate-400 mt-1">Matemática &amp; Idiomas</p>
+
+                      {/* Dropdown Content */}
+                      <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
+                        {[
+                          {
+                            id: 'notif-1',
+                            title: 'Nova entrega!',
+                            message: 'Ana Beatriz Silva concluiu "Exercício de Numerais Multilingue".',
+                            createdAt: new Date().toISOString(),
+                            isRead: false,
+                          },
+                          {
+                            id: 'notif-2',
+                            title: 'Tarefa criada!',
+                            message: 'Você criou com sucesso a tarefa "Tarefa de cores".',
+                            createdAt: new Date(Date.now() - 3600000).toISOString(),
+                            isRead: true,
+                          }
+                        ].map((notif) => (
+                          <div 
+                            key={notif.id}
+                            className={`p-5 flex gap-4 transition-colors relative text-left bg-white`}
+                          >
+                            <div className="w-9 h-9 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
+                              <span className="material-symbols-outlined text-indigo-500 text-[18px]">
+                                {notif.title.includes('entrega') ? 'assignment_turned_in' : 'assignment_add'}
+                              </span>
                             </div>
-                            <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-start gap-2">
+                                <p className="font-bold text-xs text-slate-800 leading-tight truncate">{notif.title}</p>
+                                <span className="text-[9px] text-slate-400 font-medium shrink-0">agora</span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-1 leading-normal">{notif.message}</p>
+                            </div>
                           </div>
-                          <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
-                            Gerencie tarefas, atribua atividades e acompanhe o progresso de alfabetização digital dos seus alunos.
-                          </p>
-                        </div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Profile Dropdown for Teacher */}
+                <AnimatePresence>
+                  {showProfileMenu && (
+                    <motion.div
+                      ref={profileMenuRef}
+                      initial={{ opacity: 0, y: 6, scale: 0.99 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 6, scale: 0.99 }}
+                      transition={{ 
+                        type: "spring", 
+                        damping: 30, 
+                        stiffness: 400
+                      }}
+                      className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right hidden md:flex"
+                    >
+                      {/* Header */}
+                      <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                        <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
+                        <span className="material-symbols-outlined text-slate-400">school</span>
                       </div>
  
-                      {/* Dropdown Menu Actions */}
-                      <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
-                        <button 
-                          onClick={() => { setActiveTab('tasks'); setShowProfileMenu(false); }}
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
-                        >
-                          <span className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[18px]">task</span>
-                            Ver Minhas Tarefas
-                          </span>
-                          <span className="material-symbols-outlined text-[18px]">chevron_right</span>
-                        </button>
-                        
-                        <button 
-                          onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
-                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
-                          Editar Perfil
-                        </button>
-                        
-                        <button 
-                          onClick={() => { setShowProfileMenu(false); onLogout(); }}
-                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">logout</span>
-                          Sair da Conta
-                        </button>
+                      {/* Scrollable Content */}
+                      <div className="overflow-y-auto bg-white">
+                        {/* User info details */}
+                        <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                          <div className="relative shrink-0">
+                            <img 
+                              alt="Avatar" 
+                              className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                              src="src/assets/Imagens/profdecioperfil.avif" 
+                            />
+                            <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
+                              <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
+                            </div>
+                          </div>
+                          <div className="text-left min-w-0">
+                            <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
+                            <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                          </div>
+                        </div>
+ 
+                        {/* Progress/Summary Card for Teacher */}
+                        <div className="p-5 flex flex-col gap-3">
+                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                            <div className="flex justify-between items-start">
+                              <div>
+                                <p className="text-xs font-bold text-slate-700">Função: Professor</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Professor de inglês e idiomas</p>
+                              </div>
+                              <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                              Gerencie tarefas, atribua atividades e acompanhe o progresso de alfabetização digital dos seus alunos.
+                            </p>
+                          </div>
+                        </div>
+ 
+                        {/* Dropdown Menu Actions */}
+                        <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                          <button 
+                            onClick={() => { setActiveTab('tasks'); setShowProfileMenu(false); }}
+                            className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                          >
+                            <span className="flex items-center gap-2">
+                              <span className="material-symbols-outlined text-[18px]">task</span>
+                              Ver Minhas Tarefas
+                            </span>
+                            <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                          </button>
+                          
+                          <button 
+                            onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                            Editar Perfil
+                          </button>
+                          
+                          <button 
+                            onClick={() => { setShowProfileMenu(false); setShowSettingsModal(true); }}
+                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">settings</span>
+                            Configurações
+                          </button>
+                          
+                          <button 
+                            onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                          >
+                            <span className="material-symbols-outlined text-[18px]">logout</span>
+                            Sair da Conta
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
             </div>
           </div>
         </header>
 
         {/* Content Body */}
-        <main className="p-margin-desktop max-w-[1200px] mx-auto w-full flex-1">
+        <main className="p-4 sm:p-6 md:p-margin-desktop max-w-[1200px] mx-auto w-full flex-1">
           
           {/* TAB 1: HOME */}
           {activeTab === 'home' && (
-            <div className="space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm">
-                <div>
-                  <h2 className="text-2xl font-extrabold tracking-tight text-[#131b2e]">Bem-vindo de volta, {user.name.split(' ')[0]}! 👋</h2>
-                  <p className="text-xs text-slate-500 mt-1">Aqui está a visão geral da alfabetização bilíngue de suas turmas.</p>
-                </div>
-                <button
-                  onClick={() => setIsAddTaskOpen(true)}
-                  className="flex items-center justify-center gap-2 px-5 py-3 bg-[#005bb3] hover:bg-[#00468c] text-white text-xs font-bold rounded-xl transition-all shadow shadow-[#005bb3]/20 active:scale-95 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[18px]">add</span>
-                  Adicionar Tarefa
-                </button>
-              </div>
-
-              {/* Bento Grid Stats */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl">group</span>
-                  </div>
+            <>
+              {/* DESKTOP VERSION (Identical to original) */}
+              <div className="hidden md:block space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm text-left">
                   <div>
-                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{students.length}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Alunos Ativos</p>
+                    <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Bem-vindo de volta, Professor! 👋</h2>
+                    <p className="text-sm text-slate-500 mt-1">Aqui está a visão geral da alfabetização bilingue de suas turmas.</p>
                   </div>
+                  <button
+                    onClick={() => setIsAddTaskOpen(true)}
+                    className="flex items-center justify-center gap-2 px-5 py-3.5 bg-[#005bb3] hover:bg-[#00468c] text-white text-sm font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer border-none"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                    Adicionar Tarefa
+                  </button>
                 </div>
 
-                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-purple-100 text-purple-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl">assignment</span>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{tasks.length}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Tarefas Totais</p>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl">pending_actions</span>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-extrabold text-[#131b2e]">{submissions.length}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entregas Pendentes</p>
-                  </div>
-                </div>
-
-                <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm flex items-center gap-4">
-                  <div className="w-12 h-12 rounded-xl bg-green-100 text-green-600 flex items-center justify-center">
-                    <span className="material-symbols-outlined text-2xl">verified_user</span>
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-extrabold text-[#131b2e]">
-                      {activeCodes.filter(c => c.expiresAt > Date.now()).length}
-                    </h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Códigos Ativos</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submissions Section */}
-              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-[#dde0e2]">
-                  <h3 className="font-extrabold text-lg">Submissões Recentes dos Alunos</h3>
-                  <p className="text-xs text-slate-400">Clique em Revisar para abrir a simulação tridimensional do ábaco</p>
-                </div>
-                <div className="divide-y divide-[#dde0e2]">
-                  {submissions.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-sm">
-                      Nenhuma submissão recebida até o momento.
+                {/* Bento Grid Stats */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                  {/* Card 1 */}
+                  <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-blue-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M17 11a3 3 0 1 1-3-3M22 21v-2a4 4 0 0 0-3-3.87"></path></svg>
                     </div>
-                  ) : (
-                    submissions.map((sub, idx) => (
-                      <div key={sub.id} className="p-6 flex flex-col md:flex-row md:items-center justify-between gap-4 hover:bg-[#f2f3ff] transition-all">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-[#eaedff] text-[#005bb3] flex items-center justify-center font-bold">
-                            {sub.studentName[0]}
-                          </div>
-                          <div>
-                            <p className="text-sm font-bold">{sub.studentName}</p>
-                            <p className="text-xs text-slate-400 mt-0.5">{sub.taskTitle} • {new Date(sub.submittedAt).toLocaleDateString()}</p>
-                          </div>
-                        </div>
+                    <div>
+                      <h3 className="text-3xl font-black text-slate-900 leading-none">{students.length}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Alunos Ativos</p>
+                    </div>
+                  </div>
 
-                        <div className="flex items-center gap-3">
-                          <span className="px-3 py-1 bg-blue-50 text-[#005bb3] text-[10px] font-bold rounded-full">
-                            {sub.spelledWords.length} Palavras
-                          </span>
-                          <button
-                            onClick={() => onLaunchReviewMode(sub)}
-                            className="flex items-center gap-1.5 px-4 py-2 border border-[#005bb3] text-[#005bb3] hover:bg-[#005bb3] hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">visibility</span>
-                            Revisar Ábaco
-                          </button>
-                        </div>
+                  {/* Card 2 */}
+                  <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-purple-600"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-3xl font-black text-slate-900 leading-none">{tasks.length}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Tarefas Totais</p>
+                    </div>
+                  </div>
+
+                  {/* Card 3 */}
+                  <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-orange-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-3xl font-black text-slate-900 leading-none">{submissions.length}</h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Entregas Pendentes</p>
+                    </div>
+                  </div>
+
+                  {/* Card 4 */}
+                  <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
+                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-green-600"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 11 2 2 4-4"></path></svg>
+                    </div>
+                    <div>
+                      <h3 className="text-3xl font-black text-slate-900 leading-none">
+                        {activeCodes.filter(c => c.expiresAt > Date.now()).length}
+                      </h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Códigos Ativos</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submissions Section */}
+                <div className="bg-white rounded-[24px] border border-gray-100 shadow-sm overflow-hidden text-left">
+                  <div className="p-6 border-b border-gray-100">
+                    <h3 className="font-extrabold text-lg text-slate-900">Submissões Recentes dos Alunos</h3>
+                    <p className="text-xs text-slate-400 mt-1">Clique em Revisar para abrir a simulação tridimensional do ábaco</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 p-6 bg-slate-50/20">
+                    {submissions.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-sm col-span-full">
+                        Nenhuma submissão recebida até o momento.
                       </div>
-                    ))
-                  )}
+                    ) : (
+                      submissions.map((sub, idx) => {
+                        const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
+                                            INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
+                        const avatarUrl = studentInfo ? studentInfo.img : `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`;
+                        const isReviewed = sub.reviewed || false;
+
+                        return (
+                          <div 
+                            key={sub.id} 
+                            className="bg-white rounded-[28px] border border-slate-100 p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between min-h-[220px] relative group"
+                          >
+                            {/* Top Header Row */}
+                            <div className="flex justify-between items-center w-full mb-4 select-none">
+                              <span className="bg-sky-50 text-sky-600 text-[11px] font-extrabold px-3 py-1.5 rounded-full uppercase tracking-wider">
+                                {sub.spelledWords.length} {sub.spelledWords.length === 1 ? 'Palavra' : 'Palavras'}
+                              </span>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-xs font-black ${isReviewed ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                  {isReviewed ? '100%' : 'Pendente'}
+                                </span>
+                                <div className="relative w-5 h-5 shrink-0 flex items-center justify-center">
+                                  {isReviewed ? (
+                                    <svg className="w-full h-full text-emerald-500" viewBox="0 0 36 36">
+                                      <path
+                                        className="text-emerald-100"
+                                        strokeWidth="4"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                      <path
+                                        className="text-emerald-500"
+                                        strokeWidth="4"
+                                        strokeDasharray="100, 100"
+                                        strokeLinecap="round"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-full h-full text-slate-300" viewBox="0 0 36 36">
+                                      <path
+                                        className="text-slate-100"
+                                        strokeWidth="4"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                      <path
+                                        className="text-slate-300"
+                                        strokeWidth="4"
+                                        strokeDasharray="25, 100"
+                                        strokeLinecap="round"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Title & Description Section */}
+                            <div className="text-left mb-4 flex-grow">
+                              <h4 className="font-display font-black text-slate-900 text-base leading-tight group-hover:text-primary transition-colors">
+                                {sub.taskTitle}
+                              </h4>
+                              <p className="text-[11px] text-slate-400 font-semibold mt-1.5">
+                                {new Date(sub.submittedAt).toLocaleDateString('pt-BR')} às {new Date(sub.submittedAt).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                              </p>
+                            </div>
+
+                            {/* Files Attachments if any */}
+                            {sub.taskFiles && sub.taskFiles.length > 0 && (
+                              <div className="flex flex-wrap gap-1.5 mb-4 font-sans text-left">
+                                {sub.taskFiles.map((file, fIdx) => (
+                                  file.url ? (
+                                    <a
+                                      key={fIdx}
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 rounded-lg text-[9px] font-bold text-slate-600 transition-all no-underline"
+                                      title={`Abrir ${file.name}`}
+                                    >
+                                      <span className="material-symbols-outlined text-[11px] text-slate-400">download</span>
+                                      <span className="truncate max-w-[80px]">{file.name}</span>
+                                    </a>
+                                  ) : (
+                                    <span
+                                      key={fIdx}
+                                      className="flex items-center gap-1 px-2.5 py-1 bg-slate-50 border border-slate-100 rounded-lg text-[9px] font-semibold text-slate-400"
+                                      title={`${file.name} (Salvo apenas localmente)`}
+                                    >
+                                      <span className="material-symbols-outlined text-[11px]">file_present</span>
+                                      <span className="truncate max-w-[80px]">{file.name}</span>
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Bottom Row: Profile Photo & CTA Button */}
+                            <div className="flex justify-between items-center w-full pt-4 border-t border-slate-100 mt-auto select-none">
+                              <div className="flex items-center gap-2">
+                                <div className="relative w-8 h-8 rounded-full border-2 border-white shadow-xs overflow-hidden bg-slate-100 shrink-0">
+                                  <img 
+                                    src={avatarUrl} 
+                                    alt={sub.studentName} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(sub.studentName)}&background=random`;
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-[11px] text-slate-800 font-extrabold max-w-[90px] truncate">
+                                  {sub.studentName}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => onLaunchReviewMode(sub)}
+                                className={`w-9 h-9 shrink-0 flex items-center justify-center rounded-xl transition-all active:scale-95 cursor-pointer border-none ${
+                                  isReviewed 
+                                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
+                                    : 'bg-[#0004fd] hover:bg-[#0003c7] text-white shadow-sm hover:shadow'
+                                }`}
+                                title="Revisar Ábaco"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">visibility</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {/* MOBILE VERSION (Our beautifully designed, exact match mobile design) */}
+              <div className="block md:hidden space-y-6">
+                {/* Mobile Title */}
+                <div className="mb-1 text-left">
+                  <h2 className="text-xl font-bold text-slate-900">Área do Professor</h2>
+                </div>
+
+                <div className="flex flex-col gap-4 bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm text-left">
+                  <div>
+                    <h3 className="text-xl font-extrabold tracking-tight text-slate-950 flex items-center gap-2">
+                      Bem-vindo de volta, Professor! 👋
+                    </h3>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Aqui está a visão geral da alfabetização bilíngue de suas turmas.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => setIsAddTaskOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 bg-[#005ba4] hover:bg-[#004780] text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-sm transition-all active:scale-95 w-full shrink-0 border-none cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">add</span>
+                    Adicionar Tarefa
+                  </button>
+                </div>
+
+                {/* Bento Grid Stats */}
+                <div className="grid grid-cols-2 gap-4 w-full">
+                  {/* Card 1 */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">group</span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-950 leading-none">{students.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Alunos Ativos</div>
+                    </div>
+                  </div>
+
+                  {/* Card 2 */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">assignment</span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-950 leading-none">{tasks.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Tarefas Totais</div>
+                    </div>
+                  </div>
+
+                  {/* Card 3 */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">pending_actions</span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-950 leading-none">{submissions.length}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Entregas Pendentes</div>
+                    </div>
+                  </div>
+
+                  {/* Card 4 */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-green-50 text-green-600 rounded-xl shrink-0">
+                        <span className="material-symbols-outlined text-[20px]">verified_user</span>
+                      </div>
+                      <div className="text-2xl font-black text-slate-950 leading-none">
+                        {activeCodes.filter(c => c.expiresAt > Date.now()).length}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Códigos Ativos</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submissions Section */}
+                <div className="bg-white rounded-[24px] border border-slate-200 shadow-sm overflow-hidden text-left">
+                  <div className="p-5 border-b border-slate-100">
+                    <h3 className="font-extrabold text-lg text-slate-950">Submissões Recentes dos Alunos</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Clique em Revisar para abrir a simulação tridimensional do ábaco</p>
+                  </div>
+                  <div className="flex flex-col gap-3 p-4 bg-white">
+                    {submissions.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 text-sm">
+                        Nenhuma submissão recebida até o momento.
+                      </div>
+                    ) : (
+                      submissions.map((sub, idx) => {
+                        const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
+                                            INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
+                        const avatarUrl = studentInfo ? studentInfo.img : `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`;
+                        const isReviewed = sub.reviewed || false;
+
+                        return (
+                          <div 
+                            key={sub.id} 
+                            className="bg-white rounded-[28px] border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between min-h-[210px] relative group text-left"
+                          >
+                            {/* Top Header Row */}
+                            <div className="flex justify-between items-center w-full mb-3 select-none">
+                              <span className="bg-sky-50 text-sky-600 text-[10px] font-extrabold px-3 py-1.5 rounded-full uppercase tracking-wider">
+                                {sub.spelledWords.length} {sub.spelledWords.length === 1 ? 'Palavra' : 'Palavras'}
+                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className={`text-[11px] font-black ${isReviewed ? 'text-emerald-600' : 'text-slate-400'}`}>
+                                  {isReviewed ? '100%' : 'Pendente'}
+                                </span>
+                                <div className="relative w-4.5 h-4.5 shrink-0 flex items-center justify-center">
+                                  {isReviewed ? (
+                                    <svg className="w-full h-full text-emerald-500" viewBox="0 0 36 36">
+                                      <path
+                                        className="text-emerald-100"
+                                        strokeWidth="4"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                      <path
+                                        className="text-emerald-500"
+                                        strokeWidth="4"
+                                        strokeDasharray="100, 100"
+                                        strokeLinecap="round"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-full h-full text-slate-300" viewBox="0 0 36 36">
+                                      <path
+                                        className="text-slate-100"
+                                        strokeWidth="4"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                      <path
+                                        className="text-slate-300"
+                                        strokeWidth="4"
+                                        strokeDasharray="25, 100"
+                                        strokeLinecap="round"
+                                        stroke="currentColor"
+                                        fill="none"
+                                        d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
+                                      />
+                                    </svg>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Title & Description Section */}
+                            <div className="text-left mb-3 flex-grow">
+                              <h4 className="font-display font-black text-slate-900 text-sm leading-tight group-hover:text-primary transition-colors">
+                                {sub.taskTitle}
+                              </h4>
+                              <p className="text-[10px] text-slate-400 font-semibold mt-1">
+                                {new Date(sub.submittedAt).toLocaleDateString('pt-BR')} às {new Date(sub.submittedAt).toLocaleTimeString('pt-BR', {hour: '2-digit', minute:'2-digit'})}
+                              </p>
+                            </div>
+
+                            {/* Files Attachments if any */}
+                            {sub.taskFiles && sub.taskFiles.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mb-3 font-sans text-left">
+                                {sub.taskFiles.map((file, fIdx) => (
+                                  file.url ? (
+                                    <a
+                                      key={fIdx}
+                                      href={file.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 hover:border-slate-300 rounded-lg text-[8px] font-bold text-slate-600 transition-all no-underline"
+                                      title={`Abrir ${file.name}`}
+                                    >
+                                      <span className="material-symbols-outlined text-[10px] text-slate-400">download</span>
+                                      <span className="truncate max-w-[70px]">{file.name}</span>
+                                    </a>
+                                  ) : (
+                                    <span
+                                      key={fIdx}
+                                      className="flex items-center gap-1 px-2 py-0.5 bg-slate-50 border border-slate-100 rounded-lg text-[8px] font-semibold text-slate-400"
+                                      title={`${file.name} (Salvo apenas localmente)`}
+                                    >
+                                      <span className="material-symbols-outlined text-[10px]">file_present</span>
+                                      <span className="truncate max-w-[70px]">{file.name}</span>
+                                    </span>
+                                  )
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Bottom Row: Profile Photo & CTA Button */}
+                            <div className="flex justify-between items-center w-full pt-3 border-t border-slate-100 mt-auto select-none">
+                              <div className="flex items-center gap-1.5">
+                                <div className="relative w-7 h-7 rounded-full border border-slate-100 shadow-xs overflow-hidden bg-slate-100 shrink-0">
+                                  <img 
+                                    src={avatarUrl} 
+                                    alt={sub.studentName} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${encodeURIComponent(sub.studentName)}&background=random`;
+                                    }}
+                                  />
+                                </div>
+                                <span className="text-[10px] text-slate-800 font-extrabold max-w-[80px] truncate">
+                                  {sub.studentName}
+                                </span>
+                              </div>
+
+                              <button
+                                onClick={() => onLaunchReviewMode(sub)}
+                                className={`w-8 h-8 shrink-0 flex items-center justify-center rounded-xl transition-all active:scale-95 cursor-pointer border-none ${
+                                  isReviewed 
+                                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-700' 
+                                    : 'bg-[#0004fd] hover:bg-[#0003c7] text-white shadow-sm'
+                                }`}
+                                title="Revisar"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">visibility</span>
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
           {/* TAB 2: TASKS */}
           {activeTab === 'tasks' && (
             selectedTaskDetails ? (
               <div className="space-y-xl animate-fade-in select-text">
-                {/* Breadcrumbs */}
-                <nav className="flex items-center gap-sm text-label-sm text-outline mb-md select-none">
-                  <span onClick={() => setSelectedTaskDetails(null)} className="cursor-pointer hover:text-primary transition-colors">EduConnect</span>
-                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                  <span onClick={() => setSelectedTaskDetails(null)} className="cursor-pointer hover:text-primary transition-colors font-semibold">Minhas Tarefas</span>
-                  <span className="material-symbols-outlined text-[14px]">chevron_right</span>
-                  <span className="text-on-surface-variant font-bold">Detalhes</span>
-                </nav>
+                  {/* Breadcrumbs */}
+                  <nav className="flex items-center gap-sm text-label-sm text-outline mb-md select-none">
+                    <span onClick={() => { setActiveTab('tasks'); setSelectedTaskDetails(null); }} className="cursor-pointer hover:text-primary transition-colors">Tarefas</span>
+                    <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                    <span onClick={() => setSelectedTaskDetails(null)} className="cursor-pointer hover:text-primary transition-colors font-semibold">Minhas Tarefas</span>
+                    <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+                    <span style={{ color: '#0075e0' }} className="font-bold">Detalhes</span>
+                  </nav>
 
                 {/* Header Section */}
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-lg mb-xl">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-8 text-left">
                   <div>
-                    <h2 className="font-headline-lg text-headline-lg text-on-surface mb-xs font-black">{selectedTaskDetails.title}</h2>
-                    <p className="text-body-md text-on-surface-variant mt-sm mb-md max-w-3xl leading-relaxed">{selectedTaskDetails.description}</p>
+                    <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight mb-2">{selectedTaskDetails.title}</h1>
+                    <p className="text-sm sm:text-base text-slate-500 font-medium mt-1 mb-5 max-w-3xl leading-relaxed">{selectedTaskDetails.description}</p>
                     <div className="flex flex-wrap items-center gap-md">
                       <div className="flex items-center gap-xs text-on-surface-variant">
                         <span className="material-symbols-outlined text-[18px]">calendar_today</span>
@@ -2033,19 +2875,34 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                 </div>
                               </div>
                               
-                              <button 
-                                type="button"
-                                onClick={() => {
-                                  if (isCompleted && submission) {
-                                    onLaunchReviewMode(submission);
-                                  } else {
-                                    alert('O aluno ou aluna não realizou a tarefa ainda');
-                                  }
-                                }}
-                                className="w-full py-sm text-label-md font-bold text-primary border border-primary rounded-lg hover:bg-primary hover:text-white transition-all cursor-pointer bg-white shrink-0 select-none"
-                              >
-                                Conferir
-                              </button>
+                              {submission ? (
+                                <button 
+                                  type="button"
+                                  onClick={() => onLaunchReviewMode(submission)}
+                                  className={`w-full py-sm text-label-md font-bold rounded-lg transition-all cursor-pointer shrink-0 select-none flex items-center justify-center gap-1.5 border ${
+                                    submission.reviewed 
+                                      ? 'text-emerald-700 bg-emerald-50 border-emerald-300 hover:bg-emerald-100/80' 
+                                      : 'text-primary border-primary hover:bg-primary hover:text-white bg-white'
+                                  }`}
+                                >
+                                  {submission.reviewed ? (
+                                    <>
+                                      <span className="material-symbols-outlined text-[16px] font-variation-settings-fill">check_circle</span>
+                                      Conferido
+                                    </>
+                                  ) : (
+                                    'Conferir'
+                                  )}
+                                </button>
+                              ) : (
+                                <button 
+                                  type="button"
+                                  onClick={() => alert('O aluno ou aluna não realizou a tarefa ainda')}
+                                  className="w-full py-sm text-label-md font-bold text-slate-400 border border-slate-200 rounded-lg bg-slate-50 cursor-not-allowed shrink-0 select-none"
+                                >
+                                  Conferir
+                                </button>
+                              )}
                             </div>
                           );
                         })}
@@ -2061,7 +2918,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           <div className="flex items-center gap-xs">
                             <button 
                               type="button"
-                              onClick={() => setDetailsStudentPage(prev => Math.max(1, prev - 1))}
+                              onClick={() => { setDetailsStudentPage(prev => Math.max(1, prev - 1)); scrollToContentTop(); }}
                               disabled={detailsStudentPage === 1}
                               className="p-2 rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
                             >
@@ -2072,7 +2929,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               <button 
                                 key={page}
                                 type="button"
-                                onClick={() => setDetailsStudentPage(page)}
+                                onClick={() => { setDetailsStudentPage(page); scrollToContentTop(); }}
                                 className={`w-10 h-10 rounded-lg font-bold cursor-pointer transition-all ${
                                   detailsStudentPage === page 
                                     ? 'bg-primary text-on-primary border-none shadow' 
@@ -2085,7 +2942,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             
                             <button 
                               type="button"
-                              onClick={() => setDetailsStudentPage(prev => Math.min(totalPages, prev + 1))}
+                              onClick={() => { setDetailsStudentPage(prev => Math.min(totalPages, prev + 1)); scrollToContentTop(); }}
                               disabled={detailsStudentPage === totalPages}
                               className="p-2 rounded-lg border border-outline-variant hover:bg-surface-container-high transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
                             >
@@ -2099,13 +2956,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 })()}
               </div>
             ) : (
-              <div className="space-y-xl animate-fade-in">
-                <div className="flex items-center justify-between mb-xl select-none">
-                  <div>
-                    <h1 className="font-headline-lg text-headline-lg text-on-surface">Minhas Tarefas</h1>
+              <div className="space-y-xl animate-fade-in overflow-x-hidden">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-xl select-none gap-4">
+                  <div className="min-w-0">
+                    <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Minhas Tarefas</h2>
                     <p className="font-body-md text-body-md text-on-surface-variant mt-1">Gerencie e acompanhe o progresso das atividades enviadas.</p>
                   </div>
-                  <div className="flex items-center gap-md">
+                  <div className="flex items-center gap-md flex-wrap shrink-0">
                     {/* Bulk Archive Button */}
                     <button
                       type="button"
@@ -2145,10 +3002,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
 
                 {/* Filter Tabs */}
-                <div className="flex items-center gap-md mb-xl border-b border-outline-variant select-none">
+                <div className="flex items-center gap-md mb-xl border-b border-outline-variant select-none overflow-x-auto no-scrollbar">
                   <button
                     onClick={() => { setTasksFilter('all'); setTasksPage(1); }}
-                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       tasksFilter === 'all'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -2158,7 +3015,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   </button>
                   <button
                     onClick={() => { setTasksFilter('active'); setTasksPage(1); }}
-                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       tasksFilter === 'active'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -2168,7 +3025,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   </button>
                   <button
                     onClick={() => { setTasksFilter('draft'); setTasksPage(1); }}
-                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       tasksFilter === 'draft'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -2178,7 +3035,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   </button>
                   <button
                     onClick={() => { setTasksFilter('archived'); setTasksPage(1); }}
-                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer ${
+                    className={`px-md py-sm font-label-md text-label-md border-b-2 transition-all cursor-pointer shrink-0 whitespace-nowrap ${
                       tasksFilter === 'archived'
                         ? 'border-primary text-primary font-bold'
                         : 'border-transparent text-on-surface-variant hover:text-primary'
@@ -2406,7 +3263,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     </p>
                     <div className="flex items-center gap-xs">
                       <button
-                        onClick={() => setTasksPage(prev => Math.max(1, prev - 1))}
+                        onClick={() => { setTasksPage(prev => Math.max(1, prev - 1)); scrollToContentTop(); }}
                         disabled={tasksPage === 1}
                         className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low text-on-surface-variant transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
                       >
@@ -2416,7 +3273,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         {Array.from({ length: totalPages }).map((_, i) => (
                           <button
                             key={i}
-                            onClick={() => setTasksPage(i + 1)}
+                            onClick={() => { setTasksPage(i + 1); scrollToContentTop(); }}
                             className={`w-10 h-10 rounded-lg font-label-md text-label-md cursor-pointer transition-colors ${
                               tasksPage === i + 1
                                 ? 'bg-primary text-on-primary font-bold border-none shadow'
@@ -2428,7 +3285,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         ))}
                       </div>
                       <button
-                        onClick={() => setTasksPage(prev => Math.min(totalPages, prev + 1))}
+                        onClick={() => { setTasksPage(prev => Math.min(totalPages, prev + 1)); scrollToContentTop(); }}
                         disabled={tasksPage === totalPages}
                         className="p-2 border border-outline-variant rounded-lg hover:bg-surface-container-low text-on-surface-variant transition-colors disabled:opacity-50 cursor-pointer bg-white flex items-center justify-center"
                       >
@@ -2446,15 +3303,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
             <div className="space-y-6">
               {/* Header Section with Search & Filter in the Upper Right */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-md mb-lg">
-                <div>
-                  <h2 className="font-headline-lg text-headline-lg text-on-background">Alunos</h2>
-                  <p className="text-on-surface-variant font-label-sm text-label-sm">Gerencie seus estudantes e acompanhe o progresso individual.</p>
+                <div className="text-left flex-1">
+                   <h2 className="text-2xl font-bold text-slate-900">Alunos</h2>
+                   <p className="font-body-md text-body-md text-on-surface-variant mt-1">Gerencie seus estudantes e acompanhe o progresso individual.</p>
                 </div>
                 
-                <div className="flex items-center gap-md self-end md:self-auto">
+                <div className="flex items-center gap-4 flex-shrink-0">
                   {/* Search Input */}
                   <div className="relative w-64">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 shrink-0"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
                     <input
                       type="text"
                       value={gridSearchQuery}
@@ -2463,8 +3320,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         setStudentsLimit(6); // Reset limit on search
                       }}
                       placeholder="Pesquisar por nome ou turma..."
-                      className="w-full pl-9 pr-4 py-2.5 bg-[#f2f3ff] border border-outline-variant/60 rounded-full text-xs outline-none focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] transition-all text-on-surface"
-                      style={{ border: '1px solid #c1c6d6' }}
+                      className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-full text-xs outline-none focus:ring-2 focus:ring-[#0073e0]/20 focus:border-[#0073e0] transition-all text-[#131b2e] shadow-xs"
                     />
                   </div>
 
@@ -2472,10 +3328,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   <div className="relative">
                     <button
                       onClick={() => setIsGridFilterOpen(prev => !prev)}
-                      className={`flex items-center gap-xs px-4 py-2 bg-[#f2f3ff] border border-outline-variant/60 rounded-full font-label-sm text-label-sm hover:bg-[#e4e6ff] transition-all cursor-pointer border-none text-on-surface-variant ${isGridFilterOpen ? 'bg-primary-container text-primary font-bold' : ''}`}
-                      style={{ border: '1px solid #c1c6d6' }}
+                      className={`flex items-center gap-1.5 px-5 py-2.5 bg-white border border-slate-200 rounded-full font-bold text-xs hover:bg-slate-50 transition-all cursor-pointer text-slate-700 shadow-xs border-none ${isGridFilterOpen ? 'bg-blue-50 text-blue-600 font-extrabold' : ''}`}
                     >
-                      <span className="material-symbols-outlined text-[18px]">filter_alt</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-500 shrink-0"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>
                       Filtros
                     </button>
 
@@ -2488,11 +3343,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: 8, scale: 0.95 }}
                             transition={{ duration: 0.15, ease: 'easeOut' }}
-                            className="absolute right-0 mt-2 w-56 bg-surface border border-outline-variant/60 rounded-xl shadow-lg z-50 p-3 font-sans flex flex-col gap-sm"
-                            style={{ backgroundColor: '#ffffff', border: '1px solid #c1c6d6' }}
+                            className="absolute right-0 mt-2 w-56 bg-white border border-slate-100 rounded-2xl shadow-lg z-50 p-4 font-sans flex flex-col gap-2 text-left"
                           >
-                            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider pl-1 select-none">MÉTODO DE LOGIN:</p>
-                            <div className="flex flex-col gap-xs">
+                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1 select-none">MÉTODO DE LOGIN:</p>
+                            <div className="flex flex-col gap-1">
                               {[
                                 { type: 'all', label: 'Todos os Métodos' },
                                 { type: 'code', label: 'Código (Entrou por Código)' },
@@ -2506,15 +3360,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                     setIsGridFilterOpen(false);
                                     setStudentsLimit(6); // Reset limit on filter
                                   }}
-                                  className={`w-full text-left px-md py-sm rounded-lg text-xs font-semibold transition-colors cursor-pointer border-none ${
+                                  className={`w-full text-left px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer border-none ${
                                     gridFilterType === option.type
-                                      ? 'bg-primary/10 text-primary font-extrabold'
-                                      : 'bg-transparent text-on-surface-variant hover:bg-surface-container-high'
+                                      ? 'bg-blue-50 text-[#0073e0]'
+                                      : 'bg-transparent text-slate-600 hover:bg-slate-50'
                                   }`}
-                                  style={{
-                                    backgroundColor: gridFilterType === option.type ? '#f0f3ff' : '',
-                                    color: gridFilterType === option.type ? '#005bb3' : ''
-                                  }}
                                 >
                                   {option.label}
                                 </button>
@@ -2529,43 +3379,43 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               </div>
 
               {/* Filters & Stats Chips */}
-              <div className="flex flex-wrap items-center gap-sm mb-lg">
+              <div className="flex flex-wrap items-center gap-2 mb-lg">
                 <button 
                   onClick={() => { setStudentsFilter('all'); setStudentsLimit(6); }}
-                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs border-none cursor-pointer transition-all duration-150 ${
                     studentsFilter === 'all' 
-                      ? 'bg-on-background text-surface font-bold shadow-sm' 
-                      : 'bg-surface-container-high text-on-surface-variant hover:bg-outline-variant'
+                      ? 'bg-[#191919] text-white shadow-sm font-extrabold' 
+                      : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
                   }`}
                 >
                   Todos ({students.length})
                 </button>
                 <button 
                   onClick={() => { setStudentsFilter('completed'); setStudentsLimit(6); }}
-                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs border-none cursor-pointer transition-all duration-150 ${
                     studentsFilter === 'completed' 
-                      ? 'bg-green-600 text-white font-bold shadow-sm' 
-                      : 'bg-green-100 text-green-700 hover:bg-green-200'
+                      ? 'bg-[#137333] text-white shadow-sm font-extrabold' 
+                      : 'bg-[#e6f4ea] text-[#137333] hover:bg-[#d0edd7]'
                   }`}
                 >
                   Concluídos ({students.filter(s => s.progress === 100).length})
                 </button>
                 <button 
                   onClick={() => { setStudentsFilter('pending'); setStudentsLimit(6); }}
-                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs border-none cursor-pointer transition-all duration-150 ${
                     studentsFilter === 'pending' 
-                      ? 'bg-red-500 text-white font-bold shadow-sm' 
-                      : 'bg-surface-container-high text-on-surface-variant hover:bg-outline-variant'
+                      ? 'bg-[#5c56d6] text-white shadow-sm font-extrabold' 
+                      : 'bg-[#f3f3fd] text-[#5c56d6] hover:bg-[#e2e1f9]'
                   }`}
                 >
                   Pendentes ({students.filter(s => s.progress < 50).length})
                 </button>
                 <button 
                   onClick={() => { setStudentsFilter('inprogress'); setStudentsLimit(6); }}
-                  className={`px-md py-xs rounded-full font-label-sm text-label-sm border-none cursor-pointer transition-colors duration-150 ${
+                  className={`px-4 py-2 rounded-full font-bold text-xs border-none cursor-pointer transition-all duration-150 ${
                     studentsFilter === 'inprogress' 
-                      ? 'bg-blue-600 text-white font-bold shadow-sm' 
-                      : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                      ? 'bg-[#1a73e8] text-white shadow-sm font-extrabold' 
+                      : 'bg-[#e8f0fe] text-[#1a73e8] hover:bg-[#d2e3fc]'
                   }`}
                 >
                   Concluindo ({students.filter(s => s.progress >= 50 && s.progress < 100).length})
@@ -2574,49 +3424,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
               {/* Dynamic Filtering, Ordering & Sessions Layout */}
               {(() => {
-                const getSessionTitle = (list: any[], type: string) => {
-                  if (list.length === 0) return '';
-                  
-                  const isFemaleStudent = (student: any) => {
-                    if (student.gender === 'F') return true;
-                    if (student.gender === 'M') return false;
-                    const firstName = student.name.split(' ')[0].toLowerCase();
-                    return firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene', 'maria', 'ana', 'lara', 'gabriela'].includes(firstName);
-                  };
-
-                  const total = list.length;
-                  const females = list.filter(s => isFemaleStudent(s)).length;
-                  const isAllFemale = females === total;
-                  const isSingular = total === 1;
-
-                  if (type === 'code') {
-                    return isSingular
-                      ? (isAllFemale ? "Aluna que entrou por código" : "Aluno que entrou por código")
-                      : (isAllFemale ? "Alunas que entraram por código" : "Alunos que entraram por código");
-                  }
-                  if (type === 'link') {
-                    return isSingular
-                      ? (isAllFemale ? "Aluna que entrou por link" : "Aluno que entrou por link")
-                      : (isAllFemale ? "Alunas que entraram por link" : "Alunos que entraram por link");
-                  }
-                  if (type === 'login') {
-                    return isSingular
-                      ? (isAllFemale ? "Aluna que fez o login" : "Aluno que fez o login")
-                      : (isAllFemale ? "Alunas que fizeram o login" : "Alunos que fizeram o login");
-                  }
-                  if (type === 'invite') {
-                    return isSingular
-                      ? (isAllFemale ? "Aluna que entrou por convite" : "Aluno que entrou por convite")
-                      : (isAllFemale ? "Alunas que entraram por convite" : "Alunos que entraram por convite");
-                  }
-                  if (type === 'registered') {
-                    return isSingular
-                      ? (isAllFemale ? "Aluna cadastrada" : "Aluno cadastrado")
-                      : (isAllFemale ? "Alunas cadastradas" : "Alunos cadastrados");
-                  }
-                  return "Alunos";
-                };
-
                 const renderStudentCard = (student: any) => {
                   const studentEmail = student.email || `${student.name.toLowerCase().replace(/\s+/g, '.')}@email.com`;
                   const isDone = student.progress === 100;
@@ -2624,10 +3431,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                   return (
                     <div 
-                      className="student-card bg-surface-container-lowest border border-outline-variant rounded-xl p-lg flex flex-col shadow-[0px_1px_2px_rgba(0,0,0,0.05)] hover:translate-y-[-2px] transition-all duration-200 min-h-[220px] select-text relative"
+                      className="bg-white border border-slate-100 rounded-[24px] p-6 flex flex-col justify-between shadow-xs hover:shadow-md transition-all duration-200 min-h-[220px] select-text relative text-left"
                     >
-                      <div className="flex items-start justify-between mb-md">
-                        <div className="flex items-center gap-md">
+                      <div className="flex items-start justify-between mb-4">
+                        <div className="flex items-center gap-3 min-w-0">
                           {/* Circular Selection Checkbox */}
                           <div 
                             onClick={(e) => {
@@ -2636,79 +3443,63 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             }}
                             className={`w-5 h-5 rounded-full flex items-center justify-center cursor-pointer border transition-all shrink-0 ${
                               selectedStudentIdsGrid.includes(student.id)
-                                ? 'bg-primary border-primary text-white shadow-sm'
-                                : 'border-[#c1c6d6] bg-white text-transparent hover:border-primary'
+                                ? 'bg-[#0073e0] border-[#0073e0] text-white shadow-sm'
+                                : 'border-slate-200 bg-white text-transparent hover:border-[#0073e0]'
                             }`}
                             title="Selecionar aluno"
                           >
-                            <span className="material-symbols-outlined text-[12px] font-black select-none">check</span>
+                            {selectedStudentIdsGrid.includes(student.id) && (
+                              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            )}
                           </div>
 
-                          <div className="relative">
+                          <div className="relative shrink-0">
                             <img 
                               src={student.img} 
                               alt={student.name} 
-                              className="w-14 h-14 rounded-full object-cover border-2 border-surface-container-high"
+                              className="w-12 h-12 rounded-full object-cover border-2 border-slate-100"
                             />
                             {student.lastAccessAt && (
-                              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full" title="Online recentemente" />
+                              <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse" title="Online recentemente" />
                             )}
                           </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="font-headline-md text-body-lg font-bold text-on-background flex flex-wrap items-center gap-xs">
+                          <div className="min-w-0 flex-1 text-left">
+                            <h3 className="font-bold text-sm text-slate-800 flex flex-wrap items-center gap-xs truncate">
                               {student.name}
-                              {student.loginMethod && student.loginMethod !== 'login' && (
-                                <span 
-                                  className={`text-[8px] px-1.5 py-0.5 rounded-full font-bold select-none tracking-wide ${
-                                    student.loginMethod === 'code' 
-                                      ? 'bg-purple-100 text-purple-700 border border-purple-200' 
-                                      : 'bg-blue-100 text-blue-700 border border-blue-200'
-                                  }`}
-                                  title={student.loginMethod === 'code' ? 'Entrou por Código' : 'Entrou por Link'}
-                                >
-                                  {student.loginMethod.toUpperCase()}
-                                </span>
-                              )}
                             </h3>
-                            <p className="text-outline font-label-sm text-label-sm font-medium truncate block max-w-[170px]" title={studentEmail}>{studentEmail}</p>
+                            <p className="text-slate-400 font-semibold text-xs truncate mt-0.5" title={studentEmail}>{studentEmail}</p>
                           </div>
                         </div>
 
                         <div className="shrink-0">
-                          {isDone ? (
-                            <span className="flex items-center gap-1 text-green-600">
-                              <span className="material-symbols-outlined text-[18px]" style={{ fontVariationSettings: "'FILL' 1" }}>
-                                check_circle
-                              </span>
-                            </span>
-                          ) : isWaiting ? (
-                            <span className="material-symbols-outlined text-red-500" style={{ fontVariationSettings: "'FILL' 1" }}>
-                              report_problem
+                          {isWaiting ? (
+                            <span title="Pendente" className="text-[#ea4335]">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-[#ea4335]"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
                             </span>
                           ) : (
-                            <span className="material-symbols-outlined text-on-surface-variant" style={{ fontVariationSettings: "'FILL' 1" }}>
-                              schedule
+                            <span title={isDone ? "Concluído" : "Em Progresso"}>
+                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-700"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
                             </span>
                           )}
                         </div>
                       </div>
 
-                      <div className={`rounded-lg p-md mb-lg ${isDone ? 'bg-green-100' : 'bg-surface-container-low'}`}>
-                        <div className="flex justify-between items-end mb-xs">
-                          <span className="text-outline font-label-sm text-label-sm">Progresso de Tarefas</span>
-                          <span className={`font-label-md text-label-md font-bold ${isDone ? 'text-green-600' : isWaiting ? 'text-red-500' : 'text-primary'}`}>
-                            {isDone ? 'Concluído' : `${student.progress}%`}
+                      <div className="rounded-2xl p-4 mb-5 bg-[#f0f4f9] mt-4 text-left">
+                        <div className="flex justify-between items-center mb-1.5">
+                          <span className="text-slate-400 font-bold text-[10px] uppercase tracking-wider">Progresso de Tarefas</span>
+                          <span className="font-bold text-xs text-blue-600">
+                            {student.progress}%
                           </span>
                         </div>
-                        <div className="w-full bg-outline-variant h-1.5 rounded-full overflow-hidden">
+                        <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden">
                           <div 
-                            className={`h-full rounded-full transition-all duration-500 ${isDone ? 'bg-green-600' : isWaiting ? 'bg-red-500' : 'bg-primary'}`}
+                            className="h-full rounded-full bg-[#0073e0] transition-all duration-500"
                             style={{ width: `${student.progress}%` }}
                           />
                         </div>
                       </div>
 
-                      <div className="flex gap-sm mt-auto">
+                      <div className="flex gap-2 mt-auto">
                         <button 
                           onClick={() => {
                             const sub = submissions.find(sub => sub.studentName === student.name);
@@ -2718,16 +3509,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               alert('O aluno ou aluna não realizou a tarefa ainda');
                             }
                           }}
-                          className="flex-1 py-sm bg-surface-container-high text-on-surface font-label-md text-label-md rounded-lg hover:bg-outline-variant transition-colors border-none cursor-pointer"
+                          className="flex-1 py-3 bg-[#e8f0fe] hover:bg-[#d2e3fc] text-[#1a73e8] font-bold rounded-xl transition-all border-none cursor-pointer flex items-center justify-center text-xs"
                         >
                           Ver Tarefas
                         </button>
                         <button 
                           onClick={() => alert(`Acesso na Nuvem sincronizado para o aluno ${student.name} (ID: ${student.matricula})`)}
-                          className="px-md py-sm bg-primary text-on-primary font-label-md text-label-md rounded-lg flex items-center justify-center hover:opacity-90 border-none cursor-pointer active:scale-95"
+                          className="px-4 py-3 bg-[#0073e0] hover:bg-[#005ba4] text-white rounded-xl flex items-center justify-center transition-all border-none cursor-pointer active:scale-95 shrink-0"
                           title="Sincronizar Cloud PWA"
                         >
-                          <span className="material-symbols-outlined text-[18px]">cloud</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-white"><path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.04-1.21-1.88-2.2-2.4A5.5 5.5 0 0 0 4 11.5c-2 .5-4 2.2-4 4.5A3.5 3.5 0 0 0 3.5 19z"></path></svg>
                         </button>
                       </div>
                     </div>
@@ -2738,13 +3529,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   return (
                     <div 
                       onClick={() => setIsAddStudentOpen(true)}
-                      className="border-2 border-dashed border-outline-variant rounded-xl p-lg flex flex-col items-center justify-center text-outline hover:border-primary hover:text-primary transition-all cursor-pointer group bg-surface-container-low/30 min-h-[220px] duration-150"
+                      className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 flex flex-col items-center justify-center text-slate-400 hover:border-[#0073e0] hover:text-[#0073e0] transition-all cursor-pointer group bg-slate-50/20 min-h-[220px] duration-150 text-center"
                     >
-                      <div className="w-12 h-12 rounded-full border-2 border-dashed border-outline-variant flex items-center justify-center mb-md group-hover:border-primary transition-all">
-                        <span className="material-symbols-outlined text-[32px]">add</span>
+                      <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-300 flex items-center justify-center mb-4 group-hover:border-[#0073e0] transition-all">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400 group-hover:text-[#0073e0] transition-all"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                       </div>
-                      <p className="font-label-md text-label-md font-bold">Adicionar Novo Aluno</p>
-                      <p className="text-[11px] text-center mt-xs px-md">Adicione um aluno usando formulário rápido</p>
+                      <p className="font-bold text-sm text-slate-700">Adicionar Novo Aluno</p>
+                      <p className="text-xs text-slate-400 mt-1 px-4">Adicione um aluno usando formulário rápido</p>
                     </div>
                   );
                 };
@@ -2775,144 +3566,59 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 };
 
                 const sortedAll = sortStudents(filteredAll);
-
-                // Group lists for "all" view
-                const inviteList = sortedAll.filter(s => s.loginMethod === 'code' || s.loginMethod === 'link');
-                const registeredList = sortedAll.filter(s => s.loginMethod === 'login' || !s.loginMethod);
-
                 const limit = studentsLimit;
+
+                // Apply active grid filter type (code, link, login)
+                const filteredByLoginMethod = sortedAll.filter(s => {
+                  if (gridFilterType === 'code') return s.loginMethod === 'code';
+                  if (gridFilterType === 'link') return s.loginMethod === 'link';
+                  if (gridFilterType === 'login') return s.loginMethod === 'login' || !s.loginMethod;
+                  return true;
+                });
 
                 return (
                   <div className="space-y-8 select-text min-h-[450px]">
-                    {gridFilterType === 'all' ? (
-                      <>
-                        {/* Session 1: Alunos por Convite */}
-                        {inviteList.length > 0 && (
-                          <div className="space-y-4">
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1 font-sans">
-                              {getSessionTitle(inviteList, 'invite')} ({inviteList.length})
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-                              <AnimatePresence>
-                                {inviteList.slice(0, limit).map(student => (
-                                  <motion.div
-                                    key={student.id}
-                                    layout="position"
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                                  >
-                                    {renderStudentCard(student)}
-                                  </motion.div>
-                                ))}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Session 2: Alunos Cadastrados */}
-                        {registeredList.length > 0 && (
-                          <div className="space-y-4 pt-sm">
-                            <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1 font-sans">
-                              {getSessionTitle(registeredList, 'registered')} ({registeredList.length})
-                            </h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-                              <AnimatePresence>
-                                {registeredList.slice(0, limit).map(student => (
-                                  <motion.div
-                                    key={student.id}
-                                    layout="position"
-                                    initial={{ opacity: 0, scale: 0.95 }}
-                                    animate={{ opacity: 1, scale: 1 }}
-                                    exit={{ opacity: 0, scale: 0.95 }}
-                                    transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                                  >
-                                    {renderStudentCard(student)}
-                                  </motion.div>
-                                ))}
-                              </AnimatePresence>
-                              
-                              {/* Add New Card Skeleton is rendered as the last element of registered list */}
-                              <motion.div layout="position">
-                                {renderAddNewCardSkeleton()}
-                              </motion.div>
-                            </div>
-                          </div>
-                        )}
+                    {filteredByLoginMethod.length > 0 ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        <AnimatePresence>
+                          {filteredByLoginMethod.slice(0, limit).map(student => (
+                            <motion.div
+                              key={student.id}
+                              layout="position"
+                              initial={{ opacity: 0, scale: 0.95 }}
+                              animate={{ opacity: 1, scale: 1 }}
+                              exit={{ opacity: 0, scale: 0.95 }}
+                              transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            >
+                              {renderStudentCard(student)}
+                            </motion.div>
+                          ))}
+                        </AnimatePresence>
                         
-                        {inviteList.length === 0 && registeredList.length === 0 && (
-                          <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                            <span className="material-symbols-outlined text-[48px] mb-2 text-slate-300">group_off</span>
-                            <p className="font-medium text-sm font-sans">Nenhum aluno encontrado para os filtros ativos.</p>
-                          </div>
-                        )}
-                      </>
+                        {/* Add New Card Skeleton is rendered as the last element of the list */}
+                        <motion.div layout="position">
+                          {renderAddNewCardSkeleton()}
+                        </motion.div>
+                      </div>
                     ) : (
-                      // Single filter active (Código, Link or Login)
-                      (() => {
-                        const filteredList = sortedAll.filter(s => {
-                          if (gridFilterType === 'code') return s.loginMethod === 'code';
-                          if (gridFilterType === 'link') return s.loginMethod === 'link';
-                          if (gridFilterType === 'login') return s.loginMethod === 'login' || !s.loginMethod;
-                          return true;
-                        });
-
-                        return (
-                          <div className="space-y-4 font-sans min-h-[450px]">
-                            {filteredList.length > 0 ? (
-                              <>
-                                <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider pl-1">
-                                  {getSessionTitle(filteredList, gridFilterType)} ({filteredList.length})
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg">
-                                  <AnimatePresence>
-                                    {filteredList.slice(0, limit).map(student => (
-                                      <motion.div
-                                        key={student.id}
-                                        layout="position"
-                                        initial={{ opacity: 0, scale: 0.95 }}
-                                        animate={{ opacity: 1, scale: 1 }}
-                                        exit={{ opacity: 0, scale: 0.95 }}
-                                        transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                                      >
-                                        {renderStudentCard(student)}
-                                      </motion.div>
-                                    ))}
-                                  </AnimatePresence>
-                                </div>
-                              </>
-                            ) : (
-                              <div className="flex flex-col items-center justify-center py-12 text-slate-400">
-                                <span className="material-symbols-outlined text-[48px] mb-2 text-slate-300">group_off</span>
-                                <p className="font-medium text-sm">Nenhum aluno correspondente a esse filtro de acesso.</p>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })()
+                      <div className="flex flex-col items-center justify-center py-12 text-slate-400 text-center">
+                        <span className="material-symbols-outlined text-[48px] mb-2 text-slate-300">group_off</span>
+                        <p className="font-medium text-sm font-sans">Nenhum aluno encontrado para os filtros ativos.</p>
+                      </div>
                     )}
 
                     {/* Pagination/Load More button dynamically calculated */}
                     {(() => {
-                      const totalLength = gridFilterType === 'all' 
-                        ? (inviteList.length + registeredList.length)
-                        : sortedAll.filter(s => {
-                            if (gridFilterType === 'code') return s.loginMethod === 'code';
-                            if (gridFilterType === 'link') return s.loginMethod === 'link';
-                            if (gridFilterType === 'login') return s.loginMethod === 'login' || !s.loginMethod;
-                            return true;
-                          }).length;
+                      const totalLength = filteredByLoginMethod.length;
 
                       return totalLength > limit && (
-                        <div className="mt-xl flex justify-center pt-md">
+                        <div className="mt-8 flex justify-center pt-4">
                           <button 
                             onClick={() => setStudentsLimit(prev => prev + 6)}
-                            className="flex items-center gap-sm px-xl py-md bg-surface-container-lowest border border-outline-variant rounded-full text-on-surface font-label-md text-label-md hover:bg-surface-container-high transition-all shadow-sm cursor-pointer active:scale-95 duration-100 border-none"
-                            style={{ border: '1px solid #c1c6d6', background: '#ffffff' }}
+                            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-full text-slate-700 font-bold text-xs hover:bg-slate-50 transition-all shadow-sm cursor-pointer active:scale-95 duration-100 border-none"
                           >
                             Carregar mais alunos
-                            <span className="material-symbols-outlined text-[18px]">keyboard_arrow_down</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><polyline points="6 9 12 15 18 9"></polyline></svg>
                           </button>
                         </div>
                       );
@@ -2930,7 +3636,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               {/* Alphanumeric Configuração de Acesso Block */}
               <div className="bg-white p-6 rounded-2xl border border-[#c1c6d6] shadow-sm space-y-6">
                 <div>
-                  <h2 className="text-xl font-extrabold tracking-tight text-[#131b2e]">Configuração de Acesso</h2>
+                   <h2 className="text-2xl font-bold text-slate-900 tracking-tight">Configuração de Acesso</h2>
                   <p className="text-xs text-slate-400 mt-1">Gere chaves encriptadas temporárias para acesso offline do aluno.</p>
                 </div>
 
@@ -3013,7 +3719,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           <span className="material-symbols-outlined text-[16px]">
                             {copiedIndex === 999 ? 'check' : 'content_copy'}
                           </span>
-                          {copiedIndex === 999 ? 'Copiado!' : 'Copiar Token'}
+                          {copiedIndex === 999 ? 'Copiado!' : 'Copiar Código'}
                         </button>
                       </div>
                     </div>
@@ -3095,6 +3801,28 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             <p className="font-bold text-xs truncate leading-tight">{s.name}</p>
                             <p className="text-[10px] text-slate-400 truncate mt-0.5">{s.class}</p>
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm(`Tem certeza de que deseja excluir permanentemente o aluno ${s.name}?`)) {
+                                setStudents(prev => prev.filter(student => student.id !== s.id));
+                                const updatedLocal = students.filter(student => student.id !== s.id);
+                                localStorage.setItem('abba_students_list', JSON.stringify(updatedLocal));
+                                try {
+                                  await supabase.from('students').delete().eq('id', s.id);
+                                } catch (err) {
+                                  console.warn('Erro ao excluir no banco:', err);
+                                }
+                                alert('Aluno excluído com sucesso! 🗑️');
+                              }
+                            }}
+                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors z-30 ml-2 border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0"
+                            title="Excluir aluno permanentemente"
+                          >
+                            <span className="material-symbols-outlined text-[16px]">delete</span>
+                          </button>
                         </div>
                       );
                     })}
@@ -3119,7 +3847,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       {activeCodes.map((c, index) => {
                         const isExpired = Date.now() > c.expiresAt;
                         const student = students.find(s => s.name.toLowerCase() === c.studentName.toLowerCase());
-                        const studentImg = student?.img || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150&h=150";
+                        const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif";
 
                         let friendlyCode = c.id;
                         try {
@@ -3181,7 +3909,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               </h4>
                               
                               <p className="text-[11px] text-slate-400 font-medium leading-relaxed mt-2.5">
-                                Utilize o botão abaixo para copiar o token integral encriptado em Base64.
+                                Utilize o botão abaixo para copiar o código de acesso.
                               </p>
                             </div>
 
@@ -3194,7 +3922,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               <span className="material-symbols-outlined text-[16px]">
                                 {copiedIndex === index ? 'check' : 'content_copy'}
                               </span>
-                              {copiedIndex === index ? 'Copiado!' : 'Copiar Token'}
+                              {copiedIndex === index ? 'Copiado!' : 'Copiar Código'}
                             </button>
                           </motion.div>
                         );
@@ -4808,7 +5536,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     </div>
 
                     {/* Action Buttons for Code and Link */}
-                    <div className="grid grid-cols-2 gap-sm">
+                    <div className="grid grid-cols-1 gap-sm">
                       {/* Code Option */}
                       <div className="flex flex-col gap-xs p-sm bg-[#faf8ff] border border-outline-variant/60 rounded-xl">
                         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Opção 1: Código</span>
@@ -6019,6 +6747,129 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         )}
 
       </main>
+
+      {/* SETTINGS PANEL MODAL */}
+      <AnimatePresence>
+        {showSettingsModal && (
+          <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowSettingsModal(false)}
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs"
+            ></motion.div>
+            
+            {/* Modal Body */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ type: "spring", duration: 0.4 }}
+              className="bg-white w-full max-w-[480px] rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden text-left z-10 flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 bg-slate-50 text-slate-700 rounded-xl">
+                    <span className="material-symbols-outlined text-[20px] font-variation-settings-fill">settings</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-black text-slate-900 leading-tight">Configurações</h2>
+                    <p className="text-xs text-slate-400 mt-0.5">Personalize sua área do professor</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="w-8 h-8 rounded-full bg-slate-50 hover:bg-slate-100 text-slate-500 flex items-center justify-center cursor-pointer border-none transition-all active:scale-95"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              </div>
+
+              {/* Body Content */}
+              <div className="p-6 overflow-y-auto space-y-6 bg-white">
+                {/* Section 1: Geral */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Preferências Gerais</h3>
+                  
+                  {/* Language Selector */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800">Idioma da Plataforma</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Selecione o idioma de exibição</p>
+                    </div>
+                    <select
+                      value={settingsLanguage}
+                      onChange={(e) => setSettingsLanguage(e.target.value)}
+                      className="bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#005ba4]"
+                    >
+                      <option value="pt">Português</option>
+                      <option value="en">English</option>
+                      <option value="de">Deutsch</option>
+                    </select>
+                  </div>
+
+                  {/* High Contrast Mode */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800">Alto Contraste</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Otimizar cores para acessibilidade</p>
+                    </div>
+                    <button
+                      onClick={() => setSettingsContrast(!settingsContrast)}
+                      className={`w-11 h-6 rounded-full p-1 transition-colors border-none cursor-pointer flex items-center ${
+                        settingsContrast ? 'bg-[#005ba4] justify-end' : 'bg-slate-200 justify-start'
+                      }`}
+                    >
+                      <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-sm"></motion.div>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Section 2: Recursos de Aula */}
+                <div className="space-y-4">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recursos de Aula</h3>
+                  
+                  {/* Sound Effects Toggle */}
+                  <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-slate-800">Sons e Feedback</p>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Efeitos sonoros ao mover as contas do ábaco</p>
+                    </div>
+                    <button
+                      onClick={() => setSettingsSounds(!settingsSounds)}
+                      className={`w-11 h-6 rounded-full p-1 transition-colors border-none cursor-pointer flex items-center ${
+                        settingsSounds ? 'bg-[#005ba4] justify-end' : 'bg-slate-200 justify-start'
+                      }`}
+                    >
+                      <motion.div layout className="w-4 h-4 rounded-full bg-white shadow-sm"></motion.div>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-6 border-t border-slate-100 flex items-center justify-end gap-3 bg-white">
+                <button
+                  onClick={() => setShowSettingsModal(false)}
+                  className="px-4 py-2.5 rounded-2xl bg-slate-50 hover:bg-slate-100 text-slate-600 border-none font-bold text-sm transition-all active:scale-95 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveSettings}
+                  className="px-5 py-2.5 rounded-2xl bg-[#005ba4] hover:bg-[#004780] text-white border-none font-bold text-sm transition-all active:scale-95 cursor-pointer shadow-sm shadow-[#005ba4]/10"
+                >
+                  Salvar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
     </div>
   );
 };

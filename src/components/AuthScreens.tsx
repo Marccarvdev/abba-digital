@@ -114,7 +114,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     }
 
     // Default teacher account bypass for fast demonstration
-    if (email === 'teacher@abba.com' && password === 'admin') {
+    if (email === 'inglesdecio@gmail.com' && password === 'admin') {
       const teacherUser: User = {
         name: 'Professor Décio Silva',
         email: email,
@@ -403,7 +403,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     if (trimmed === 'ABC123DEF' || trimmed === 'PROF123') {
       const teacherUser: User = {
         name: 'Professor Décio Silva',
-        email: 'teacher@abba.com',
+        email: 'inglesdecio@gmail.com',
         role: 'teacher'
       };
       setSuccessMsg('Login de professor realizado com sucesso! Redirecionando...');
@@ -537,142 +537,56 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                 )}
               </AnimatePresence>
 
-              {/* Tab Switcher */}
-              <div className="flex border-b border-[#c1c6d6] mb-6">
-                <button 
-                  type="button" 
-                  onClick={() => isOnline && setActiveTab('email')}
-                  disabled={!isOnline}
-                  className={`flex-1 py-2.5 font-semibold text-xs sm:text-sm border-b-2 transition-all duration-200 cursor-pointer ${
-                    activeTab === 'email'
-                      ? 'border-[#005bb3] text-[#005bb3]'
-                      : 'border-transparent text-[#414754] hover:text-[#131b2e]'
-                  } ${!isOnline ? 'opacity-40 cursor-not-allowed' : ''}`}
-                  id="tab-email"
-                >
-                  E-mail
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setActiveTab('code')}
-                  className={`flex-1 py-2.5 font-semibold text-xs sm:text-sm border-b-2 transition-all duration-200 cursor-pointer ${
-                    activeTab === 'code'
-                      ? 'border-[#005bb3] text-[#005bb3]'
-                      : 'border-transparent text-[#414754] hover:text-[#131b2e]'
-                  }`}
-                  id="tab-code"
-                >
-                  Entrar com código
-                </button>
-              </div>
-
               {/* Login Form */}
               <form 
-                onSubmit={activeTab === 'email' ? handleEmailLogin : handleCodeLogin} 
+                onSubmit={handleCodeLogin} 
                 className="space-y-4 sm:space-y-5"
               >
                 
-                {activeTab === 'email' ? (
-                  // TAB: EMAIL LOGIN FIELDS
-                  <>
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="email">
-                        E-mail
-                      </label>
-                      <div className="relative group">
-                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                          mail
-                        </span>
-                        <input 
-                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
-                          id="email" 
-                          placeholder="nome@exemplo.com" 
-                          type="email"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                        />
-                      </div>
+                {/* TAB: STUDENT CODE FIELDS */}
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="access-code">
+                      Código de Acesso
+                    </label>
+                    <div className="relative group">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
+                        key
+                      </span>
+                      <input 
+                        className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60 font-mono" 
+                        id="access-code" 
+                        placeholder="Digite seu código (ex: NKOHML)" 
+                        type="text"
+                        value={accessCode}
+                        onChange={(e) => setAccessCode(e.target.value)}
+                      />
                     </div>
-
-                    <div className="space-y-1">
-                      <div className="flex justify-between items-center px-1">
-                        <label className="text-xs font-semibold text-[#414754]" htmlFor="password">
-                          Senha
-                        </label>
-                        <a className="text-[11px] text-[#005bb3] hover:underline font-semibold" href="#">
-                          Esqueci minha senha
-                        </a>
-                      </div>
-                      <div className="relative group">
-                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                          lock
-                        </span>
-                        <input 
-                          className="w-full pl-11 pr-11 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e]" 
-                          id="password" 
-                          placeholder="••••••••" 
-                          type={showPassword ? 'text' : 'password'}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                        />
-                        <button 
-                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-[#131b2e] transition-colors cursor-pointer border-none bg-transparent" 
-                          type="button"
-                          onClick={() => setShowPassword(prev => !prev)}
-                        >
-                          <span className="material-symbols-outlined text-[20px]">
-                            {showPassword ? 'visibility_off' : 'visibility'}
-                          </span>
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  // TAB: STUDENT CODE FIELDS
-                  <div className="space-y-4">
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="access-code">
-                        Código de Acesso
-                      </label>
-                      <div className="relative group">
-                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                          key
-                        </span>
-                        <input 
-                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60 font-mono" 
-                          id="access-code" 
-                          placeholder="Digite seu código (ex: NKOHML)" 
-                          type="text"
-                          value={accessCode}
-                          onChange={(e) => setAccessCode(e.target.value)}
-                        />
-                      </div>
-                    </div>
-
-                    <div className="space-y-1">
-                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="student-email">
-                        E-mail de Acesso (Gmail ou Outlook)
-                      </label>
-                      <div className="relative group">
-                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                          mail
-                        </span>
-                        <input 
-                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
-                          id="student-email" 
-                          placeholder="Ex: seu.nome@gmail.com" 
-                          type="email"
-                          value={studentEmailInput}
-                          onChange={(e) => setStudentEmailInput(e.target.value)}
-                        />
-                      </div>
-                    </div>
-                    
-                    <p className="text-[11px] text-[#414754] px-1 leading-normal">
-                      Insira o seu código de acesso simples de 6 dígitos e seu e-mail do Gmail ou Outlook para autenticar instantaneamente!
-                    </p>
                   </div>
-                )}
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="student-email">
+                      E-mail de Acesso (Gmail ou Outlook)
+                    </label>
+                    <div className="relative group">
+                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
+                        mail
+                      </span>
+                      <input 
+                        className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
+                        id="student-email" 
+                        placeholder="Ex: seu.nome@gmail.com" 
+                        type="email"
+                        value={studentEmailInput}
+                        onChange={(e) => setStudentEmailInput(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  
+                  <p className="text-[11px] text-[#414754] px-1 leading-normal">
+                    Insira o seu código de acesso simples de 6 dígitos e seu e-mail do Gmail ou Outlook para autenticar instantaneamente!
+                  </p>
+                </div>
 
                 <button 
                   className="w-full bg-[#0073e0] text-[#fefcff] font-semibold text-xs sm:text-sm py-3 sm:py-3.5 rounded-lg hover:shadow-lg hover:shadow-[#005bb3]/20 active:scale-[0.98] transition-all duration-200 cursor-pointer border-none" 
@@ -681,48 +595,6 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                   Entrar na Plataforma
                 </button>
               </form>
-
-              {/* Social Login Divider (Only online) */}
-              {isOnline && (
-                <>
-                  <div className="flex items-center my-6">
-                    <div className="flex-grow border-t border-[#c1c6d6]"></div>
-                    <span className="px-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                      Ou entrar com
-                    </span>
-                    <div className="flex-grow border-t border-[#c1c6d6]"></div>
-                  </div>
-
-                  {/* Social Buttons */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button 
-                      onClick={() => handleSocialLogin('google')}
-                      className="flex items-center justify-center gap-2 py-3 px-3 border border-[#c1c6d6] rounded-lg bg-[#faf8ff] hover:bg-[#eaedff] transition-colors active:scale-[0.98] cursor-pointer"
-                    >
-                      <img alt="Google" className="w-5 h-5 object-contain" src="src/assets/icons/Google logo.svg" />
-                      <span className="font-semibold text-xs sm:text-sm text-[#131b2e]">Google</span>
-                    </button>
-                    <button 
-                      onClick={() => handleSocialLogin('microsoft')}
-                      className="flex items-center justify-center gap-2 py-3 px-3 border border-[#c1c6d6] rounded-lg bg-[#faf8ff] hover:bg-[#eaedff] transition-colors active:scale-[0.98] cursor-pointer"
-                    >
-                      <img alt="Microsoft" className="w-5 h-5 object-contain" src="src/assets/icons/Microsoft_logo.svg" />
-                      <span className="font-semibold text-xs sm:text-sm text-[#131b2e]">Microsoft</span>
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {/* Bottom Signup Link */}
-              <p className="text-center mt-6 sm:mt-8 text-xs sm:text-sm text-[#414754]">
-                Não tem uma conta?{' '}
-                <button 
-                  onClick={onGoToSignup}
-                  className="text-[#005bb3] font-bold hover:underline cursor-pointer border-none bg-transparent"
-                >
-                  Crie uma agora
-                </button>
-              </p>
             </>
           ) : (
             // SUBTELA 2: TEACHER EXCLUSIVE LOGIN (ALPHANUMERIC CODE)

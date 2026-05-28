@@ -79,8 +79,8 @@ html {
 }
 
 @theme {
-  --font-sans: 'Outfit', 'Inter', system-ui, sans-serif;
-  --font-display: 'Montserrat', 'Outfit', system-ui, sans-serif;
+  --font-sans: 'Roboto', system-ui, sans-serif;
+  --font-display: 'Roboto', system-ui, sans-serif;
   --font-mono: 'Fira Code', ui-monospace, monospace;
   --font-humanist: 'Humanist777', sans-serif;
   --font-corsiva: 'MonotypeCorsiva', cursive;
@@ -365,4 +365,15 @@ html {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
+.mask-gradient {
+  mask-image: linear-gradient(to bottom, black 35%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 100%);
+}
 
+/* Disable smooth scrolling globally during active drag-and-drop to eliminate scroll lag and make scrolling instant */
+.dragging-active, 
+.dragging-active *, 
+html.dragging-active,
+html.dragging-active * {
+  scroll-behavior: auto !important;
+}

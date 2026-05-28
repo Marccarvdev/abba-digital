@@ -781,7 +781,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         
         <div className="flex flex-col gap-xs pt-md border-t border-outline-variant">
           <button
-            onClick={() => alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link mágico ou envie por WhatsApp/Gmail.')}
+            onClick={() => alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.')}
             className="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-label-md text-label-md text-left cursor-pointer bg-transparent border-none"
           >
             <span className="material-symbols-outlined">help</span> Ajuda
@@ -852,7 +852,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="src/assets/Imagens/perfil aluno/alunoexemplo.avif"
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif"
                 />
               </button>
  
@@ -1044,7 +1044,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <img 
                             alt="Avatar" 
                             className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                            src="src/assets/Imagens/perfil aluno/alunoexemplo.avif" 
+                            src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif" 
                           />
                           <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                             <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
