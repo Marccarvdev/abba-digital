@@ -1278,21 +1278,21 @@ export default function App() {
       const viewHeight = window.innerHeight;
       const viewWidth = window.innerWidth;
       
-      const threshold = 120; // 120px zone near the edges of the viewport
-      const maxScrollSpeed = 28; // max scroll speed in pixels per frame
+      const threshold = 170; // 170px zone near the edges of the viewport (increased sensitivity)
+      const maxScrollSpeed = 48; // max scroll speed in pixels per frame (nearly doubled)
 
       // Vertical auto-scroll - robustly handle pointer coordinates that go beyond viewport edges (e.g. negative or > viewHeight)
       if (pointerY < threshold) {
         // Dragging near or beyond the top edge -> scroll up
-        const intensity = Math.min(1.5, Math.max(0, (threshold - pointerY) / threshold));
-        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        const intensity = Math.min(1.6, Math.max(0, (threshold - pointerY) / threshold));
+        const speed = Math.pow(intensity, 1.15) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(0, -speed);
         }
       } else if (pointerY > viewHeight - threshold) {
         // Dragging near or beyond the bottom edge -> scroll down
-        const intensity = Math.min(1.5, Math.max(0, (pointerY - (viewHeight - threshold)) / threshold));
-        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        const intensity = Math.min(1.6, Math.max(0, (pointerY - (viewHeight - threshold)) / threshold));
+        const speed = Math.pow(intensity, 1.15) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(0, speed);
         }
@@ -1300,14 +1300,14 @@ export default function App() {
 
       // Horizontal auto-scroll for window
       if (pointerX < threshold) {
-        const intensity = Math.min(1.5, Math.max(0, (threshold - pointerX) / threshold));
-        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        const intensity = Math.min(1.6, Math.max(0, (threshold - pointerX) / threshold));
+        const speed = Math.pow(intensity, 1.15) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(-speed, 0);
         }
       } else if (pointerX > viewWidth - threshold) {
-        const intensity = Math.min(1.5, Math.max(0, (pointerX - (viewWidth - threshold)) / threshold));
-        const speed = Math.pow(intensity, 1.5) * maxScrollSpeed;
+        const intensity = Math.min(1.6, Math.max(0, (pointerX - (viewWidth - threshold)) / threshold));
+        const speed = Math.pow(intensity, 1.15) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(speed, 0);
         }
