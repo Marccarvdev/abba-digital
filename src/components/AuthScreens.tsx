@@ -6,9 +6,10 @@ import { supabase } from '../supabaseClient';
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
   onGoToSignup: () => void;
+  onGoToLanding?: () => void;
 }
 
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToSignup }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoToSignup, onGoToLanding }) => {
   const [activeTab, setActiveTab] = useState<'email' | 'code'>('code');
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [isTeacherCodeMode, setIsTeacherCodeMode] = useState<boolean>(false);
@@ -447,7 +448,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       
       {/* HEADER COMPONENT */}
       <header className="flex justify-between items-center px-6 sm:px-10 h-16 w-full bg-white border-b border-[#c1c6d6]/30">
-        <div className="font-extrabold text-xl text-[#000000] flex items-center gap-2 cursor-pointer" onClick={() => setIsTeacherCodeMode(false)}>
+        <div 
+          className="font-extrabold text-xl text-[#000000] flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all" 
+          onClick={() => onGoToLanding && onGoToLanding()}
+          title="Voltar para a página principal"
+        >
           <img 
             src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" 
             alt="ABBA Logo" 
@@ -722,9 +727,10 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 interface SignupScreenProps {
   onSignupSuccess: () => void;
   onGoToLogin: () => void;
+  onGoToLanding?: () => void;
 }
 
-export const SignupScreen: React.FC<SignupScreenProps> = ({ onSignupSuccess, onGoToLogin }) => {
+export const SignupScreen: React.FC<SignupScreenProps> = ({ onSignupSuccess, onGoToLogin, onGoToLanding }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -808,7 +814,11 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ onSignupSuccess, onG
         style={{ backgroundColor: 'rgba(250, 248, 255, 0.8)', backdropFilter: 'blur(12px)', WebkitBackdropFilter: 'blur(12px)', borderColor: '#c1c6d6' }}
       >
         <div className="flex justify-between items-center w-full mx-auto" style={{ maxWidth: 1200, padding: '16px 20px' }}>
-          <div className="flex items-center gap-2 cursor-pointer" onClick={onGoToLogin}>
+          <div 
+            className="flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all" 
+            onClick={() => onGoToLanding ? onGoToLanding() : onGoToLogin()}
+            title="Voltar para a página principal"
+          >
             <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-8 h-8 object-contain" />
             <span style={{ color: '#005bb3', fontSize: 28, lineHeight: '36px', fontWeight: 600, letterSpacing: '-0.02em' }}>ABBA DIGITAL</span>
           </div>

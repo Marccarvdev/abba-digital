@@ -2252,6 +2252,11 @@ export default function App() {
             }
           }}
           onGoToSignup={() => setCurrentScreen('signup')}
+          onGoToLanding={() => {
+            setShowLanding(true);
+            setCurrentScreen('abacus');
+            setActiveTab('app');
+          }}
         />
       </>
     );
@@ -2262,6 +2267,11 @@ export default function App() {
       <SignupScreen
         onSignupSuccess={() => setCurrentScreen('login')}
         onGoToLogin={() => setCurrentScreen('login')}
+        onGoToLanding={() => {
+          setShowLanding(true);
+          setCurrentScreen('abacus');
+          setActiveTab('app');
+        }}
       />
     );
   }
