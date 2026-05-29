@@ -1791,19 +1791,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right hidden lg:flex"
                   >
                     {/* Header */}
-                    <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                    <div className="py-4 px-5 flex justify-between items-center border-b border-slate-100 bg-white">
                       <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     </div>
 
                     {/* Scrollable Content */}
-                    <div className="overflow-y-auto bg-white">
+                    <div className="overflow-y-auto bg-white pb-4">
                       {/* User info details */}
-                      <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                      <div className="py-3 px-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                         <div className="relative shrink-0">
                           <img
                             alt="Avatar"
-                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20"
+                            className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20"
                             src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
                           />
                           <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
@@ -1817,18 +1817,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
 
                       {/* Progress card */}
-                      <div className="p-5 flex flex-col gap-3">
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                      <div className="py-3 px-5 flex flex-col gap-2">
+                        <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-left">
                           <div className="flex justify-between items-start">
                             <div>
                               <p className="text-xs font-bold text-slate-700">Progresso do Ábaco Digital</p>
-                              <p className="text-[11px] text-slate-400 mt-1">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
+                              <p className="text-[11px] text-slate-400 mt-0.5">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
                             </div>
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-indigo-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5c0 1.66-1.34 3-3 3H9a3 3 0 0 1-3-3V8a6 6 0 0 1 6-6z"></path></svg>
                           </div>
 
                           {/* Progress bar */}
-                          <div className="w-full h-2.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
+                          <div className="w-full h-2 bg-slate-200 rounded-full mt-3 overflow-hidden">
                             <div
                               className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
                               style={{ width: `${(completedCount / NUMERAL_ITEMS.length) * 100}%` }}
@@ -1838,10 +1838,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
 
                       {/* Dropdown Menu Actions */}
-                      <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                      <div className="px-4 py-2 border-t border-slate-100 flex flex-col gap-1 bg-white">
                         <button
                           onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
-                          className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                          className="w-full flex items-center justify-between py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
                         >
                           <span className="flex items-center gap-2">
                             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
@@ -1852,15 +1852,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                         <button
                           onClick={() => { setShowProfileMenu(false); setShowAvatarSelector(true); }}
-                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                          className="w-full flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1-2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51-1z"></path></svg>
                           Editar Perfil
                         </button>
 
                         <button
                           onClick={() => { setShowProfileMenu(false); onLogout(); }}
-                          className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                          className="w-full flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-red-500 shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                           Sair da Conta

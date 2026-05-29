@@ -2147,19 +2147,19 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right hidden md:flex"
                     >
                       {/* Header */}
-                      <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                      <div className="py-4 px-5 flex justify-between items-center border-b border-slate-100 bg-white">
                         <h2 className="text-lg font-bold text-slate-900">Perfil do Teatcher</h2>
                         <span className="material-symbols-outlined text-slate-400">school</span>
                       </div>
  
                       {/* Scrollable Content */}
-                      <div className="overflow-y-auto bg-white">
+                      <div className="overflow-y-auto bg-white pb-4">
                         {/* User info details */}
-                        <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                        <div className="py-3 px-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                           <div className="relative shrink-0">
                             <img 
                               alt="Avatar" 
-                              className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                              className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20" 
                               src="src/assets/Imagens/profdecioperfil.avif" 
                             />
                             <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
@@ -2173,26 +2173,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         </div>
  
                         {/* Progress/Summary Card for Teacher */}
-                        <div className="p-5 flex flex-col gap-3">
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                        <div className="py-3 px-5 flex flex-col gap-2">
+                          <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-left">
                             <div className="flex justify-between items-start">
                               <div>
                                 <p className="text-xs font-bold text-slate-700">Função: Teatcher</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Teatcher de inglês e idiomas</p>
+                                <p className="text-[11px] text-slate-400 mt-0.5">Teatcher de inglês e idiomas</p>
                               </div>
                               <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
                             </div>
-                            <p className="text-[10px] text-slate-400 mt-3 leading-relaxed">
+                            <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
                               Gerencie tarefas, atribua atividades e acompanhe o progresso de alfabetização digital dos seus alunos.
                             </p>
                           </div>
                         </div>
  
                         {/* Dropdown Menu Actions */}
-                        <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                        <div className="px-4 py-2 border-t border-slate-100 flex flex-col gap-1 bg-white">
                           <button 
                             onClick={() => { setActiveTab('tasks'); setShowProfileMenu(false); }}
-                            className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                            className="w-full flex items-center justify-between py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
                           >
                             <span className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-[18px]">task</span>
@@ -2203,7 +2203,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           
                           <button 
                             onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
-                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                            className="w-full flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                           >
                             <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
                             Editar Perfil
@@ -2211,7 +2211,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           
                           <button 
                             onClick={() => { setShowProfileMenu(false); setShowSettingsModal(true); }}
-                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                            className="w-full flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                           >
                             <span className="material-symbols-outlined text-[18px]">settings</span>
                             Configurações
@@ -2219,7 +2219,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           
                           <button 
                             onClick={() => { setShowProfileMenu(false); onLogout(); }}
-                            className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                            className="w-full flex items-center gap-2 py-2 px-3 rounded-xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
                           >
                             <span className="material-symbols-outlined text-[18px]">logout</span>
                             Sair da Conta
