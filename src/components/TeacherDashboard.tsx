@@ -1532,6 +1532,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     return true;
   });
 
+  const filteredActiveCodes = activeCodes.filter(c =>
+    c.studentName.toLowerCase().includes(studentSearchQuery.toLowerCase())
+  );
+
   const [selectedStudentIdsGrid, setSelectedStudentIdsGrid] = useState<string[]>([]);
 
   const handleCloudSync = () => {
@@ -3852,40 +3856,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
               </div>
 
-              {/* Student grid with Checkboxes selection */}
+              {/* Unified "Enviar convite de acesso" section */}
               <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
                 <div className="p-6 border-b border-[#dde0e2] space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                    <h3 className="font-extrabold text-lg">Enviar convite de acesso</h3>
-                    <div className="flex items-center gap-2">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-[#f2f3ff] rounded-xl border border-[#c1c6d6]/60">
-                        <input
-                          type="checkbox"
-                          id="select-all"
-                          checked={selectedStudentIds.length === filteredStudentsForGrid.length && filteredStudentsForGrid.length > 0}
-                          onChange={(e) => handleSelectAllStudents(e.target.checked)}
-                          className="w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] cursor-pointer"
-                        />
-                        <label htmlFor="select-all" className="text-xs font-bold text-slate-500 cursor-pointer select-none">
-                          Selecionar Todos
-                        </label>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleBatchAssignKeys}
-                        disabled={selectedStudentIds.length === 0}
-                        className="px-4 py-2 bg-[#005bb3] text-white font-bold text-xs rounded-xl hover:brightness-110 active:scale-95 disabled:opacity-50 disabled:pointer-events-none transition-all cursor-pointer border-none shadow-sm flex items-center gap-1.5"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">key</span>
-                        Atribuir
-                      </button>
+                  <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
+                    <div>
+                      <h3 className="font-extrabold text-lg">Enviar convite de acesso</h3>
+                      <p className="text-xs text-slate-400 mt-1">Alunos que acessaram pelo código - Chaves ativas geradas para acompanhamento em tempo real</p>
                     </div>
                   </div>
                   <div className="relative">
                     <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
                     <input
                       type="text"
-                      placeholder="Filtrar por nome ou turma..."
+                      placeholder="Filtrar chaves de acesso por nome do aluno..."
                       value={studentSearchQuery}
                       onChange={(e) => setStudentSearchQuery(e.target.value)}
                       className="w-full pl-9 pr-4 py-2.5 bg-[#f2f3ff] border-none rounded-xl text-xs focus:ring-2 focus:ring-[#005bb3] outline-none"
@@ -3893,90 +3877,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   </div>
                 </div>
 
-                <div className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 p-6 pt-8 pl-8 bg-slate-50/20">
-                    {filteredStudentsForGrid.map(s => {
-                      const isSelected = selectedStudentIds.includes(s.id);
-                      return (
-                        <div
-                          key={s.id}
-                          onClick={() => handleSelectStudent(s.id, !isSelected)}
-                          className={`bg-white rounded-2xl border transition-all cursor-pointer relative shadow-sm p-6 pt-10 flex flex-col hover:border-[#005bb3]/40 ${
-                            isSelected ? 'border-[#005bb3] bg-[#f2f3ff]' : 'border-[#c1c6d6]/60'
-                          }`}
-                        >
-                          {/* Popping out avatar */}
-                          <div className={`absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 overflow-hidden shadow-md bg-white select-none shrink-0 transition-all ${
-                            isSelected ? 'border-[#005bb3]' : 'border-slate-200'
-                          }`}>
-                            <img src={s.img} className="w-full h-full object-cover" alt={s.name} />
-                          </div>
-
-                          {/* Custom Checkbox Selection & Trash Button in top-right */}
-                          <div className="absolute top-4 right-4 flex items-center gap-2 select-none z-30">
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border cursor-pointer transition-all ${
-                              isSelected ? 'bg-[#005bb3] border-[#005bb3] text-white' : 'bg-white border-[#c1c6d6]'
-                            }`}>
-                              {isSelected && <span className="material-symbols-outlined text-[12px] font-bold">check</span>}
-                            </div>
-                            
-                            <button
-                              type="button"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                if (confirm(`Tem certeza de que deseja excluir permanentemente o aluno ${s.name}?`)) {
-                                  setStudents(prev => prev.filter(student => student.id !== s.id));
-                                  const updatedLocal = students.filter(student => student.id !== s.id);
-                                  localStorage.setItem('abba_students_list', JSON.stringify(updatedLocal));
-                                  try {
-                                    await supabase.from('students').delete().eq('id', s.id);
-                                  } catch (err) {
-                                    console.warn('Erro ao excluir no banco:', err);
-                                  }
-                                  alert('Aluno excluído com sucesso! 🗑️');
-                                }
-                              }}
-                              className="p-1 text-slate-300 hover:text-red-500 rounded-full hover:bg-red-50 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
-                              title="Excluir aluno permanentemente"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
-                            </button>
-                          </div>
-
-                          {/* Content of the card */}
-                          <div className="flex-grow mt-2">
-                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                              Estudante
-                            </span>
-                            <h4 className="text-sm font-extrabold text-[#131b2e] tracking-wide mt-2 truncate leading-tight">
-                              {s.name}
-                            </h4>
-                            <p className="text-[10px] text-slate-500 mt-1 truncate font-medium">
-                              {s.class}
-                            </p>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-
-              {/* Active codes table */}
-              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden">
-                <div className="p-6 border-b border-[#dde0e2]">
-                  <h3 className="font-extrabold text-lg">Alunos que acessaram pelo código</h3>
-                  <p className="text-xs text-slate-400">Tokens gerados em atividade para acompanhamento</p>
-                </div>
-                <div>
-                  {activeCodes.length === 0 ? (
+                <div className="p-6 bg-slate-50/20 flex-grow">
+                  {filteredActiveCodes.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-sm">
-                      Nenhum código de acesso gerado ainda.
+                      {studentSearchQuery ? 'Nenhuma chave encontrada para esta busca.' : 'Nenhuma chave de acesso ativa no momento.'}
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 p-8 bg-slate-50/50 min-h-[200px]">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pt-6 pl-6">
                       <AnimatePresence>
-                      {activeCodes.map((c, index) => {
+                      {filteredActiveCodes.map((c, index) => {
                         const isExpired = Date.now() > c.expiresAt;
                         const student = students.find(s => s.name.toLowerCase() === c.studentName.toLowerCase());
                         const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif";
@@ -4002,12 +3911,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
                             className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-6 pt-10 flex flex-col relative hover:border-[#005bb3]/40 transition-all group"
                           >
-                            {/* Circular avatar with thick green border */}
                             <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 border-[#00c853] overflow-hidden shadow-md bg-white select-none shrink-0">
                               <img src={studentImg} className="w-full h-full object-cover" alt={c.studentName} />
                             </div>
 
-                            {/* Expired/Active badge & Revoke Button */}
                             <div className="absolute top-4 right-4 flex items-center gap-2 select-none">
                               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/60">
                                 {c.durationLabel && c.durationLabel.startsWith('Até ') && c.durationLabel.includes('-')
@@ -4032,7 +3939,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               </button>
                             </div>
 
-                            {/* Card Content */}
                             <div className="flex-1 mt-2">
                               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
                                 Chave gerada para {c.studentName}
@@ -4047,7 +3953,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               </p>
                             </div>
 
-                            {/* Copy button matching third image exactly */}
                             <button
                               type="button"
                               onClick={() => handleCopyCode(c.code, index)}
@@ -4069,7 +3974,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
             </div>
           )}
-
         </main>
 
         {/* Modal: Batch Assign Duration */}
