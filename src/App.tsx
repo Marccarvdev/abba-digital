@@ -131,6 +131,7 @@ import { LoginScreen, SignupScreen } from './components/AuthScreens';
 import { TeacherDashboard } from './components/TeacherDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { Confetti } from './components/Confetti';
+import { supabase } from './supabaseClient';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -251,6 +252,12 @@ export default function App() {
   
   // State for show Session Expired modal
   const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false);
+
+  // States for active task saving process and success modal
+  const [isSavingActivity, setIsSavingActivity] = useState(false);
+  const [savingProgressText, setSavingProgressText] = useState("");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[] } | null>(null);
 
   // Spelled words list completed by student
   const [completedSpelledWords, setCompletedSpelledWords] = useState<SavedWord[]>(() => {
@@ -441,6 +448,230 @@ export default function App() {
     setRowColors(newRowColors);
     setActiveReviewSubmission(submission);
     setCurrentScreen('abacus');
+  };
+
+  const handleSaveAndSubmitActivity = async () => {
+    if (!activeTaskInfo) return;
+    
+    setIsSavingActivity(true);
+    setSavingProgressText("Analisando o tabuleiro do Ábaco...");
+    
+    setTimeout(() => {
+      setSavingProgressText("Processando fios de costura e cores...");
+    }, 800);
+    
+    setTimeout(() => {
+      setSavingProgressText("Gravando palavras no sistema...");
+    }, 1600);
+    
+    setTimeout(() => {
+      setSavingProgressText("Gerando relatório PDF e fechando atividade...");
+    }, 2400);
+
+    setTimeout(async () => {
+      const newWords = [...savedWordsList];
+      setCompletedSpelledWords(prev => {
+        const merged = [...prev];
+        newWords.forEach(nw => {
+          if (!merged.some(m => m.word.toUpperCase() === nw.word.toUpperCase())) {
+            merged.push(nw);
+          }
+        });
+        return merged;
+      });
+
+      const studentName = user?.name || "Estudante";
+      const studentEmail = user?.email || "aluno@abbadigital.com";
+      const taskTitle = activeTaskInfo.title;
+      
+      const newSentItem = {
+        id: `SUB-${Date.now()}`,
+        studentName,
+        studentEmail,
+        taskTitle,
+        submittedAt: new Date().toISOString(),
+        spelledWordsCount: newWords.length
+      };
+
+      try {
+        const localSent = localStorage.getItem('abba_student_sent_activities');
+        const sentList = localSent ? JSON.parse(localSent) : [];
+        sentList.unshift(newSentItem);
+        localStorage.setItem('abba_student_sent_activities', JSON.stringify(sentList));
+      } catch (e) {
+        console.error(e);
+      }
+
+      try {
+        await supabase.from('student_submissions').insert([
+          {
+            student_name: studentName,
+            student_email: studentEmail,
+            task_title: taskTitle,
+            submitted_at: newSentItem.submittedAt,
+            spelled_words_count: newSentItem.spelledWordsCount
+          }
+        ]);
+        console.log('⚡ Submission synced with Supabase from active task!');
+      } catch (err) {
+        console.warn('Erro ao salvar submissão no Supabase:', err);
+      }
+
+      setLastSavedTask({
+        title: taskTitle,
+        words: newWords
+      });
+
+      setIsSavingActivity(false);
+      setShowSuccessModal(true);
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 5000);
+      
+    }, 3200);
+  };
+
+  const handleDownloadTaskPdf = () => {
+    if (!lastSavedTask) return;
+    
+    try {
+      const encoder = new TextEncoder();
+      const objects: Uint8Array[] = [];
+
+      const escapePdfText = (text: string) => {
+        if (!text) return "";
+        return text
+          .replace(/\\/g, "\\\\")
+          .replace(/\(/g, "\\(")
+          .replace(/\)/g, "\\)")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      };
+
+      objects.push(encoder.encode("<< /Type /Catalog /Pages 2 0 R >>"));
+      objects.push(encoder.encode("<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>"));
+      objects.push(encoder.encode("<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 595.27 841.89 ] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"));
+
+      const dateStr = new Date().toLocaleDateString('pt-BR');
+      const studentName = user?.name || "Estudante";
+      const taskTitle = lastSavedTask.title;
+      const completedWords = lastSavedTask.words;
+
+      const streamLines = [
+        "BT",
+        "/F1 20 Tf",
+        "50 780 Td",
+        "(ABBA DIGITAL - Relatorio de Atividades) Tj",
+        "0 -40 Td",
+        "/F1 13 Tf",
+        `(${escapePdfText("Tarefa: " + taskTitle)}) Tj`,
+        "0 -22 Td",
+        "/F2 11 Tf",
+        `(${escapePdfText("Estudante: " + studentName)}) Tj`,
+        "0 -18 Td",
+        `(${escapePdfText("Data de Conclusao: " + dateStr)}) Tj`,
+        "0 -18 Td",
+        `(${escapePdfText("Status da Atividade: CONCLUIDA E SALVA")}) Tj`,
+        "0 -40 Td",
+        "/F1 13 Tf",
+        "(Palavras Soletradas no Abaco Digital:) Tj",
+        "0 -12 Td"
+      ];
+
+      if (completedWords.length === 0) {
+        streamLines.push(
+          "0 -20 Td",
+          "/F2 11 Tf",
+          "(Nenhuma palavra gravada ainda no abaco.) Tj"
+        );
+      } else {
+        completedWords.forEach((wordObj, i) => {
+          let langName = "Portugues";
+          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Ingles";
+          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemao";
+          else if (wordObj.themeColor === 'green' || wordObj.themeColor === '#10b981') langName = "Italiano";
+
+          const textLine = `${i + 1}. ${wordObj.word} (${langName})`;
+          streamLines.push(
+            "0 -20 Td",
+            "/F2 11 Tf",
+            `(${escapePdfText(textLine)}) Tj`
+          );
+        });
+      }
+
+      streamLines.push(
+        "0 -50 Td",
+        "/F1 9 Tf",
+        "(Relatorio gerado em tempo real pelo Abaco Digital de Alfabetizacao.) Tj",
+        "0 -14 Td",
+        "(Acesse: abba-digital.vercel.app | Codigo de Autenticidade: ABBA-2026) Tj",
+        "ET"
+      );
+
+      const streamContent = encoder.encode(streamLines.join("\n"));
+
+      const headerStr = `<< /Length ${streamContent.length} >>\nstream\n`;
+      const footerStr = `\nendstream`;
+      const headerBin = encoder.encode(headerStr);
+      const footerBin = encoder.encode(footerStr);
+
+      const contentStreamObj = new Uint8Array(headerBin.length + streamContent.length + footerBin.length);
+      contentStreamObj.set(headerBin, 0);
+      contentStreamObj.set(streamContent, headerBin.length);
+      contentStreamObj.set(footerBin, headerBin.length + streamContent.length);
+
+      objects.push(contentStreamObj);
+      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"));
+      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"));
+
+      const chunks: Uint8Array[] = [];
+      chunks.push(encoder.encode("%PDF-1.4\n"));
+
+      const offsets: number[] = [];
+      let currentOffset = chunks[0].length;
+
+      for (let i = 0; i < objects.length; i++) {
+        offsets.push(currentOffset);
+        const objHeader = encoder.encode(`${i + 1} 0 obj\n`);
+        const objFooter = encoder.encode("\nendobj\n");
+
+        chunks.push(objHeader);
+        chunks.push(objects[i]);
+        chunks.push(objFooter);
+
+        currentOffset += objHeader.length + objects[i].length + objFooter.length;
+      }
+
+      const xrefOffset = currentOffset;
+
+      chunks.push(encoder.encode("xref\n"));
+      chunks.push(encoder.encode(`0 ${objects.length + 1}\n`));
+      chunks.push(encoder.encode("0000000000 65535 f\r\n"));
+
+      for (let i = 0; i < offsets.length; i++) {
+        const paddedOffset = String(offsets[i]).padStart(10, '0');
+        chunks.push(encoder.encode(`${paddedOffset} 00000 n\r\n`));
+      }
+
+      chunks.push(encoder.encode("trailer\n"));
+      chunks.push(encoder.encode(`<< /Size ${objects.length + 1} /Root 1 0 R >>\n`));
+      chunks.push(encoder.encode("startxref\n"));
+      chunks.push(encoder.encode(`${xrefOffset}\n`));
+      chunks.push(encoder.encode("%%EOF\n"));
+
+      const blob = new Blob(chunks, { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `relatorio-tarefa-${escapePdfText(taskTitle).toLowerCase().replace(/\s+/g, '-')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+    }
   };
 
   const handleCloseReviewMode = () => {
@@ -869,54 +1100,7 @@ export default function App() {
   // Keep spelling rows neat & automatically manage empty rows based on drag state
   const isCurrentlyDragging = draggedCube !== null || draggedTrayIndex !== null || draggedShelfIndex !== null;
 
-  useEffect(() => {
-    if (isCurrentlyDragging) {
-      // 1. DRAGGING STATE: Expand board dynamically so the user has plenty of space below to drop blocks
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
 
-      // Ensure we have at least 9 rows in total, and at least 4 empty rows below the last filled row
-      const desiredLength = Math.max(9, lastFilledRowIdx + 5);
-      if (spelledRows.length < desiredLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          while (copy.length < desiredLength) {
-            copy.push([]);
-          }
-          return copy;
-        });
-      }
-    } else {
-      // 2. IDLE STATE: Clean up trailing empty rows, but preserve intermediate empty rows to prevent layout shifting!
-      let lastFilledRowIdx = -1;
-      spelledRows.forEach((row, idx) => {
-        if (row.length > 0) {
-          lastFilledRowIdx = idx;
-        }
-      });
-
-      // We want to keep all rows up to lastFilledRowIdx, plus at least 4 empty rows, with a minimum of 6 rows in total
-      const targetLength = Math.max(6, lastFilledRowIdx + 4);
-      
-      if (spelledRows.length !== targetLength) {
-        setSpelledRows(prev => {
-          const copy = prev.map(r => [...r]);
-          if (copy.length > targetLength) {
-            return copy.slice(0, targetLength);
-          } else {
-            while (copy.length < targetLength) {
-              copy.push([]);
-            }
-            return copy;
-          }
-        });
-      }
-    }
-  }, [spelledRows, isCurrentlyDragging]);
 
   // Synchronize rowIds with spelledRows length for dynamic padding/trimming
   useEffect(() => {
@@ -962,9 +1146,9 @@ export default function App() {
     const py = y !== undefined ? y : pointerPos.y;
     const rect = refEl.getBoundingClientRect();
     
-    // Use a safety boundary of 35px so dragging outside makes it easy to delete.
+    const isMobile = window.innerWidth < 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
     const hPadding = 35;
-    const vPadding = 35;
+    const vPadding = isMobile ? 320 : 35;
     
     return (
       px >= rect.left - hPadding &&
@@ -1157,19 +1341,13 @@ export default function App() {
   useEffect(() => {
     const isDragging = (draggedCube !== null && draggedLetter !== null) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null);
     if (isDragging) {
-      document.body.style.touchAction = 'none';
-      document.documentElement.style.touchAction = 'none';
       document.documentElement.classList.add('dragging-active');
       document.body.classList.add('dragging-active');
     } else {
-      document.body.style.touchAction = '';
-      document.documentElement.style.touchAction = '';
       document.documentElement.classList.remove('dragging-active');
       document.body.classList.remove('dragging-active');
     }
     return () => {
-      document.body.style.touchAction = '';
-      document.documentElement.style.touchAction = '';
       document.documentElement.classList.remove('dragging-active');
       document.body.classList.remove('dragging-active');
     };
@@ -1234,6 +1412,9 @@ export default function App() {
       const threshold = 170; // 170px zone near the edges of the viewport (increased sensitivity)
       const maxScrollSpeed = 58; // max scroll speed in pixels per frame (increased for extreme speed)
 
+      const isMobile = window.innerWidth < 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+      const bottomThreshold = isMobile ? (viewHeight * 0.65) : threshold;
+
       let didScroll = false;
       // Vertical auto-scroll - robustly handle pointer coordinates that go beyond viewport edges (e.g. negative or > viewHeight)
       // Removed the limit (capping) of 1.6 to allow infinite scroll speed when the user drags the block far outside the viewport!
@@ -1245,9 +1426,9 @@ export default function App() {
           window.scrollBy(0, -speed);
           didScroll = true;
         }
-      } else if (pointerY > viewHeight - threshold) {
+      } else if (pointerY > viewHeight - bottomThreshold) {
         // Dragging near or beyond the bottom edge -> scroll down
-        const intensity = Math.max(0, (pointerY - (viewHeight - threshold)) / threshold);
+        const intensity = Math.max(0, (pointerY - (viewHeight - bottomThreshold)) / bottomThreshold);
         const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
         if (speed > 0.5) {
           window.scrollBy(0, speed);
@@ -1255,20 +1436,22 @@ export default function App() {
         }
       }
 
-      // Horizontal auto-scroll for window
-      if (pointerX < threshold) {
-        const intensity = Math.max(0, (threshold - pointerX) / threshold);
-        const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
-        if (speed > 0.5) {
-          window.scrollBy(-speed, 0);
-          didScroll = true;
-        }
-      } else if (pointerX > viewWidth - threshold) {
-        const intensity = Math.max(0, (pointerX - (viewWidth - threshold)) / threshold);
-        const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
-        if (speed > 0.5) {
-          window.scrollBy(speed, 0);
-          didScroll = true;
+      // Horizontal auto-scroll for window - ONLY on desktop (not mobile!)
+      if (!isMobile) {
+        if (pointerX < threshold) {
+          const intensity = Math.max(0, (threshold - pointerX) / threshold);
+          const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
+          if (speed > 0.5) {
+            window.scrollBy(-speed, 0);
+            didScroll = true;
+          }
+        } else if (pointerX > viewWidth - threshold) {
+          const intensity = Math.max(0, (pointerX - (viewWidth - threshold)) / threshold);
+          const speed = Math.pow(intensity, 1.1) * maxScrollSpeed;
+          if (speed > 0.5) {
+            window.scrollBy(speed, 0);
+            didScroll = true;
+          }
         }
       }
 
@@ -1414,6 +1597,8 @@ export default function App() {
       // ensuring the dragging cube coordinates align instantly with the finger.
       setPointerPos({ x: e.clientX, y: e.clientY });
       pointerPosRef.current = { x: e.clientX, y: e.clientY };
+
+
 
       // Calculate velocity and time intervals
       const now = performance.now();
@@ -1822,9 +2007,13 @@ export default function App() {
     window.addEventListener('pointercancel', handlePointerCancel);
 
     const handleGlobalTouch = (e: TouchEvent) => {
-      const target = e.target as HTMLElement;
-      const isDraggable = target.closest('[data-shelf-idx]') || target.closest('[data-slot-idx]') || target.closest('.cursor-grab');
-      if (isDraggable && e.cancelable) {
+      // Only block scroll when a drag is actually in progress — do NOT block when simply touching near cubes!
+      const isCurrentlyDragging =
+        draggedCubeRef.current !== null ||
+        draggedLetterRef.current !== null ||
+        draggedTrayIndexRef.current !== null ||
+        draggedShelfIndexRef.current !== null;
+      if (isCurrentlyDragging && e.cancelable) {
         e.preventDefault();
       }
     };
@@ -2208,9 +2397,13 @@ export default function App() {
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
     e.preventDefault();
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (err) {}
+    // Only use setPointerCapture on desktop — on mobile/touch it causes pointercancel which kills drags
+    const isMobile = window.matchMedia('(pointer: coarse)').matches;
+    if (!isMobile) {
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch (err) {}
+    }
     const rect = e.currentTarget.getBoundingClientRect();
     const startX = rect.left + rect.width / 2 + window.scrollX;
     const startY = rect.top + rect.height / 2 + window.scrollY;
@@ -2230,7 +2423,7 @@ export default function App() {
     pointerPosRef.current = { x: e.clientX, y: e.clientY };
     setDragScribblePoints([{ x: startX, y: startY }]);
 
-    if (trayRef.current) {
+    if (trayRef.current && !isMobile) {
       trayRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }
   };
@@ -2771,15 +2964,25 @@ export default function App() {
               </h2>
             </div>
             
-            <button
-              onClick={() => {
-                setActiveTaskInfo(null);
-                setCurrentScreen('student-dashboard');
-              }}
-              className="inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap self-start sm:self-center border-none"
-            >
-              <span>Voltar ao Painel</span>
-            </button>
+            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center">
+              <button
+                onClick={handleSaveAndSubmitActivity}
+                className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+              >
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                <span>Salvar Atividade</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setActiveTaskInfo(null);
+                  setCurrentScreen('student-dashboard');
+                }}
+                className="inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+              >
+                <span>Voltar ao Painel</span>
+              </button>
+            </div>
           </div>
         ) : (
           <div className="text-left">
@@ -2835,7 +3038,7 @@ export default function App() {
         })()}
 
         {/* 1. INTERACTIVE CUBES GRID */}
-        <section className="bg-white rounded-3xl border border-gray-200 p-5 sm:p-6 shadow-xs w-full text-left">
+        <section className={`bg-white rounded-3xl border border-gray-200 p-5 sm:p-6 shadow-xs w-full text-left ${isCurrentlyDragging ? 'pointer-events-none' : ''}`}>
           <div className="mb-4 border-b border-gray-100 pb-2.5 flex items-center justify-between">
             <button
               onClick={handleFlagClick}
@@ -2869,22 +3072,32 @@ export default function App() {
                 data-shelf-idx={cubeIdx}
               >
                 <div 
-                  className={`touch-none select-none transition-all duration-150 w-full h-full ${
+                  className={`select-none transition-all duration-150 w-full h-full ${
                     draggedShelfIndex === cubeIdx 
                       ? 'opacity-30 scale-95 border-2 border-dashed border-gray-300 rounded-2xl' 
                       : 'active:scale-95 cursor-grab'
                   }`}
                   onTouchStart={(e) => {
-                    if (e.cancelable) e.preventDefault();
+                    // Only block native scroll when actively dragging
+                    if (draggedShelfIndexRef.current !== null || draggedCubeRef.current !== null) {
+                      if (e.cancelable) e.preventDefault();
+                    }
                   }}
                   onTouchMove={(e) => {
-                    if (e.cancelable) e.preventDefault();
+                    // Only block native scroll when actively dragging
+                    if (draggedShelfIndexRef.current !== null || draggedCubeRef.current !== null) {
+                      if (e.cancelable) e.preventDefault();
+                    }
                   }}
                   onPointerDown={(e) => {
                     e.preventDefault();
-                    try {
-                      e.currentTarget.setPointerCapture(e.pointerId);
-                    } catch (err) {}
+                    // Only use setPointerCapture on desktop — on touch devices it triggers pointercancel
+                    const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+                    if (!isTouchDevice) {
+                      try {
+                        e.currentTarget.setPointerCapture(e.pointerId);
+                      } catch (err) {}
+                    }
                     if (isReorderCubesActive) {
                       setDraggedShelfIndex(cubeIdx);
                       draggedShelfIndexRef.current = cubeIdx;
@@ -2921,7 +3134,7 @@ export default function App() {
         {/* 2. THE MULTI-LINE SPELLING WORKSPACE */}
         <section 
           ref={trayRef} 
-          className="bg-white rounded-3xl border border-gray-150 p-5 sm:p-6 shadow-xs relative overflow-hidden w-full text-left font-sans animate-feed"
+          className={`bg-white rounded-3xl border border-gray-150 p-5 sm:p-6 shadow-xs relative overflow-hidden w-full text-left font-sans animate-feed ${isCurrentlyDragging ? 'pointer-events-none' : ''}`}
         >
           <div className="flex flex-col gap-4 w-full">
 
@@ -3145,7 +3358,7 @@ export default function App() {
 
                             updateElementPositions();
                           }}
-                          className="spelling-scroll-container w-full h-[calc((100vw-6rem)/5+8px)] min-h-[calc((100vw-6rem)/5+8px)] max-h-[calc((100vw-6rem)/5+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-1 overflow-x-auto no-scrollbar scroll-auto relative"
+                          className="spelling-scroll-container w-full h-[calc((100vw-6.5rem)/4+8px)] min-h-[calc((100vw-6.5rem)/4+8px)] max-h-[calc((100vw-6.5rem)/4+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-1 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
                           <AnimatePresence>
                             {row.length === 0 && isLastRow && (
@@ -3194,7 +3407,7 @@ export default function App() {
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -3240,25 +3453,35 @@ export default function App() {
                                          ease: [0.32, 0.94, 0.60, 1]
                                        } 
                                      }}
-                                    className={`relative z-20 min-w-[calc((100vw-6rem)/5)] w-[calc((100vw-6rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
+                                    className={`relative z-20 min-w-[calc((100vw-6.5rem)/4)] w-[calc((100vw-6.5rem)/4)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
                                       isBeingReplaced 
                                         ? 'ring-4 ring-offset-2' 
                                         : ''
                                     }`}
-                                    style={isBeingReplaced ? undefined : undefined}
+                                    style={isBeingReplaced ? { willChange: 'transform' } : undefined}
                                     onTouchStart={(e) => {
-                                      if (e.cancelable) e.preventDefault();
+                                      // Only block native scroll when a tray drag is in progress
+                                      if (draggedTrayIndexRef.current !== null || trayDragStartRef.current !== null) {
+                                        if (e.cancelable) e.preventDefault();
+                                      }
                                     }}
                                     onTouchMove={(e) => {
-                                      if (e.cancelable) e.preventDefault();
+                                      // Only block native scroll when a tray drag is in progress
+                                      if (draggedTrayIndexRef.current !== null || trayDragStartRef.current !== null) {
+                                        if (e.cancelable) e.preventDefault();
+                                      }
                                     }}
                                     onPointerDown={(e) => {
                                       if (isBeingDragged) return;
                                       e.preventDefault();
                                       e.stopPropagation(); // Stop bubbling to prevent showing the scrollbar when grabbing a letter
-                                      try {
-                                        e.currentTarget.setPointerCapture(e.pointerId);
-                                      } catch (err) {}
+                                      // Only use setPointerCapture on desktop — on touch it causes pointercancel killing drags
+                                      const isTouchDevice = window.matchMedia('(pointer: coarse)').matches;
+                                      if (!isTouchDevice) {
+                                        try {
+                                          e.currentTarget.setPointerCapture(e.pointerId);
+                                        } catch (err) {}
+                                      }
                                       setTrayDragStart({ 
                                         index: slotIdx, 
                                         x: e.clientX, 
@@ -3299,7 +3522,7 @@ export default function App() {
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -3334,7 +3557,7 @@ export default function App() {
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -3641,10 +3864,10 @@ export default function App() {
                 }
             }
 
-            const wireStartX = baseX;
-            const wireStartY = baseY;
-            let wireEndX = endCenterX - ux * (endFaceW / 2);
-            let wireEndY = endCenterY - uy * (endFaceH / 2);
+            let wireStartX = startCenterX;
+            let wireStartY = startCenterY + (startFaceH / 2);
+            let wireEndX = endCenterX;
+            let wireEndY = endCenterY - (endFaceH / 2);
 
             if (clip) {
               const buffer = 18;
@@ -3741,10 +3964,14 @@ export default function App() {
             const ux = dx / dist;
             const uy = dy / dist;
 
-            const wireStartX = startCenterX + ux * (startFaceW / 2);
-            const wireStartY = startCenterY + uy * (startFaceH / 2);
-            const wireEndX = currentDragPageX - ux * (endW / 2);
-            const wireEndY = currentDragPageY - uy * (endH / 2);
+            const dragW = window.innerWidth < 640 ? (window.innerWidth - 104) / 4 : 66;
+            const dragH = dragW;
+            const dragFaceH = 0.720 * dragH;
+
+            const wireStartX = startCenterX;
+            const wireStartY = startCenterY + (startFaceH / 2);
+            const wireEndX = currentDragPageX + 0.1244 * dragW;
+            const wireEndY = currentDragPageY + 0.1244 * dragH - (dragFaceH / 2);
 
             const midY = wireStartY + (wireEndY - wireStartY) * 0.45;
             const pathData = `M ${wireStartX} ${wireStartY} C ${wireStartX} ${midY}, ${wireEndX} ${wireStartY + (wireEndY - wireStartY) * 0.55}, ${wireEndX} ${wireEndY}`;
@@ -3804,10 +4031,14 @@ export default function App() {
             const ux = dx / dist;
             const uy = dy / dist;
 
-            const edgeStartX = startCenterX + ux * (startFaceW / 2);
-            const edgeStartY = startCenterY + uy * (startFaceH / 2);
-            const edgeEndX = currentDragPageX - ux * (startW / 2);
-            const edgeEndY = currentDragPageY - uy * (startH / 2);
+            const dragW = window.innerWidth < 640 ? (window.innerWidth - 104) / 4 : 66;
+            const dragH = dragW;
+            const dragFaceH = 0.720 * dragH;
+
+            const edgeStartX = startCenterX;
+            const edgeStartY = startCenterY + (startFaceH / 2);
+            const edgeEndX = currentDragPageX + 0.1244 * dragW;
+            const edgeEndY = currentDragPageY + 0.1244 * dragH - (dragFaceH / 2);
 
             const dragMidY = edgeStartY + (edgeEndY - edgeStartY) * 0.45;
             const livePathData = `M ${edgeStartX} ${edgeStartY} C ${edgeStartX} ${dragMidY}, ${edgeEndX} ${edgeStartY + (edgeEndY - edgeStartY) * 0.55}, ${edgeEndX} ${edgeEndY}`;
@@ -3846,7 +4077,7 @@ export default function App() {
       <AnimatePresence>
         {((draggedCube && draggedLetter) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null)) && (
           <div
-            className="pointer-events-none fixed z-50 w-[calc((100vw-6rem)/5)] h-[calc((100vw-6rem)/5)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+            className="pointer-events-none fixed z-50 w-[calc((100vw-6.5rem)/4)] h-[calc((100vw-6.5rem)/4)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] -translate-x-1/2 -translate-y-1/2 overflow-visible"
             style={{
               left: pointerPos.x,
               top: pointerPos.y,
@@ -3905,7 +4136,23 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/60 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              backdropFilter: 'blur(8px)',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
@@ -3940,7 +4187,23 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-white/30 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              backdropFilter: 'blur(8px)',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
@@ -4229,6 +4492,168 @@ export default function App() {
                   </div>
                 </>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* SAVING TASK ACTIVITY OVERLAY */}
+      <AnimatePresence>
+        {isSavingActivity && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(2, 6, 23, 0.85)',
+              backdropFilter: 'blur(8px)',
+              padding: '24px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <div className="flex flex-col items-center max-w-sm px-6 text-center select-none">
+              {/* Premium Rotating/Pulsing Spinner with gradient */}
+              <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
+                <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-500 border-r-emerald-500 animate-spin" />
+                <span className="material-symbols-outlined text-[36px] text-emerald-500 animate-pulse">save</span>
+              </div>
+              
+              <h3 className="text-xl font-bold text-white tracking-tight leading-tight">Salvando Atividade</h3>
+              <p className="text-sm font-medium text-slate-400 mt-2 min-h-[40px] transition-all duration-300">
+                {savingProgressText}
+              </p>
+              
+              {/* Modern progress track */}
+              <div className="w-48 h-1 bg-slate-800 rounded-full mt-4 overflow-hidden relative">
+                <div className="absolute inset-y-0 left-0 bg-emerald-500 w-full animate-[fillProgress_3.2s_linear_infinite]" />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* TASK CONCLUDED SUCCESS MODAL */}
+      <AnimatePresence>
+        {showSuccessModal && lastSavedTask && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(2, 6, 23, 0.75)',
+              backdropFilter: 'blur(4px)',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 15 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 15 }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative"
+            >
+              {/* Header Decorative Confetti Ribbon */}
+              <div className="h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-indigo-500" />
+              
+              <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+                {/* Checkmark icon with micro-animations */}
+                <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mb-4 shadow-sm shadow-emerald-100">
+                  <span className="material-symbols-outlined text-[32px] text-emerald-500 font-bold block animate-bounce">check_circle</span>
+                </div>
+                
+                <h3 className="text-2xl font-black text-slate-900 tracking-tight leading-tight">Tarefa Salva no Sistema!</h3>
+                <p className="text-sm font-medium text-slate-400 mt-1">Parabéns, sua atividade foi registrada e concluída com sucesso.</p>
+                
+                {/* Spelled Words & Details Box */}
+                <div className="w-full mt-6 bg-slate-50 border border-slate-100 rounded-2xl p-4 sm:p-5 text-left flex flex-col gap-3.5 select-none">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Atividade Realizada</span>
+                    <h4 className="text-[16px] font-bold text-slate-800 tracking-tight leading-tight mt-0.5">{lastSavedTask.title}</h4>
+                  </div>
+                  
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Palavras Soletradas ({lastSavedTask.words.length})</span>
+                    <div className="flex flex-wrap gap-2 max-h-[120px] overflow-y-auto pr-1">
+                      {lastSavedTask.words.length === 0 ? (
+                        <span className="text-xs italic text-slate-400 font-medium">Nenhuma palavra gravada nesta rodada.</span>
+                      ) : (
+                        lastSavedTask.words.map((wordObj, i) => {
+                          let langFlag = "🇧🇷";
+                          let badgeBg = "bg-slate-100 border-slate-200 text-slate-700";
+                          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') {
+                            langFlag = "🇺🇸";
+                            badgeBg = "bg-blue-50 border-blue-150 text-blue-700";
+                          } else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') {
+                            langFlag = "🇩🇪";
+                            badgeBg = "bg-red-50 border-red-150 text-red-700";
+                          } else if (wordObj.themeColor === 'green' || wordObj.themeColor === '#10b981') {
+                            langFlag = "🇮🇹";
+                            badgeBg = "bg-emerald-50 border-emerald-150 text-emerald-700";
+                          }
+                          return (
+                            <div key={i} className={`flex items-center gap-1 px-2.5 py-1 rounded-full border text-xs font-mono font-bold tracking-wide shadow-3xs ${badgeBg}`}>
+                              <span>{langFlag}</span>
+                              <span>{wordObj.word}</span>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t border-slate-200/60 pt-3 flex justify-between items-center text-xs font-medium text-slate-500">
+                    <span>Estudante: {user?.name || "Estudante"}</span>
+                    <span>{new Date().toLocaleDateString('pt-BR')}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleDownloadTaskPdf}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-sm rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
+                >
+                  <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                  Baixar Relatório em PDF
+                </button>
+                
+                <button
+                  onClick={() => {
+                    setShowSuccessModal(false);
+                    setActiveTaskInfo(null);
+                    setCurrentScreen('student-dashboard');
+                  }}
+                  className="py-3 px-6 bg-slate-200 hover:bg-slate-350 text-slate-700 font-bold text-sm rounded-xl cursor-pointer transition-colors border-none"
+                >
+                  Voltar ao Painel
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

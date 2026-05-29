@@ -85,6 +85,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [showShareModal, setShowShareModal] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [showProcessingQueue, setShowProcessingQueue] = useState(false);
+  const [processingType, setProcessingType] = useState<'pdf' | 'link' | null>(null);
 
   const [showSpellingLoader, setShowSpellingLoader] = useState(false);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
@@ -207,8 +209,43 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [teacherTasks, setTeacherTasks] = useState<any[]>(() => {
     try {
       const raw = localStorage.getItem('abba_teacher_tasks');
-      return raw ? JSON.parse(raw) : [];
-    } catch { return []; }
+      const parsed = raw ? JSON.parse(raw) : [];
+      if (parsed.length === 0) {
+        const defaultStudentId = user.codeSession?.codeId || user.email || 'st-unknown';
+        const defaultStudentName = user.name || 'Estudante';
+        return [
+          {
+            id: 'numerais',
+            title: 'Exercício de Numerais Multilingue',
+            description: 'Soletrar e gravar no ábaco digital os numerais de 0 a 9 em Português, Inglês e Alemão. Use os fios suspensos de costura correspondentes para ligar as prateleiras de letras.',
+            dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'active',
+            targetWords: ['ZERO', 'ONE', 'ZWEI', 'FIVE', 'NOVE'],
+            priority: 'Alta',
+            assignedStudentIds: [defaultStudentId, defaultStudentName, 'st-unknown'],
+            startDate: new Date().toISOString(),
+            teacherNote: 'Atenção aos fios correspondentes: Azul (en), Vermelho (de), Preto (pt).',
+            submissionsCount: 0
+          },
+          {
+            id: 'cores-animais',
+            title: 'Vocabulário de Cores e Animais',
+            description: 'Soletrar palavras como "RED" (vermelho) ou "CAT" (gato) no ábaco. Verifique a tradução inteligente agrupar os termos de significado equivalente no painel de aprendizado.',
+            dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'active',
+            targetWords: ['RED', 'BLUE', 'CAT', 'DOG'],
+            priority: 'Média',
+            assignedStudentIds: [defaultStudentId, defaultStudentName, 'st-unknown'],
+            startDate: new Date().toISOString(),
+            teacherNote: 'Lembre-se de clicar na pílula de idioma de cada linha para escolher as bandeiras dos países!',
+            submissionsCount: 0
+          }
+        ];
+      }
+      return parsed;
+    } catch { 
+      return []; 
+    }
   });
 
   const getStudentId = () => {
@@ -226,6 +263,76 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return user.email || 'st-unknown';
   };
   const studentId = getStudentId();
+
+  useEffect(() => {
+    const defaultStudentId = studentId;
+    const defaultStudentName = user.name || 'Estudante';
+    
+    setTeacherTasks(prev => {
+      const hasNumerais = prev.some(t => t.id === 'numerais');
+      const hasCores = prev.some(t => t.id === 'cores-animais');
+      
+      if (!hasNumerais || !hasCores) {
+        const updated = [...prev];
+        
+        if (!hasNumerais) {
+          updated.push({
+            id: 'numerais',
+            title: 'Exercício de Numerais Multilingue',
+            description: 'Soletrar e gravar no ábaco digital os numerais de 0 a 9 em Português, Inglês e Alemão. Use os fios suspensos de costura correspondentes para ligar as prateleiras de letras.',
+            dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'active',
+            targetWords: ['ZERO', 'ONE', 'ZWEI', 'FIVE', 'NOVE'],
+            priority: 'Alta',
+            assignedStudentIds: [defaultStudentId, defaultStudentName, 'st-unknown'],
+            startDate: new Date().toISOString(),
+            teacherNote: 'Atenção aos fios correspondentes: Azul (en), Vermelho (de), Preto (pt).',
+            submissionsCount: 0
+          });
+        }
+        
+        if (!hasCores) {
+          updated.push({
+            id: 'cores-animais',
+            title: 'Vocabulário de Cores e Animais',
+            description: 'Soletrar palavras como "RED" (vermelho) ou "CAT" (gato) no ábaco. Verifique a tradução inteligente agrupar os termos de significado equivalente no painel de aprendizado.',
+            dueDate: new Date(Date.now() + 10 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+            status: 'active',
+            targetWords: ['RED', 'BLUE', 'CAT', 'DOG'],
+            priority: 'Média',
+            assignedStudentIds: [defaultStudentId, defaultStudentName, 'st-unknown'],
+            startDate: new Date().toISOString(),
+            teacherNote: 'Lembre-se de clicar na pílula de idioma de cada linha para escolher as bandeiras dos países!',
+            submissionsCount: 0
+          });
+        }
+        
+        localStorage.setItem('abba_teacher_tasks', JSON.stringify(updated));
+        return updated;
+      }
+      
+      let changed = false;
+      const verified = prev.map(t => {
+        if ((t.id === 'numerais' || t.id === 'cores-animais') && 
+            !t.assignedStudentIds?.includes(defaultStudentId) && 
+            !t.assignedStudentIds?.includes(defaultStudentName)) {
+          changed = true;
+          return {
+            ...t,
+            assignedStudentIds: [...(t.assignedStudentIds || []), defaultStudentId, defaultStudentName]
+          };
+        }
+        return t;
+      });
+      
+      if (changed) {
+        localStorage.setItem('abba_teacher_tasks', JSON.stringify(verified));
+        return verified;
+      }
+      
+      return prev;
+    });
+  }, [studentId, user.name]);
 
   const fetchTasksFromSupabase = async () => {
     try {
@@ -546,12 +653,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
-      const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+      const allowedExtensions = ['.pdf'];
       const fileName = file.name.toLowerCase();
       const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
 
       if (!isAllowed) {
-        alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
+        alert("Apenas arquivos em formato PDF são aceitos!");
         return;
       }
 
@@ -563,7 +670,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
-      alert(`Arquivo "${file.name}" anexado com sucesso!`);
+      setProcessingType('pdf');
+      setShowProcessingQueue(true);
     }
   };
 
@@ -688,6 +796,150 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     registerSentActivity(taskTitle);
   };
 
+  const handleDownloadPdf = () => {
+    try {
+      const encoder = new TextEncoder();
+      const objects: Uint8Array[] = [];
+
+      const escapePdfText = (text: string) => {
+        if (!text) return "";
+        return text
+          .replace(/\\/g, "\\\\")
+          .replace(/\(/g, "\\(")
+          .replace(/\)/g, "\\)")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "");
+      };
+
+      objects.push(encoder.encode("<< /Type /Catalog /Pages 2 0 R >>"));
+      objects.push(encoder.encode("<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>"));
+      objects.push(encoder.encode("<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 595.27 841.89 ] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"));
+
+      const dateStr = new Date().toLocaleDateString('pt-BR');
+      const progressText = `${completedCount} de ${NUMERAL_ITEMS.length} (${progressPercent}%)`;
+      const studentName = user.name || "Estudante";
+
+      const streamLines = [
+        "BT",
+        "/F1 20 Tf",
+        "50 780 Td",
+        "(ABBA DIGITAL - Relatorio de Atividades) Tj",
+        "0 -40 Td",
+        "/F1 13 Tf",
+        `(${escapePdfText("Estudante: " + studentName)}) Tj`,
+        "0 -22 Td",
+        "/F2 11 Tf",
+        `(${escapePdfText("Progresso Geral: " + progressText)}) Tj`,
+        "0 -18 Td",
+        `(${escapePdfText("Data de Emissao: " + dateStr)}) Tj`,
+        "0 -18 Td",
+        `(${escapePdfText("Status da Tarefa: Concluida")}) Tj`,
+        "0 -40 Td",
+        "/F1 13 Tf",
+        "(Palavras Registradas no Abaco:) Tj",
+        "0 -12 Td"
+      ];
+
+      if (completedSpelledWords.length === 0) {
+        streamLines.push(
+          "0 -20 Td",
+          "/F2 11 Tf",
+          "(Nenhuma palavra gravada ainda no abaco.) Tj"
+        );
+      } else {
+        completedSpelledWords.forEach((wordObj, i) => {
+          let langName = "Portugues";
+          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Ingles";
+          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemao";
+          else if (wordObj.themeColor === 'green' || wordObj.themeColor === '#10b981') langName = "Italiano";
+
+          const textLine = `${i + 1}. ${wordObj.word} (${langName})`;
+          streamLines.push(
+            "0 -20 Td",
+            "/F2 11 Tf",
+            `(${escapePdfText(textLine)}) Tj`
+          );
+        });
+      }
+
+      streamLines.push(
+        "0 -50 Td",
+        "/F1 9 Tf",
+        "(Relatorio gerado em tempo real pelo Abaco Digital de Alfabetizacao.) Tj",
+        "0 -14 Td",
+        "(Acesse: abba-digital.vercel.app | Codigo de Autenticidade: ABBA-2026) Tj",
+        "ET"
+      );
+
+      const streamContent = encoder.encode(streamLines.join("\n"));
+
+      const headerStr = `<< /Length ${streamContent.length} >>\nstream\n`;
+      const footerStr = `\nendstream`;
+      const headerBin = encoder.encode(headerStr);
+      const footerBin = encoder.encode(footerStr);
+
+      const contentStreamObj = new Uint8Array(headerBin.length + streamContent.length + footerBin.length);
+      contentStreamObj.set(headerBin, 0);
+      contentStreamObj.set(streamContent, headerBin.length);
+      contentStreamObj.set(footerBin, headerBin.length + streamContent.length);
+
+      objects.push(contentStreamObj);
+      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"));
+      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"));
+
+      const chunks: Uint8Array[] = [];
+      chunks.push(encoder.encode("%PDF-1.4\n"));
+
+      const offsets: number[] = [];
+      let currentOffset = chunks[0].length;
+
+      for (let i = 0; i < objects.length; i++) {
+        offsets.push(currentOffset);
+        const objHeader = encoder.encode(`${i + 1} 0 obj\n`);
+        const objFooter = encoder.encode("\nendobj\n");
+
+        chunks.push(objHeader);
+        chunks.push(objects[i]);
+        chunks.push(objFooter);
+
+        currentOffset += objHeader.length + objects[i].length + objFooter.length;
+      }
+
+      const xrefOffset = currentOffset;
+
+      chunks.push(encoder.encode("xref\n"));
+      chunks.push(encoder.encode(`0 ${objects.length + 1}\n`));
+      chunks.push(encoder.encode("0000000000 65535 f\r\n"));
+
+      for (let i = 0; i < offsets.length; i++) {
+        const paddedOffset = String(offsets[i]).padStart(10, '0');
+        chunks.push(encoder.encode(`${paddedOffset} 00000 n\r\n`));
+      }
+
+      chunks.push(encoder.encode("trailer\n"));
+      chunks.push(encoder.encode(`<< /Size ${objects.length + 1} /Root 1 0 R >>\n`));
+      chunks.push(encoder.encode("startxref\n"));
+      chunks.push(encoder.encode(`${xrefOffset}\n`));
+      chunks.push(encoder.encode("%%EOF\n"));
+
+      const blob = new Blob(chunks, { type: 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `relatorio-abba-${studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      registerSentActivity('Relatório de Atividades em PDF');
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+    }
+  };
+
+
   const filteredItems = NUMERAL_ITEMS.filter(item => {
     const matchesLanguage = filterLanguage === 'all' ? true : item.language === filterLanguage;
     const matchesSearch = item.word.toLowerCase().includes(taskSearchQuery.toLowerCase()) || 
@@ -726,133 +978,489 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   return (
     <div className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans">
       
-      {/* SideNavBar Backdrop for mobile */}
-      {mobileSidebarOpen && (
+      {/* Mobile Bottom Sheets (Notifications and Profile) - Rendered at root level */}
+      <AnimatePresence>
+        {showNotificationsDropdown && (
+          <div className="fixed inset-0 z-[150] block lg:hidden">
+            <div 
+              onClick={() => setShowNotificationsDropdown(false)} 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            ></div>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 z-[200] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col overflow-hidden text-left"
+            >
+              {/* Top Drag Indicator for Mobile Sheet */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
+
+              {/* Dropdown Header */}
+              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
+                <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                  Notificações
+                  {derivedNotifications.filter(n => !n.isRead).length > 0 && (
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-black">
+                      {derivedNotifications.filter(n => !n.isRead).length}
+                    </span>
+                  )}
+                </h2>
+                <button 
+                  onClick={() => setShowNotificationsDropdown(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Dropdown Content */}
+              <div className="overflow-y-auto divide-y divide-slate-50 custom-scrollbar max-h-[340px] bg-white">
+                {(() => {
+                  const displayed = derivedNotifications.filter(n => {
+                    if (notificationFilter === 'unread') return !n.isRead;
+                    return true;
+                  });
+
+                  if (displayed.length === 0) {
+                    return (
+                      <div className="p-5 py-8 text-center text-slate-400 text-xs font-semibold">
+                        Nenhuma notificação por enquanto.
+                      </div>
+                    );
+                  }
+
+                  return displayed.map((notif) => (
+                    <div 
+                      key={notif.id}
+                      onClick={() => {
+                        // Mark as read
+                        if (!notif.isRead) {
+                            setReadNotifications(prev => [...prev, notif.id]);
+                        }
+                        setShowNotificationsDropdown(false);
+                        // Go to abacus directly
+                        if (onGoToAbacus) {
+                          onGoToAbacus(notif.taskTitle, notif.taskDescription);
+                        }
+                      }}
+                      className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${
+                        !notif.isRead ? 'bg-indigo-50/10' : ''
+                      }`}
+                    >
+                      {/* Avatar section with badge */}
+                      <div className="relative flex-shrink-0 select-none">
+                        <img 
+                          alt="Teacher avatar" 
+                          className="w-12 h-12 rounded-full object-cover border border-slate-100" 
+                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N" 
+                        />
+                        <div className="absolute -right-1 -bottom-1 bg-purple-600 text-white p-0.5 rounded-full border-2 border-white flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[10px] block font-black">assignment</span>
+                        </div>
+                      </div>
+
+                      {/* Notification details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-semibold text-slate-900">
+                            Prof. Marcos 
+                            <span className="text-slate-400 font-normal ml-2 text-xs">
+                              {formatTimeAgo(notif.createdAt)}
+                            </span>
+                          </p>
+                          {!notif.isRead && (
+                            <div className="w-2.5 h-2.5 rounded-full bg-[#10B981] shrink-0 mt-[6px]"></div>
+                          )}
+                        </div>
+                        <p className="text-sm mt-0.5 text-slate-900">
+                          Enviou a tarefa: <span className="font-semibold">{notif.taskTitle}</span>
+                        </p>
+                        <p 
+                          className="text-xs mt-1.5 text-slate-500 leading-relaxed"
+                          style={{
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden'
+                          }}
+                        >
+                          {notif.taskDescription || "Pratique soletração no ábaco digital em três idiomas."}
+                        </p>
+                      </div>
+                    </div>
+                  ));
+                })()}
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showProfileMenu && (
+          <div className="fixed inset-0 z-[150] block lg:hidden">
+            <div 
+              onClick={() => setShowProfileMenu(false)} 
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            ></div>
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 z-[200] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left"
+            >
+              {/* Top Drag Indicator for Mobile Sheet */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
+
+              {/* Header */}
+              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
+                <button 
+                  onClick={() => setShowProfileMenu(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto bg-white">
+                {/* User info details */}
+                <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
+                  <div className="relative shrink-0">
+                    <img 
+                      alt="Avatar" 
+                      className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
+                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif" 
+                    />
+                    <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
+                      <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
+                    </div>
+                  </div>
+                  <div className="text-left min-w-0">
+                    <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
+                    <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'aluno@abbadigital.com'}</p>
+                  </div>
+                </div>
+
+                {/* Progress card */}
+                <div className="p-5 flex flex-col gap-3">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-xs font-bold text-slate-700">Progresso do Ábaco Digital</p>
+                        <p className="text-[11px] text-slate-400 mt-1">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
+                      </div>
+                      <span className="material-symbols-outlined text-indigo-500 text-lg">emoji_events</span>
+                    </div>
+                    
+                    {/* Progress bar */}
+                    <div className="w-full h-2.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
+                      <div 
+                        className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500" 
+                        style={{ width: `${(completedCount / NUMERAL_ITEMS.length) * 100}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Dropdown Menu Actions */}
+                <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
+                  <button 
+                    onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
+                    className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-[18px]">task</span>
+                      Ver Minhas Tarefas
+                    </span>
+                    <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+                    className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                    Editar Perfil
+                  </button>
+                  
+                  <button 
+                    onClick={() => { setShowProfileMenu(false); onLogout(); }}
+                    className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">logout</span>
+                    Sair da Conta
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Mobile Sidebar Overlay Drawer (Symmetrical to Teacher's style) */}
+      <div className={`fixed inset-0 z-50 flex lg:hidden transition-all duration-300 ${mobileSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
         <div 
-          onClick={() => setMobileSidebarOpen(false)}
-          className="fixed inset-0 bg-black/40 z-50 lg:hidden"
-        />
-      )}
-      
-      {/* SideNavBar */}
-      <aside className={`fixed left-0 top-0 bottom-0 flex flex-col p-md z-50 h-screen w-64 bg-surface-container-low border-r border-outline-variant transition-transform duration-300 ${
-        mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-      } lg:translate-x-0`}>
-        <div className="flex items-center gap-sm mb-xl px-sm justify-between">
+          onClick={() => setMobileSidebarOpen(false)} 
+          className={`fixed inset-0 bg-slate-900/45 backdrop-blur-xs transition-opacity duration-300 ${
+            mobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+          }`}
+        ></div>
+        
+        <div 
+          className={`relative w-[280px] sm:w-[320px] shrink-0 bg-white h-full shadow-2xl p-6 flex flex-col justify-between text-left z-10 transition-transform duration-300 ease-out ${
+            mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+          }`}
+        >
+          <div>
+            <div className="flex items-center justify-between pb-6 border-b border-gray-100">
+              <div 
+                onClick={() => onGoToLanding && onGoToLanding()}
+                className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+                title="Voltar para a página principal"
+              >
+                <img src={abbaLogo} alt="ABBA Logo" className="w-10 h-10 object-contain" />
+                <div>
+                  <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>
+                  <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setMobileSidebarOpen(false)}
+                className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+              </button>
+            </div>
+
+            <nav className="mt-6 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setShowSpellingLoader(true);
+                  setTimeout(() => {
+                    setShowSpellingLoader(false);
+                    if (onGoToAbacus) {
+                      onGoToAbacus();
+                    }
+                  }, 1500);
+                }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all bg-transparent text-slate-600 hover:bg-slate-50`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+                Início
+              </button>
+              <button
+                onClick={() => {
+                  setMobileSidebarOpen(false);
+                  setStudentView('tasks-list');
+                }}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
+                  studentView === 'tasks-list' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                Tarefas
+              </button>
+            </nav>
+          </div>
+
+          <div className="space-y-4 pt-4 border-t border-gray-100">
+            <button
+              onClick={() => {
+                setMobileSidebarOpen(false);
+                alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.');
+              }}
+              className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              Ajuda
+            </button>
+            <button
+              onClick={() => {
+                setMobileSidebarOpen(false);
+                onLogout();
+              }}
+              className="flex items-center gap-3 px-4 py-3 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+              Sair
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Desktop Sidebar (Identical to teacher's styling) */}
+      <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 flex-col p-6 z-40 bg-white border-r border-gray-100 h-screen w-64 justify-between">
+        <div className="space-y-8 flex-1 flex flex-col">
           <div 
             onClick={() => onGoToLanding && onGoToLanding()}
-            className="flex items-center gap-sm cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
+            className="flex items-center gap-3 px-2 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
             title="Voltar para a página principal"
           >
-            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-9 h-9 object-contain shrink-0" />
+            <img src={abbaLogo} alt="ABBA DIGITAL Logo" className="w-10 h-10 object-contain shrink-0" />
             <div>
-              <h1 className="font-headline-md text-headline-md font-black text-on-surface tracking-tight">ABBA DIGITAL</h1>
-              <p className="font-label-sm text-label-sm text-on-surface-variant">Portal da Educação</p>
+              <h1 className="font-bold text-lg tracking-tight text-gray-950">ABBA DIGITAL</h1>
+              <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
             </div>
           </div>
-          <button 
-            onClick={() => setMobileSidebarOpen(false)}
-            className="lg:hidden p-1 rounded-full hover:bg-surface-container-high border-none bg-transparent cursor-pointer flex items-center justify-center"
-          >
-            <span className="material-symbols-outlined text-slate-500">close</span>
-          </button>
-        </div>
-        <nav className="flex-grow flex flex-col gap-xs">
-          <button
-            onClick={() => {
-              setMobileSidebarOpen(false);
-              setShowSpellingLoader(true);
-              setTimeout(() => {
-                setShowSpellingLoader(false);
-                if (onGoToAbacus) {
-                  onGoToAbacus();
-                }
-              }, 1500);
-            }}
-            className="flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none text-on-surface-variant hover:bg-surface-container-high bg-transparent"
-          >
-            <span className="material-symbols-outlined">home</span>Início
-          </button>
           
-          <button
-            onClick={() => {
-              setMobileSidebarOpen(false);
-              setStudentView('tasks-list');
-            }}
-            className={`flex items-center gap-md px-md py-sm rounded-lg transition-all font-label-md text-label-md text-left cursor-pointer border-none bg-primary-container text-on-primary-container font-bold shadow-sm`}
-          >
-            <span className="material-symbols-outlined">assignment</span> Tarefas
-          </button>
-        </nav>
+          <nav className="space-y-2">
+            <button
+              onClick={() => {
+                setShowSpellingLoader(true);
+                setTimeout(() => {
+                  setShowSpellingLoader(false);
+                  if (onGoToAbacus) {
+                    onGoToAbacus();
+                  }
+                }, 1500);
+              }}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all bg-transparent text-slate-600 hover:bg-slate-50`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+              <span className="text-sm">Início</span>
+            </button>
+            
+            <button
+              onClick={() => setStudentView('tasks-list')}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
+                studentView === 'tasks-list'
+                  ? 'bg-[#0073e0] text-white'
+                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <span className="text-sm">Tarefas</span>
+            </button>
+          </nav>
+        </div>
         
-        <div className="flex flex-col gap-xs pt-md border-t border-outline-variant">
+        <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
           <button
             onClick={() => alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.')}
-            className="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-label-md text-label-md text-left cursor-pointer bg-transparent border-none"
+            className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
-            <span className="material-symbols-outlined">help</span> Ajuda
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            <span className="text-sm">Ajuda</span>
           </button>
-          <button
+          <button 
             onClick={onLogout}
-            className="flex items-center gap-md px-md py-sm text-on-surface-variant hover:bg-surface-container-high transition-all rounded-lg font-label-md text-label-md text-left cursor-pointer bg-transparent border-none"
+            className="flex items-center gap-3 px-4 py-3 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
-            <span className="material-symbols-outlined">logout</span> Sair
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+            <span className="text-sm">Sair</span>
           </button>
         </div>
       </aside>
 
       {/* Main Content Shell */}
-      <div className="lg:ml-64 flex flex-col min-h-screen w-full overflow-x-hidden">
-        {/* TopAppBar */}
-        <header className="flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-surface/80 backdrop-blur-md h-16 border-b border-outline-variant">
+      <div className="lg:ml-64 flex flex-col min-h-screen w-full lg:w-[calc(100%-16rem)] overflow-x-hidden">
+        {/* Mobile Header (Symmetrical to Teacher's style) */}
+        <header className="sticky top-0 bg-white border-b border-gray-100 py-3.5 px-4 sm:px-6 z-40 shadow-xs block lg:hidden w-full">
+          <div className="max-w-7xl mx-auto flex items-center justify-between">
+            <div className="flex items-center gap-2.5">
+              <button 
+                onClick={() => setMobileSidebarOpen(true)}
+                className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-700"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-700 w-6 h-6">
+                  <line x1="4" x2="20" y1="12" y2="12"></line>
+                  <line x1="4" x2="20" y1="6" y2="6"></line>
+                  <line x1="4" x2="20" y1="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setSearchExpanded(true)}
+                className="p-0 border-none bg-transparent cursor-pointer flex items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95"
+                title="Pesquisar Atividades"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600">
+                  <circle cx="11" cy="11" r="8"></circle>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                </svg>
+              </button>
+
+              <button 
+                onClick={() => setShowNotificationsDropdown(prev => !prev)}
+                className="p-0 border-none bg-transparent cursor-pointer flex items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 relative"
+                title="Notificações"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600">
+                  <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path>
+                  <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path>
+                </svg>
+                {derivedNotifications.filter(n => !n.isRead).length > 0 && (
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#10B981] rounded-full animate-pulse"></span>
+                )}
+              </button>
+              
+              <button
+                onClick={() => setShowProfileMenu(prev => !prev)}
+                className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
+                title="Perfil"
+              >
+                <img
+                  alt={`${user.name} Avatar`}
+                  className="w-full h-full object-cover"
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif"
+                />
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* Desktop Header (Identical to teacher's styling) */}
+        <header className="hidden lg:flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-white/80 backdrop-blur-md h-16 border-b border-gray-100">
           <div className="flex items-center gap-md flex-1">
-            <button 
-              onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-2 rounded-xl hover:bg-slate-100 border-none bg-transparent cursor-pointer flex items-center justify-center mr-2"
-              aria-label="Open sidebar"
-            >
-              <span className="material-symbols-outlined text-slate-800">menu</span>
-            </button>
-            <h2 className="font-title-md text-title-md text-slate-800 font-extrabold">Área do Aluno</h2>
+            <h2 className="text-lg text-slate-800 font-extrabold lg:block hidden">Área do Aluno</h2>
           </div>
           
-          <div className="flex items-center gap-md relative">
+          <div className="flex items-center gap-4 relative">
+            {/* Search Lupa Button */}
+            <button 
+              onClick={() => setSearchExpanded(true)}
+              className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent"
+              title="Pesquisar Atividades (Lupa)"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+            </button>
+
             {/* Notifications Bell Button */}
             <div className="relative">
               <button 
                 ref={bellButtonRef}
                 onClick={() => setShowNotificationsDropdown(prev => !prev)}
-                className={`relative w-10 h-10 flex items-center justify-center rounded-xl shadow-sm transition-all active:scale-95 cursor-pointer border ${
-                  showNotificationsDropdown 
-                    ? 'bg-slate-100 border-slate-300 text-slate-900' 
-                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                }`}
+                className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent relative"
                 title="Notificações"
               >
-                <span className="material-symbols-outlined font-semibold text-[20px]">notifications</span>
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
                 {derivedNotifications.filter(n => !n.isRead).length > 0 && (
-                  <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-[#10B981] rounded-full animate-pulse border-2 border-white"></span>
+                  <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#10B981] rounded-full animate-pulse"></span>
                 )}
               </button>
             </div>
             
-            {/* Search Lupa Button (Style Matched) */}
-            <button 
-              onClick={() => setSearchExpanded(true)}
-              className="bg-slate-100 hover:bg-slate-200 text-slate-900 px-5 py-2.5 rounded-xl font-bold border-none transition-all active:scale-95 cursor-pointer flex items-center justify-center shadow-xs"
-              title="Pesquisar Atividades (Lupa)"
-            >
-              <span className="material-symbols-outlined font-black text-[20px]">search</span>
-            </button>
-            
-            <div className="w-px h-6 bg-outline-variant mx-xs"></div>
+            <div className="w-px h-6 bg-gray-100 hidden lg:block mx-1"></div>
  
             {/* Profile Avatar & Dropdowns */}
             <div className="relative">
               <button
                 ref={avatarButtonRef}
                 onClick={() => setShowProfileMenu(prev => !prev)}
-                className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none"
+                className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
                 title="Perfil"
               >
                 <img
@@ -875,7 +1483,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       damping: 30, 
                       stiffness: 400
                     }}
-                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right"
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right hidden lg:flex"
                   >
                     {/* Dropdown Header */}
                     <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white select-none">
@@ -964,7 +1572,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                   src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N" 
                                 />
                                 <div className="absolute -right-1 -bottom-1 bg-purple-600 text-white p-0.5 rounded-full border-2 border-white flex items-center justify-center">
-                                  <span className="material-symbols-outlined text-[10px] block font-black">assignment</span>
+                                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                                 </div>
                               </div>
  
@@ -1034,12 +1642,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       damping: 30, 
                       stiffness: 400
                     }}
-                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right"
+                    className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right hidden lg:flex"
                   >
                     {/* Header */}
                     <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
                       <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
-                      <span className="material-symbols-outlined text-slate-400">person</span>
+                      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     </div>
  
                     {/* Scrollable Content */}
@@ -1070,7 +1678,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                               <p className="text-xs font-bold text-slate-700">Progresso do Ábaco Digital</p>
                               <p className="text-[11px] text-slate-400 mt-1">{completedCount} / {NUMERAL_ITEMS.length} palavras soletradas</p>
                             </div>
-                            <span className="material-symbols-outlined text-indigo-500 text-lg">emoji_events</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-indigo-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5c0 1.66-1.34 3-3 3H9a3 3 0 0 1-3-3V8a6 6 0 0 1 6-6z"></path></svg>
                           </div>
                           
                           {/* Progress bar */}
@@ -1090,17 +1698,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
                         >
                           <span className="flex items-center gap-2">
-                            <span className="material-symbols-outlined text-[18px]">task</span>
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                             Ver Minhas Tarefas
                           </span>
-                          <span className="material-symbols-outlined text-[18px]">chevron_right</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400"><polyline points="9 18 15 12 9 6"></polyline></svg>
                         </button>
                         
                         <button 
                           onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
                           className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
-                          <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                           Editar Perfil
                         </button>
                         
@@ -1108,7 +1716,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           onClick={() => { setShowProfileMenu(false); onLogout(); }}
                           className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
-                          <span className="material-symbols-outlined text-[18px]">logout</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-red-500 shrink-0"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
                           Sair da Conta
                         </button>
                       </div>
@@ -1147,184 +1755,195 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* File Upload */}
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                    onDragLeave={() => setDragActive(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setDragActive(false);
-                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                        const file = e.dataTransfer.files[0];
-                        const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
-                        const fileName = file.name.toLowerCase();
-                        const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
-
-                        if (!isAllowed) {
-                          alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
-                          return;
-                        }
-
-                        const maxSize = 5 * 1024 * 1024; // 5MB
-                        if (file.size > maxSize) {
-                          alert('O tamanho do arquivo excede o limite máximo de 5MB!');
-                          return;
-                        }
-
-                        const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                        setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
-                      }
-                    }}
-                    className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${
-                      dragActive
-                        ? 'border-primary bg-primary/5'
-                        : 'border-slate-200 hover:border-primary/40 hover:bg-slate-50'
-                    }`}
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      className="hidden"
-                      onChange={handleFileChange}
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary text-[24px]">upload_file</span>
+                  <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4 bg-white shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-outlined text-slate-400 text-[20px]">upload_file</span>
+                      <p className="text-sm font-semibold text-slate-700">Fazer o upload por arquivo</p>
                     </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-slate-700">Arraste um arquivo aqui</p>
-                      <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para selecionar</span></p>
+
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                      onDragLeave={() => setDragActive(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setDragActive(false);
+                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                          const file = e.dataTransfer.files[0];
+                          const allowedExtensions = ['.pdf'];
+                          const fileName = file.name.toLowerCase();
+                          const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
+
+                          if (!isAllowed) {
+                            alert("Apenas arquivos em formato PDF são aceitos!");
+                            return;
+                          }
+
+                          const maxSize = 5 * 1024 * 1024; // 5MB
+                          if (file.size > maxSize) {
+                            alert('O tamanho do arquivo excede o limite máximo de 5MB!');
+                            return;
+                          }
+
+                          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
+                          setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
+                          setProcessingType('pdf');
+                          setShowProcessingQueue(true);
+                        }
+                      }}
+                      className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer flex-grow min-h-[160px] ${
+                        dragActive
+                          ? 'border-primary bg-primary/5'
+                          : 'border-slate-200 hover:border-primary/40 hover:bg-slate-50/50'
+                      }`}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        className="hidden"
+                        onChange={handleFileChange}
+                        accept=".pdf"
+                      />
+                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center transition-transform hover:scale-110">
+                        <span className="material-symbols-outlined text-primary text-[24px]">upload_file</span>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-sm font-semibold text-slate-700">Arraste um arquivo aqui</p>
+                        <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para selecionar</span></p>
+                      </div>
+                      <p className="text-[10px] text-slate-400">PDF ou Imagens — máx. 5 MB</p>
                     </div>
-                    <p className="text-[10px] text-slate-400">PDF ou Imagens — máx. 5 MB</p>
                   </div>
 
                   {/* Smart Teacher Link Input */}
-                  <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4">
+                  <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4 bg-white shadow-xs">
                     <div className="flex items-center gap-2">
                       <span className="material-symbols-outlined text-slate-400 text-[20px]">link</span>
                       <p className="text-sm font-semibold text-slate-700">Fazer o upload por link</p>
                     </div>
 
-                    {/* Input field */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="task-link-input"
-                        value={uploadLink}
-                        onChange={(e) => {
-                          setUploadLink(e.target.value);
-                          setLinkError(null);
-                          setValidatedLink(null);
-                        }}
-                        onBlur={(e) => validateAndPreviewLink(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
-                        placeholder="Cole o link ou digite o código de 6 dígitos do professor..."
-                        className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${
-                          linkError
-                            ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
-                            : validatedLink
-                            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
-                            : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
-                        }`}
-                      />
-                      {uploadLink && (
+                    <div className="flex flex-col justify-center flex-grow gap-4">
+                      {/* Input field */}
+                      <div className="relative">
+                        <input
+                          type="text"
+                          id="task-link-input"
+                          value={uploadLink}
+                          onChange={(e) => {
+                            setUploadLink(e.target.value);
+                            setLinkError(null);
+                            setValidatedLink(null);
+                          }}
+                          onBlur={(e) => validateAndPreviewLink(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
+                          placeholder="Cole o link ou código de 6 dígitos..."
+                          className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${
+                            linkError
+                              ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
+                              : validatedLink
+                              ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
+                              : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
+                          }`}
+                        />
+                        {uploadLink && (
+                          <button
+                            type="button"
+                            onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
+                          >
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Validation error */}
+                      <AnimatePresence>
+                        {linkError && (
+                          <motion.div
+                            key="link-error"
+                            initial={{ opacity: 0, y: -6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -6 }}
+                            className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
+                          >
+                            <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
+                            <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Validated link preview */}
+                      <AnimatePresence>
+                        {validatedLink && (
+                          <motion.div
+                            key="link-preview"
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            style={{ overflow: 'hidden' }}
+                          >
+                            <div
+                              className="rounded-xl p-4 flex flex-col gap-3"
+                              style={{
+                                background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
+                                border: '1px solid rgba(99,102,241,0.2)'
+                              }}
+                            >
+                              {/* Tag */}
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
+                                  style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                                >
+                                  ✓ Link verificado
+                                </span>
+                              </div>
+
+                              {/* Task info */}
+                              <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                                  <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
+                                </div>
+                                <div>
+                                  <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
+                                  <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
+                                  <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
+                                </div>
+                              </div>
+
+                              {/* Link preview text */}
+                              <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
+                                <p className="text-[11px] text-slate-400 font-medium truncate">{validatedLink.link}</p>
+                              </div>
+
+                              {/* Fazer tarefa button */}
+                              <button
+                                type="button"
+                                onClick={handleAcceptTaskLink}
+                                className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
+                                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
+                                Fazer tarefa
+                              </button>
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Validate button when no preview yet */}
+                      {!validatedLink && !linkError && (
                         <button
                           type="button"
-                          onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
+                          onClick={() => validateAndPreviewLink(uploadLink)}
+                          disabled={!uploadLink.trim()}
+                          className="w-full py-2.5 rounded-lg bg-primary disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold text-sm transition-all hover:bg-primary/95 disabled:hover:bg-slate-100 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
                         >
-                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                          Verificar Link
                         </button>
                       )}
                     </div>
-
-                    {/* Validation error */}
-                    <AnimatePresence>
-                      {linkError && (
-                        <motion.div
-                          key="link-error"
-                          initial={{ opacity: 0, y: -6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
-                        >
-                          <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
-                          <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Validated link preview */}
-                    <AnimatePresence>
-                      {validatedLink && (
-                        <motion.div
-                          key="link-preview"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          <div
-                            className="rounded-xl p-4 flex flex-col gap-3"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
-                              border: '1px solid rgba(99,102,241,0.2)'
-                            }}
-                          >
-                            {/* Tag */}
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
-                                style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
-                              >
-                                ✓ Link verificado
-                              </span>
-                            </div>
-
-                            {/* Task info */}
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                                <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
-                                <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
-                              </div>
-                            </div>
-
-                            {/* Link preview text */}
-                            <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
-                              <p className="text-[11px] text-slate-400 font-medium truncate">{validatedLink.link}</p>
-                            </div>
-
-                            {/* Fazer tarefa button */}
-                            <button
-                              type="button"
-                              onClick={handleAcceptTaskLink}
-                              className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
-                              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
-                              Fazer tarefa
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Validate button when no preview yet */}
-                    {!validatedLink && !linkError && (
-                      <button
-                        type="button"
-                        onClick={() => validateAndPreviewLink(uploadLink)}
-                        disabled={!uploadLink.trim()}
-                        className="w-full py-2.5 rounded-lg bg-primary text-white font-semibold text-sm transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
-                      >
-                        Verificar Link
-                      </button>
-                    )}
                   </div>
 
                   {/* Accepted Task Links history */}
@@ -1822,7 +2441,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       ref={fileInputRef} 
                       onChange={handleFileChange} 
                       className="hidden" 
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
+                      accept=".pdf"
                     />
                     <div 
                       onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
@@ -1832,12 +2451,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         setDragActive(false);
                         if (e.dataTransfer.files && e.dataTransfer.files[0]) {
                           const file = e.dataTransfer.files[0];
-                          const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+                          const allowedExtensions = ['.pdf'];
                           const fileName = file.name.toLowerCase();
                           const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
 
                           if (!isAllowed) {
-                            alert(`Formato de arquivo não suportado! Formatos aceitos: PDF e Imagens (${allowedExtensions.join(', ')})`);
+                            alert("Apenas arquivos em formato PDF são aceitos!");
                             return;
                           }
 
@@ -1849,7 +2468,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                           const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
                           setTaskFiles([...taskFiles, { name: file.name, size: `${sizeMB} MB` }]);
-                          alert(`Arquivo "${file.name}" anexado com sucesso!`);
+                          setProcessingType('pdf');
+                          setShowProcessingQueue(true);
                         }
                       }}
                       onClick={() => {
@@ -1945,7 +2565,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                             setTaskFiles(prev => [...prev, { name: trimmedLink, size: 'link' }]);
                             setUploadLink('');
-                            alert('Link anexado com sucesso!');
+                            setProcessingType('link');
+                            setShowProcessingQueue(true);
                           }}
                           type="button"
                           disabled={!uploadLink.trim()}
@@ -2360,7 +2981,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </button>
                 </div>
 
-                <div className="pt-2">
+                <div className="pt-1">
+                  <button
+                    onClick={handleDownloadPdf}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
+                    Baixar Relatório em PDF
+                  </button>
+                </div>
+
+                <div className="pt-1">
                   <button
                     onClick={handleCopyLink}
                     className="w-full flex items-center justify-center gap-1.5 py-3 border border-[#005bb3] text-[#005bb3] hover:bg-blue-50 font-bold text-xs rounded-xl cursor-pointer transition-all bg-transparent"
@@ -2376,6 +3007,192 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
               </div>
 
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* PROCESSING QUEUE MODAL */}
+      <AnimatePresence>
+        {showProcessingQueue && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 w-screen h-screen"
+          >
+            {/* Scoped CSS styling for pure CSS synchro-triggers */}
+            <style dangerouslySetInnerHTML={{__html: `
+              /* ================= ANIMAÇÕES DE TEMPO CONFIGURADAS ================= */
+              
+              /* 1. Giro do Ícone Superior (1.5s) */
+              @keyframes spinIcon {
+                0% { transform: rotate(0deg); }
+                100% { transform: rotate(360deg); }
+              }
+
+              /* 2. Carregamento das Barras (4s) */
+              @keyframes fillProgress {
+                0% { width: 0%; }
+                100% { width: 100%; }
+              }
+
+              /* 3. Surgimento Suave de Elementos (Fade In) */
+              @keyframes fadeInAction {
+                0% { opacity: 0; pointer-events: none; transform: scale(0.9); }
+                100% { opacity: 1; pointer-events: auto; transform: scale(1); }
+              }
+
+              /* 4. Sumiço Suave de Elementos (Fade Out) */
+              @keyframes fadeOutAction {
+                0% { opacity: 1; pointer-events: auto; transform: scale(1); }
+                100% { opacity: 0; pointer-events: none; transform: scale(0.8); visibility: hidden; }
+              }
+
+              /* 5. Transição do Fundo dos Containers para Azul */
+              @keyframes bgToBlue {
+                0% { background-color: #ffffff; }
+                100% { background-color: #f0f5ff; border-color: #e0eaff; }
+              }
+
+              /* 6. Transição das Cores de Texto/Ícone para Azul */
+              @keyframes textToBlue {
+                0% { color: #64748b; }
+                100% { color: #0052cc; }
+              }
+
+              /* ================= SINCRO-GATILHOS EM CSS PURO ================= */
+
+              #trigger:checked ~ .card-container #syncIcon {
+                animation: spinIcon 1.5s ease-in-out;
+              }
+
+              /* --- TIMING CARD 1: PDF/LINK (Janela de tempo: 1.5s a 5.5s) --- */
+              
+              #trigger:checked ~ .card-container #progress1 {
+                animation: fillProgress 4s linear forwards 1.5s;
+              }
+              /* "Cancel" ativo enquanto carrega */
+              #trigger:checked ~ .card-container #btnCancel1 {
+                animation: fadeInAction 0.3s ease-out forwards 1.5s, fadeOutAction 0.2s ease-in forwards 5.5s;
+              }
+              /* Ao bater 5.5s, ativa o fundo azul, muda textos e surge "Ver atividade" */
+              #trigger:checked ~ .card-container #card1 {
+                animation: bgToBlue 0.4s ease-out forwards 5.5s;
+              }
+              #trigger:checked ~ .card-container #text1,
+              #trigger:checked ~ .card-container #icon1 {
+                animation: textToBlue 0.4s ease-out forwards 5.5s;
+              }
+              #trigger:checked ~ .card-container #btnActivity1 {
+                animation: fadeInAction 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards 5.5s;
+              }
+            `}} />
+
+            <input type="checkbox" id="trigger" checked={true} readOnly className="hidden" />
+
+            <motion.div 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="card-container w-full max-w-[540px] bg-white rounded-[28px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative select-none"
+            >
+              <div className="p-6 pb-5 flex items-center justify-between">
+                <div className="flex items-center gap-4 text-left">
+                  <div className="w-12 h-12 bg-[#0052cc] text-white rounded-full flex items-center justify-center shadow-md">
+                    <div id="syncIcon" className="w-5 h-5 flex items-center justify-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="w-5 h-5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                    </div>
+                  </div>
+                  <div>
+                    <h2 className="text-[19px] font-bold text-[#1e293b] tracking-tight leading-tight">Fila de Processamento</h2>
+                    <p className="text-[14px] font-medium text-slate-400 mt-1">Anexando e validando a sua atividade...</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => setShowProcessingQueue(false)}
+                    className="w-8 h-8 bg-[#ebf2ff] hover:bg-[#d0e0ff] text-[#0052cc] rounded-full flex items-center justify-center transition-colors cursor-pointer border-none"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-6 pb-6 bg-[#f8fafc] pt-5 space-y-4">
+                {processingType === 'pdf' && (
+                  <div id="card1" className="bg-white rounded-2xl px-5 pt-5 pb-4 flex flex-col border border-slate-100 shadow-3xs text-left gap-4 relative transition-all duration-300">
+                    <div className="flex items-center justify-between gap-4 h-9 relative">
+                      <div className="flex items-center gap-4">
+                        <div id="icon1" className="text-slate-400 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15a1 1 0 1 0 2 0 1 1 0 1 0-2 0Z"/></svg>
+                        </div>
+                        <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Processando anexo em formato PDF...</span>
+                      </div>
+                      
+                      <div className="relative w-28 h-full flex items-center justify-end">
+                        <button 
+                          id="btnCancel1" 
+                          onClick={() => setShowProcessingQueue(false)}
+                          className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          id="btnActivity1" 
+                          onClick={() => setShowProcessingQueue(false)}
+                          className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
+                        >
+                          Ver atividade
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="w-full px-1">
+                      <div className="w-full h-[4px] bg-[#ebf2ff] rounded-full relative overflow-hidden">
+                        <div id="progress1" className="absolute left-0 top-0 h-full bg-[#0052cc] w-0 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {processingType === 'link' && (
+                  <div id="card1" className="bg-white rounded-2xl px-5 pt-5 pb-4 flex flex-col border border-slate-100 shadow-3xs text-left gap-4 relative transition-all duration-300">
+                    <div className="flex items-center justify-between gap-4 h-9 relative">
+                      <div className="flex items-center gap-4">
+                        <div id="icon1" className="text-slate-400 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-500"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                        </div>
+                        <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Processando link de entrega do WhatsApp...</span>
+                      </div>
+                      
+                      <div className="relative w-28 h-full flex items-center justify-end">
+                        <button 
+                          id="btnCancel1" 
+                          onClick={() => setShowProcessingQueue(false)}
+                          className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button 
+                          id="btnActivity1" 
+                          onClick={() => setShowProcessingQueue(false)}
+                          className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
+                        >
+                          Ver atividade
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="w-full px-1">
+                      <div className="w-full h-[4px] bg-[#ebf2ff] rounded-full relative overflow-hidden">
+                        <div id="progress1" className="absolute left-0 top-0 h-full bg-[#0052cc] w-0 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </motion.div>
           </motion.div>
         )}
