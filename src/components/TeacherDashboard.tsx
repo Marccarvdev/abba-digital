@@ -325,6 +325,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [studentNameInput, setStudentNameInput] = useState('');
   const [duration, setDuration] = useState('1h'); // 1h, 4h, 1d, 1w, custom
   const [customExpiryDate, setCustomExpiryDate] = useState('2026-12-31');
+  const [customExpiryTime, setCustomExpiryTime] = useState('23:59');
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedBase64, setGeneratedBase64] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
@@ -340,6 +341,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [duplicateActiveCode, setDuplicateActiveCode] = useState<AccessCode | null>(null);
   const [duplicateSelectedDuration, setDuplicateSelectedDuration] = useState('1h');
   const [duplicateCustomExpiryDate, setDuplicateCustomExpiryDate] = useState('2026-12-31');
+  const [duplicateCustomExpiryTime, setDuplicateCustomExpiryTime] = useState('23:59');
   const [duplicateStep, setDuplicateStep] = useState<'question' | 'edit_duration'>('question');
 
   // Task link generation and sharing states
@@ -1154,9 +1156,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       durationLabel = '1 Semana';
     } else {
       const parts = customExpiryDate.split('-');
-      const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+      const timeParts = customExpiryTime.split(':');
+      const hour = timeParts.length > 0 ? Number(timeParts[0]) : 23;
+      const minute = timeParts.length > 1 ? Number(timeParts[1]) : 59;
+      const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), hour, minute, 0);
       durationMs = expDate.getTime() - Date.now();
-      durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
+      durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]} às ${customExpiryTime}`;
     }
 
     const expiresAt = Date.now() + durationMs;
@@ -3781,17 +3786,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       </div>
 
                       {duration === 'custom' && (
-                        <div>
-                          <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="expiry-date">
-                            Data de Expiração
-                          </label>
-                          <input
-                            type="date"
-                            id="expiry-date"
-                            value={customExpiryDate}
-                            onChange={(e) => setCustomExpiryDate(e.target.value)}
-                            className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
-                          />
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="expiry-date">
+                              Data de Expiração
+                            </label>
+                            <input
+                              type="date"
+                              id="expiry-date"
+                              value={customExpiryDate}
+                              onChange={(e) => setCustomExpiryDate(e.target.value)}
+                              className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="expiry-time">
+                              Hora de Expiração
+                            </label>
+                            <input
+                              type="time"
+                              id="expiry-time"
+                              value={customExpiryTime}
+                              onChange={(e) => setCustomExpiryTime(e.target.value)}
+                              className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                            />
+                          </div>
                         </div>
                       )}
                     </div>
@@ -3875,60 +3894,67 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
 
                 <div className="p-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 p-6 pt-8 pl-8 bg-slate-50/20">
                     {filteredStudentsForGrid.map(s => {
                       const isSelected = selectedStudentIds.includes(s.id);
                       return (
                         <div
                           key={s.id}
                           onClick={() => handleSelectStudent(s.id, !isSelected)}
-                          className={`flex items-center gap-3 p-3 border rounded-2xl transition-all cursor-pointer relative bg-white hover:shadow-sm ${
-                            isSelected ? 'border-[#005bb3] bg-[#f2f3ff]' : 'border-[#c1c6d6]/70'
+                          className={`bg-white rounded-2xl border transition-all cursor-pointer relative shadow-sm p-6 pt-10 flex flex-col hover:border-[#005bb3]/40 ${
+                            isSelected ? 'border-[#005bb3] bg-[#f2f3ff]' : 'border-[#c1c6d6]/60'
                           }`}
                         >
-                          <div className="relative shrink-0">
-                            <img src={s.img} alt={s.name} className="w-12 h-12 rounded-full object-cover border-2 border-slate-100" />
-                            <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-full flex items-center justify-center border ${
-                              isSelected ? 'bg-[#005bb3] border-[#005bb3] text-white' : 'bg-white border-[#c1c6d6]'
-                            }`}>
-                              <input
-                                type="checkbox"
-                                checked={isSelected}
-                                onChange={(e) => {
-                                  e.stopPropagation();
-                                  handleSelectStudent(s.id, e.target.checked);
-                                }}
-                                className="opacity-0 absolute inset-0 cursor-pointer w-full h-full"
-                              />
-                              {isSelected && <span className="material-symbols-outlined text-[12px] font-bold">check</span>}
-                            </div>
-                          </div>
-                          <div className="overflow-hidden flex-1">
-                            <p className="font-bold text-xs truncate leading-tight">{s.name}</p>
-                            <p className="text-[10px] text-slate-400 truncate mt-0.5">{s.class}</p>
+                          {/* Popping out avatar */}
+                          <div className={`absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 overflow-hidden shadow-md bg-white select-none shrink-0 transition-all ${
+                            isSelected ? 'border-[#005bb3]' : 'border-slate-200'
+                          }`}>
+                            <img src={s.img} className="w-full h-full object-cover" alt={s.name} />
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={async (e) => {
-                              e.stopPropagation();
-                              if (confirm(`Tem certeza de que deseja excluir permanentemente o aluno ${s.name}?`)) {
-                                setStudents(prev => prev.filter(student => student.id !== s.id));
-                                const updatedLocal = students.filter(student => student.id !== s.id);
-                                localStorage.setItem('abba_students_list', JSON.stringify(updatedLocal));
-                                try {
-                                  await supabase.from('students').delete().eq('id', s.id);
-                                } catch (err) {
-                                  console.warn('Erro ao excluir no banco:', err);
+                          {/* Custom Checkbox Selection & Trash Button in top-right */}
+                          <div className="absolute top-4 right-4 flex items-center gap-2 select-none z-30">
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center border cursor-pointer transition-all ${
+                              isSelected ? 'bg-[#005bb3] border-[#005bb3] text-white' : 'bg-white border-[#c1c6d6]'
+                            }`}>
+                              {isSelected && <span className="material-symbols-outlined text-[12px] font-bold">check</span>}
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm(`Tem certeza de que deseja excluir permanentemente o aluno ${s.name}?`)) {
+                                  setStudents(prev => prev.filter(student => student.id !== s.id));
+                                  const updatedLocal = students.filter(student => student.id !== s.id);
+                                  localStorage.setItem('abba_students_list', JSON.stringify(updatedLocal));
+                                  try {
+                                    await supabase.from('students').delete().eq('id', s.id);
+                                  } catch (err) {
+                                    console.warn('Erro ao excluir no banco:', err);
+                                  }
+                                  alert('Aluno excluído com sucesso! 🗑️');
                                 }
-                                alert('Aluno excluído com sucesso! 🗑️');
-                              }
-                            }}
-                            className="p-1 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors z-30 ml-2 border-none bg-transparent cursor-pointer flex items-center justify-center shrink-0"
-                            title="Excluir aluno permanentemente"
-                          >
-                            <span className="material-symbols-outlined text-[16px]">delete</span>
-                          </button>
+                              }}
+                              className="p-1 text-slate-300 hover:text-red-500 rounded-full hover:bg-red-50 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
+                              title="Excluir aluno permanentemente"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">delete</span>
+                            </button>
+                          </div>
+
+                          {/* Content of the card */}
+                          <div className="flex-grow mt-2">
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                              Estudante
+                            </span>
+                            <h4 className="text-sm font-extrabold text-[#131b2e] tracking-wide mt-2 truncate leading-tight">
+                              {s.name}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 mt-1 truncate font-medium">
+                              {s.class}
+                            </p>
+                          </div>
                         </div>
                       );
                     })}
@@ -6191,9 +6217,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               durationLabel = '1 Semana';
                             } else {
                               const parts = customExpiryDate.split('-');
-                              const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+                              const timeParts = customExpiryTime.split(':');
+                              const hour = timeParts.length > 0 ? Number(timeParts[0]) : 23;
+                              const minute = timeParts.length > 1 ? Number(timeParts[1]) : 59;
+                              const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), hour, minute, 0);
                               durationMs = expDate.getTime() - Date.now();
-                              durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
+                              durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]} às ${customExpiryTime}`;
                             }
 
                             const expiresAt = Date.now() + durationMs;
@@ -6276,17 +6305,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         </div>
 
                         {duplicateSelectedDuration === 'custom' && (
-                          <div>
-                            <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="duplicate-expiry-date">
-                              Data de Expiração
-                            </label>
-                            <input
-                              type="date"
-                              id="duplicate-expiry-date"
-                              value={duplicateCustomExpiryDate}
-                              onChange={(e) => setDuplicateCustomExpiryDate(e.target.value)}
-                              className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
-                            />
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="duplicate-expiry-date">
+                                Data de Expiração
+                              </label>
+                              <input
+                                type="date"
+                                id="duplicate-expiry-date"
+                                value={duplicateCustomExpiryDate}
+                                onChange={(e) => setDuplicateCustomExpiryDate(e.target.value)}
+                                className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-600 mb-1.5" htmlFor="duplicate-expiry-time">
+                                Hora de Expiração
+                              </label>
+                              <input
+                                type="time"
+                                id="duplicate-expiry-time"
+                                value={duplicateCustomExpiryTime}
+                                onChange={(e) => setDuplicateCustomExpiryTime(e.target.value)}
+                                className="w-full bg-white border border-[#c1c6d6] rounded-xl px-4 py-2.5 text-sm focus:ring-2 focus:ring-[#005bb3] outline-none"
+                              />
+                            </div>
                           </div>
                         )}
 
@@ -6320,9 +6363,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                 durationLabel = '1 Semana';
                               } else {
                                 const parts = duplicateCustomExpiryDate.split('-');
-                                const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
+                                const timeParts = duplicateCustomExpiryTime.split(':');
+                                const hour = timeParts.length > 0 ? Number(timeParts[0]) : 23;
+                                const minute = timeParts.length > 1 ? Number(timeParts[1]) : 59;
+                                const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), hour, minute, 0);
                                 durationMs = expDate.getTime() - Date.now();
-                                durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
+                                durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]} às ${duplicateCustomExpiryTime}`;
                               }
 
                               const newExpiresAt = Date.now() + durationMs;
