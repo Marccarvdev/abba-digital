@@ -1156,7 +1156,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       const parts = customExpiryDate.split('-');
       const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
       durationMs = expDate.getTime() - Date.now();
-      durationLabel = `Até ${customExpiryDate}`;
+      durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
     }
 
     const expiresAt = Date.now() + durationMs;
@@ -3837,7 +3837,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
                 <div className="p-6 border-b border-[#dde0e2] space-y-4">
                   <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                    <h3 className="font-extrabold text-lg">Selecionar Alunos para Atribuição</h3>
+                    <h3 className="font-extrabold text-lg">Enviar convite de acesso</h3>
                     <div className="flex items-center gap-2">
                       <div className="flex items-center gap-2 px-3 py-2 bg-[#f2f3ff] rounded-xl border border-[#c1c6d6]/60">
                         <input
@@ -3939,7 +3939,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               {/* Active codes table */}
               <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden">
                 <div className="p-6 border-b border-[#dde0e2]">
-                  <h3 className="font-extrabold text-lg">Alunos atribuídos</h3>
+                  <h3 className="font-extrabold text-lg">Alunos que acessaram pelo código</h3>
                   <p className="text-xs text-slate-400">Tokens gerados em atividade para acompanhamento</p>
                 </div>
                 <div>
@@ -3984,7 +3984,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             {/* Expired/Active badge & Revoke Button */}
                             <div className="absolute top-4 right-4 flex items-center gap-2 select-none">
                               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/60">
-                                {c.durationLabel}
+                                {c.durationLabel && c.durationLabel.startsWith('Até ') && c.durationLabel.includes('-')
+                                  ? `Até ${c.durationLabel.substring(4).split('-').reverse().join('/')}`
+                                  : c.durationLabel}
                               </span>
                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                                 isExpired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -4030,121 +4032,6 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               </span>
                               {copiedIndex === index ? 'Copiado!' : 'Copiar Código'}
                             </button>
-                          </motion.div>
-                        );
-                      })}
-                      </AnimatePresence>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Accessed by Code Section */}
-              <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden mt-8">
-                <div className="p-6 border-b border-[#dde0e2] flex flex-col sm:flex-row justify-between sm:items-center gap-3">
-                  <div>
-                    <h3 className="font-extrabold text-lg flex items-center gap-2">
-                      <span className="material-symbols-outlined text-green-500 animate-pulse">login</span>
-                      Alunos que acessaram pelo código
-                    </h3>
-                    <p className="text-xs text-slate-400">Estudantes que realizaram login no portal utilizando chaves ativas em tempo real</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (window.confirm('Deseja limpar o histórico de acessos por código?')) {
-                        localStorage.setItem('abba_students_logged_by_code', JSON.stringify([]));
-                        setAccessedStudents([]);
-                      }
-                    }}
-                    className="px-3 py-1.5 border border-red-200 hover:bg-red-50 text-red-600 font-semibold text-xs rounded-xl transition-all cursor-pointer bg-transparent"
-                  >
-                    Limpar Histórico
-                  </button>
-                </div>
-
-                <div className="p-6">
-                  {accessedStudents.length === 0 ? (
-                    <div className="p-8 text-center text-slate-400 text-sm">
-                      Nenhum aluno acessou utilizando código no momento.
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 min-h-[120px]">
-                      <AnimatePresence>
-                      {accessedStudents.map((item) => {
-                        const student = students.find(s => s.name.toLowerCase() === item.studentName.toLowerCase());
-                        const studentImg = student?.img || "https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&q=80&w=150&h=150";
-                        const studentClass = student?.class || "Turma A - 3º Ano";
-                        
-                        const accessedTime = new Date(item.accessedAt);
-                        const formattedTime = accessedTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                        const formattedDate = accessedTime.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-
-                        return (
-                          <motion.div 
-                            key={item.id + item.accessedAt}
-                            layout="position"
-                            initial={{ opacity: 0, scale: 0.95 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.95 }}
-                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                            className="bg-slate-50/50 rounded-2xl border border-slate-100 p-4 flex items-center gap-4 relative hover:shadow-sm transition-all"
-                          >
-                            {/* Glowing circular student avatar */}
-                            <div className="relative shrink-0 select-none">
-                              <img src={studentImg} className="w-14 h-14 rounded-full object-cover border-2 border-slate-200" alt={item.studentName} />
-                              {/* Pulse Green Glowing Dot */}
-                              <div className="absolute -bottom-1 -right-1 w-4.5 h-4.5 rounded-full bg-white flex items-center justify-center shadow">
-                                <span className="w-2.5 h-2.5 rounded-full bg-[#00c853] animate-pulse shadow-sm shadow-[#00c853]"></span>
-                              </div>
-                            </div>
-
-                            {/* Text Info */}
-                            <div className="overflow-hidden flex-grow min-w-0">
-                              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                                Acesso Confirmado
-                              </span>
-                              <h4 className="font-bold text-xs text-slate-800 truncate mt-0.5">{item.studentName}</h4>
-                              <p className="text-[10px] text-slate-400 mt-0.5">{studentClass}</p>
-                              
-                              <div className="flex items-center gap-1.5 mt-2 bg-slate-100 px-2 py-1 rounded-lg w-fit">
-                                <span className="material-symbols-outlined text-[12px] text-[#005bb3]">key</span>
-                                <span className="font-mono text-[9px] font-bold text-[#005bb3] truncate max-w-[120px]">{item.code}</span>
-                              </div>
-                            </div>
-
-                            {/* Timestamp badge */}
-                            <div className="absolute top-4 right-4 text-right select-none flex flex-col items-end gap-1">
-                              <span className="text-[8px] font-extrabold text-[#00c853] bg-green-50 px-2 py-0.5 rounded-full uppercase tracking-wider block">
-                                Online
-                              </span>
-                              <span className="text-[9px] text-slate-400 font-medium mt-1 block">
-                                {formattedTime} ({formattedDate})
-                              </span>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (window.confirm(`Tem certeza que deseja remover ${item.studentName} permanentemente? Isso irá excluí-lo do histórico de acessos e do cadastro geral de alunos de forma definitiva.`)) {
-                                    // 1. Remove from accessedStudents
-                                    const updatedAccessed = accessedStudents.filter(s => s.id !== item.id && s.studentName.toLowerCase() !== item.studentName.toLowerCase());
-                                    setAccessedStudents(updatedAccessed);
-                                    localStorage.setItem('abba_students_logged_by_code', JSON.stringify(updatedAccessed));
-
-                                    // 2. Remove from students list
-                                    const updatedStudents = students.filter(s => s.id !== item.id && s.name.toLowerCase() !== item.studentName.toLowerCase());
-                                    setStudents(updatedStudents);
-                                    localStorage.setItem('abba_students_list', JSON.stringify(updatedStudents));
-                                    
-                                    alert(`${item.studentName} foi excluído permanentemente!`);
-                                  }
-                                }}
-                                className="mt-2 text-red-500 hover:text-red-700 bg-red-50 hover:bg-red-100 p-1 rounded-lg border-none cursor-pointer transition-all flex items-center justify-center"
-                                title="Excluir permanentemente"
-                              >
-                                <span className="material-symbols-outlined text-[15px]">delete</span>
-                              </button>
-                            </div>
                           </motion.div>
                         );
                       })}
@@ -6257,7 +6144,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           <div className="flex justify-between items-center text-xs">
                             <span className="text-slate-500 font-medium">Duração:</span>
                             <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                              {duplicateActiveCode.durationLabel}
+                              {duplicateActiveCode.durationLabel && duplicateActiveCode.durationLabel.startsWith('Até ') && duplicateActiveCode.durationLabel.includes('-')
+                                ? `Até ${duplicateActiveCode.durationLabel.substring(4).split('-').reverse().join('/')}`
+                                : duplicateActiveCode.durationLabel}
                             </span>
                           </div>
                           <div className="flex justify-between items-center text-xs">
@@ -6304,7 +6193,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               const parts = customExpiryDate.split('-');
                               const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
                               durationMs = expDate.getTime() - Date.now();
-                              durationLabel = `Até ${customExpiryDate}`;
+                              durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
                             }
 
                             const expiresAt = Date.now() + durationMs;
@@ -6433,7 +6322,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                 const parts = duplicateCustomExpiryDate.split('-');
                                 const expDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]), 23, 59, 59);
                                 durationMs = expDate.getTime() - Date.now();
-                                durationLabel = `Até ${duplicateCustomExpiryDate}`;
+                                durationLabel = `Até ${parts[2]}/${parts[1]}/${parts[0]}`;
                               }
 
                               const newExpiresAt = Date.now() + durationMs;
