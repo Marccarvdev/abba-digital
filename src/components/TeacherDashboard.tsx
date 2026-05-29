@@ -3856,36 +3856,22 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
               </div>
 
-              {/* Unified "Enviar convite de acesso" section */}
+              {/* Unified "Alunos que acessaram pelo código" section */}
               <div className="bg-white rounded-2xl border border-[#c1c6d6] shadow-sm overflow-hidden flex flex-col min-h-[400px]">
-                <div className="p-6 border-b border-[#dde0e2] space-y-4">
-                  <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
-                    <div>
-                      <h3 className="font-extrabold text-lg">Enviar convite de acesso</h3>
-                      <p className="text-xs text-slate-400 mt-1">Alunos que acessaram pelo código - Chaves ativas geradas para acompanhamento em tempo real</p>
-                    </div>
-                  </div>
-                  <div className="relative">
-                    <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[18px]">search</span>
-                    <input
-                      type="text"
-                      placeholder="Filtrar chaves de acesso por nome do aluno..."
-                      value={studentSearchQuery}
-                      onChange={(e) => setStudentSearchQuery(e.target.value)}
-                      className="w-full pl-9 pr-4 py-2.5 bg-[#f2f3ff] border-none rounded-xl text-xs focus:ring-2 focus:ring-[#005bb3] outline-none"
-                    />
-                  </div>
+                <div className="p-6 border-b border-[#dde0e2]">
+                  <h3 className="font-extrabold text-lg">Alunos que acessaram pelo código</h3>
+                  <p className="text-xs text-slate-400 mt-1">Estudantes que realizaram login no portal utilizando chaves ativas em tempo real</p>
                 </div>
 
                 <div className="p-6 bg-slate-50/20 flex-grow">
-                  {filteredActiveCodes.length === 0 ? (
+                  {activeCodes.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-sm">
-                      {studentSearchQuery ? 'Nenhuma chave encontrada para esta busca.' : 'Nenhuma chave de acesso ativa no momento.'}
+                      Nenhuma chave de acesso ativa no momento.
                     </div>
                   ) : (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 pt-6 pl-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 p-8 bg-slate-50/50 min-h-[200px]">
                       <AnimatePresence>
-                      {filteredActiveCodes.map((c, index) => {
+                      {activeCodes.map((c, index) => {
                         const isExpired = Date.now() > c.expiresAt;
                         const student = students.find(s => s.name.toLowerCase() === c.studentName.toLowerCase());
                         const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif";
