@@ -131,7 +131,7 @@ import { LoginScreen, SignupScreen } from './components/AuthScreens';
 import { TeacherDashboard } from './components/TeacherDashboard';
 import { StudentDashboard } from './components/StudentDashboard';
 import { Confetti } from './components/Confetti';
-import { supabase } from './supabaseClient';
+import { supabase, logUserAction } from './supabaseClient';
 
 const getShelfCubeIdForLetter = (letter: string): string => {
   const match = ALPHABET_CUBES.find(c => c.primaryLetter === letter || c.secondaryLetter === letter);
@@ -332,6 +332,19 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user]);
 
+  // Protect Teacher and Student Dashboards from unauthorized access
+  useEffect(() => {
+    if (currentScreen === 'teacher-dashboard') {
+      if (!user || user.role !== 'teacher') {
+        setCurrentScreen('login');
+      }
+    } else if (currentScreen === 'student-dashboard') {
+      if (!user || user.role !== 'student') {
+        setCurrentScreen('login');
+      }
+    }
+  }, [currentScreen, user]);
+
   // Process import link query parameter or auto fixed code login on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -342,7 +355,7 @@ export default function App() {
       const upperCode = code.trim().toUpperCase();
       if (upperCode === 'PROF123') {
         const teacherUser: User = {
-          name: 'Professor Décio Silva',
+          name: 'José Décio de Alencar',
           email: 'inglesdecio@gmail.com',
           role: 'teacher'
         };
@@ -509,9 +522,18 @@ export default function App() {
             student_email: studentEmail,
             task_title: taskTitle,
             submitted_at: newSentItem.submittedAt,
-            spelled_words_count: newSentItem.spelledWordsCount
+            spelled_words_count: newSentItem.spelledWordsCount,
+            spelled_words: JSON.stringify(newWords),
+            task_files: JSON.stringify([])
           }
         ]);
+        await logUserAction({
+          userName: studentName,
+          userEmail: studentEmail,
+          role: 'student',
+          actionType: 'task_submission',
+          actionDetails: `Concluiu a tarefa ativa "${taskTitle}" com ${newSentItem.spelledWordsCount} palavras soletradas.`
+        });
         console.log('⚡ Submission synced with Supabase from active task!');
       } catch (err) {
         console.warn('Erro ao salvar submissão no Supabase:', err);
@@ -659,7 +681,7 @@ export default function App() {
       chunks.push(encoder.encode(`${xrefOffset}\n`));
       chunks.push(encoder.encode("%%EOF\n"));
 
-      const blob = new Blob(chunks, { type: 'application/pdf' });
+      const blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -2439,7 +2461,7 @@ export default function App() {
             <span className="material-symbols-outlined text-red-500 text-5xl">lock_clock</span>
             <h3 className="text-lg font-extrabold text-slate-800">Sessão Expirada!</h3>
             <p className="text-xs text-slate-500 leading-relaxed">
-              O tempo limite de segurança do seu Código de Acesso Único expirou. Por favor, solicite um novo código ao seu professor.
+              O tempo limite de segurança do seu Código de Acesso Único expirou. Por favor, solicite um novo código ao seu Teatcher.
             </p>
             <button
               onClick={() => setIsSessionExpiredOpen(false)}
@@ -2494,7 +2516,7 @@ export default function App() {
     );
   }
 
-  if (currentScreen === 'teacher-dashboard' && user) {
+  if (currentScreen === 'teacher-dashboard' && user && user.role === 'teacher') {
     return (
       <TeacherDashboard
         user={user}
@@ -2514,10 +2536,11 @@ export default function App() {
     );
   }
 
-  if (currentScreen === 'student-dashboard' && user) {
+  if (currentScreen === 'student-dashboard' && user && user.role === 'student') {
     return (
       <StudentDashboard
         user={user}
+        onUpdateUser={setUser}
         onLogout={() => {
           setUser(null);
           localStorage.removeItem('abba_logged_in_user');

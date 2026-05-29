@@ -4,7 +4,7 @@ import { User, TaskItem, SavedWord } from '../types';
 import abbaLogo from '../assets/logo abba.svg';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 import Loader from './Loader';
-import { supabase } from '../supabaseClient';
+import { supabase, logUserAction } from '../supabaseClient';
 
 const parseTeacherNoteAndFiles = (rawNote: string) => {
   if (!rawNote) return { note: '', files: [] };
@@ -29,6 +29,7 @@ const serializeTeacherNoteAndFiles = (note: string, files: any[]) => {
 
 interface StudentDashboardProps {
   user: User;
+  onUpdateUser?: (updated: User) => void;
   onLogout: () => void;
   onLaunchSpellingTask: (word: string, language: 'pt' | 'en' | 'de', color: string) => void;
   completedSpelledWords: SavedWord[];
@@ -73,6 +74,7 @@ const NUMERAL_ITEMS: { word: string; target?: string; language: 'pt' | 'en' | 'd
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user,
+  onUpdateUser,
   onLogout,
   onLaunchSpellingTask,
   completedSpelledWords,
@@ -108,6 +110,50 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [dragActive, setDragActive] = useState(false);
   const [taskSearchQuery, setTaskSearchQuery] = useState('');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showAvatarSelector, setShowAvatarSelector] = useState(false);
+  const [showMobileAvatarSelector, setShowMobileAvatarSelector] = useState(false);
+  const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const PRESET_AVATARS = [
+    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150&h=150",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"
+  ];
+
+  const handleSelectAvatar = async (imgUrl: string) => {
+    const updatedUser = { ...user, img: imgUrl };
+    if (onUpdateUser) {
+      onUpdateUser(updatedUser);
+    }
+    localStorage.setItem('abba_logged_in_user', JSON.stringify(updatedUser));
+    
+    try {
+      const { error } = await supabase
+        .from('students')
+        .update({ img: imgUrl })
+        .eq('name', user.name);
+      
+      if (!error) {
+        console.log('⚡ Avatar do estudante sincronizado com o Supabase!');
+      }
+      
+      await logUserAction({
+        userName: user.name,
+        userEmail: user.email || 'aluno@abbadigital.com',
+        role: 'student',
+        actionType: 'update_avatar',
+        actionDetails: `Atualizou sua imagem de perfil no sistema.`
+      });
+    } catch (err) {
+      console.warn('Erro ao atualizar avatar no Supabase:', err);
+    }
+    setShowAvatarSelector(false);
+    setShowMobileAvatarSelector(false);
+  };
+
   const [uploadLink, setUploadLink] = useState('');
   const [searchExpanded, setSearchExpanded] = useState(false);
   const [excludedSearchTaskIds, setExcludedSearchTaskIds] = useState<string[]>(() => {
@@ -168,27 +214,34 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const bellButtonRef = useRef<HTMLButtonElement>(null);
   const avatarButtonRef = useRef<HTMLButtonElement>(null);
+  const mobileProfileMenuRef = useRef<HTMLDivElement>(null);
+  const mobileAvatarSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (showNotificationsDropdown) {
         if (
-          notificationsRef.current && 
+          notificationsRef.current &&
           !notificationsRef.current.contains(event.target as Node) &&
-          bellButtonRef.current && 
+          bellButtonRef.current &&
           !bellButtonRef.current.contains(event.target as Node)
         ) {
           setShowNotificationsDropdown(false);
         }
       }
       if (showProfileMenu) {
-        if (
-          profileMenuRef.current && 
-          !profileMenuRef.current.contains(event.target as Node) &&
-          avatarButtonRef.current && 
-          !avatarButtonRef.current.contains(event.target as Node)
-        ) {
+        const clickedOutsideDesktop = !profileMenuRef.current || !profileMenuRef.current.contains(event.target as Node);
+        const clickedOutsideMobile = !mobileProfileMenuRef.current || !mobileProfileMenuRef.current.contains(event.target as Node);
+        const clickedOutsideAvatarBtn = !avatarButtonRef.current || !avatarButtonRef.current.contains(event.target as Node);
+        
+        if (clickedOutsideDesktop && clickedOutsideMobile && clickedOutsideAvatarBtn) {
           setShowProfileMenu(false);
+        }
+      }
+      if (showMobileAvatarSelector) {
+        const clickedOutsideMobileSelector = !mobileAvatarSelectorRef.current || !mobileAvatarSelectorRef.current.contains(event.target as Node);
+        if (clickedOutsideMobileSelector) {
+          setShowMobileAvatarSelector(false);
         }
       }
     }
@@ -197,7 +250,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showNotificationsDropdown, showProfileMenu]);
+  }, [showNotificationsDropdown, showProfileMenu, showMobileAvatarSelector]);
   const [notificationFilter, setNotificationFilter] = useState<'all' | 'unread'>('all');
   const [readNotifications, setReadNotifications] = useState<string[]>(() => {
     try {
@@ -243,8 +296,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         ];
       }
       return parsed;
-    } catch { 
-      return []; 
+    } catch {
+      return [];
     }
   });
 
@@ -252,8 +305,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     if (user.codeSession?.codeId) return user.codeSession.codeId;
     try {
       const studentsList = JSON.parse(localStorage.getItem('abba_students_list') || '[]');
-      const matched = studentsList.find((s: any) => 
-        s.email?.toLowerCase() === user.email?.toLowerCase() || 
+      const matched = studentsList.find((s: any) =>
+        s.email?.toLowerCase() === user.email?.toLowerCase() ||
         s.name?.toLowerCase() === user.name?.toLowerCase()
       );
       if (matched) return matched.id;
@@ -267,14 +320,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   useEffect(() => {
     const defaultStudentId = studentId;
     const defaultStudentName = user.name || 'Estudante';
-    
+
     setTeacherTasks(prev => {
       const hasNumerais = prev.some(t => t.id === 'numerais');
       const hasCores = prev.some(t => t.id === 'cores-animais');
-      
+
       if (!hasNumerais || !hasCores) {
         const updated = [...prev];
-        
+
         if (!hasNumerais) {
           updated.push({
             id: 'numerais',
@@ -290,7 +343,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             submissionsCount: 0
           });
         }
-        
+
         if (!hasCores) {
           updated.push({
             id: 'cores-animais',
@@ -306,16 +359,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             submissionsCount: 0
           });
         }
-        
+
         localStorage.setItem('abba_teacher_tasks', JSON.stringify(updated));
         return updated;
       }
-      
+
       let changed = false;
       const verified = prev.map(t => {
-        if ((t.id === 'numerais' || t.id === 'cores-animais') && 
-            !t.assignedStudentIds?.includes(defaultStudentId) && 
-            !t.assignedStudentIds?.includes(defaultStudentName)) {
+        if ((t.id === 'numerais' || t.id === 'cores-animais') &&
+          !t.assignedStudentIds?.includes(defaultStudentId) &&
+          !t.assignedStudentIds?.includes(defaultStudentName)) {
           changed = true;
           return {
             ...t,
@@ -324,12 +377,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         }
         return t;
       });
-      
+
       if (changed) {
         localStorage.setItem('abba_teacher_tasks', JSON.stringify(verified));
         return verified;
       }
-      
+
       return prev;
     });
   }, [studentId, user.name]);
@@ -339,7 +392,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       const { data: dbTasks, error } = await supabase
         .from('tasks')
         .select('*');
-      
+
       if (dbTasks && !error) {
         const mappedTasks = dbTasks.map((t: any) => ({
           id: t.id || t.task_id,
@@ -347,17 +400,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           description: t.description || t.task_description || '',
           dueDate: t.due_date || t.dueDate || '',
           status: t.status || 'active',
-          targetWords: typeof t.target_words === 'string' 
-            ? JSON.parse(t.target_words) 
-            : t.target_words || typeof t.targetWords === 'string' 
-            ? JSON.parse(t.targetWords) 
-            : t.targetWords || [],
+          targetWords: typeof t.target_words === 'string'
+            ? JSON.parse(t.target_words)
+            : t.target_words || typeof t.targetWords === 'string'
+              ? JSON.parse(t.targetWords)
+              : t.targetWords || [],
           priority: t.priority || 'Alta',
           assignedStudentIds: typeof t.assigned_student_ids === 'string'
             ? JSON.parse(t.assigned_student_ids)
             : t.assigned_student_ids || typeof t.assignedStudentIds === 'string'
-            ? JSON.parse(t.assignedStudentIds)
-            : t.assignedStudentIds || [],
+              ? JSON.parse(t.assignedStudentIds)
+              : t.assignedStudentIds || [],
           startDate: t.start_date || t.startDate || '',
           teacherNote: t.teacher_note || t.teacherNote || '',
           submissionsCount: t.submissions_count || t.submissionsCount || 0
@@ -471,7 +524,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       'bosta', 'merda', 'caralho', 'puta', 'viado', 'fdp', 'filho da puta', 'cu', 'cuzao',
       'shit', 'fuck', 'bitch', 'asshole', 'dick', 'pussy', 'bastard', 'crap', 'pqp'
     ];
-    const hasOffensive = offensiveWords.some(word => 
+    const hasOffensive = offensiveWords.some(word =>
       new RegExp(`\\b${word}\\b`, 'i').test(rawTrimmed)
     );
     if (hasOffensive) {
@@ -519,7 +572,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           .select('*')
           .eq('link_id', code)
           .maybeSingle();
-        
+
         if (data && !error) {
           matchedLink = {
             id: data.link_id,
@@ -543,8 +596,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
 
     // Proactive duplication validation
-    const autoAssignedTasks = teacherTasks.filter((task: any) => 
-      task.status === 'active' && 
+    const autoAssignedTasks = teacherTasks.filter((task: any) =>
+      task.status === 'active' &&
       (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
     );
     if (autoAssignedTasks.some((t: any) => t.id === matchedLink.taskId)) {
@@ -614,8 +667,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     if (!validatedLink) return;
 
     // Check if task is already automatically assigned by the professor
-    const autoAssignedTasks = teacherTasks.filter((task: any) => 
-      task.status === 'active' && 
+    const autoAssignedTasks = teacherTasks.filter((task: any) =>
+      task.status === 'active' &&
       (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
     );
     const isAlreadyAutoAssigned = autoAssignedTasks.some((t: any) => t.id === validatedLink.taskId);
@@ -641,7 +694,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     // Save in unsynced queue for background synchronization
     const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_links') || '[]');
     localStorage.setItem('abba_unsynced_student_links', JSON.stringify([enriched, ...unsynced]));
-    
+
     // Attempt sync
     syncStudentLinks();
   };
@@ -747,7 +800,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       submittedAt: new Date().toISOString(),
       spelledWordsCount: completedSpelledWords.length
     };
-    
+
     setSentActivities(prev => {
       if (prev.some(a => a.taskTitle === newSentItem.taskTitle && Math.abs(new Date(a.submittedAt).getTime() - new Date(newSentItem.submittedAt).getTime()) < 10000)) {
         return prev;
@@ -762,9 +815,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           student_email: newSentItem.studentEmail,
           task_title: newSentItem.taskTitle,
           submitted_at: newSentItem.submittedAt,
-          spelled_words_count: newSentItem.spelledWordsCount
+          spelled_words_count: newSentItem.spelledWordsCount,
+          spelled_words: JSON.stringify(completedSpelledWords),
+          task_files: JSON.stringify(taskFiles)
         }
       ]);
+      await logUserAction({
+        userName: user.name,
+        userEmail: newSentItem.studentEmail,
+        role: 'student',
+        actionType: 'task_submission',
+        actionDetails: `Entregou a tarefa "${newSentItem.taskTitle}" com ${newSentItem.spelledWordsCount} palavras soletradas e ${taskFiles.length} arquivos/links anexados.`
+      });
       console.log('⚡ Submission synced with Supabase!');
     } catch (err) {
       console.warn('Erro ao salvar submissão no Supabase:', err);
@@ -922,7 +984,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       chunks.push(encoder.encode(`${xrefOffset}\n`));
       chunks.push(encoder.encode("%%EOF\n"));
 
-      const blob = new Blob(chunks, { type: 'application/pdf' });
+      const blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -942,13 +1004,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const filteredItems = NUMERAL_ITEMS.filter(item => {
     const matchesLanguage = filterLanguage === 'all' ? true : item.language === filterLanguage;
-    const matchesSearch = item.word.toLowerCase().includes(taskSearchQuery.toLowerCase()) || 
-                          item.langLabel.toLowerCase().includes(taskSearchQuery.toLowerCase());
+    const matchesSearch = item.word.toLowerCase().includes(taskSearchQuery.toLowerCase()) ||
+      item.langLabel.toLowerCase().includes(taskSearchQuery.toLowerCase());
     return matchesLanguage && matchesSearch;
   });
 
-  const autoAssignedTasks = teacherTasks.filter((task: any) => 
-    task.status === 'active' && 
+  const autoAssignedTasks = teacherTasks.filter((task: any) =>
+    task.status === 'active' &&
     (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
   );
 
@@ -977,13 +1039,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   return (
     <div className="min-h-screen bg-[#faf8ff] text-[#131b2e] flex flex-col font-sans">
-      
+
       {/* Mobile Bottom Sheets (Notifications and Profile) - Rendered at root level */}
       <AnimatePresence>
         {showNotificationsDropdown && (
           <div className="fixed inset-0 z-[150] block lg:hidden">
-            <div 
-              onClick={() => setShowNotificationsDropdown(false)} 
+            <div
+              onClick={() => setShowNotificationsDropdown(false)}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
             ></div>
             <motion.div
@@ -1006,7 +1068,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </span>
                   )}
                 </h2>
-                <button 
+                <button
                   onClick={() => setShowNotificationsDropdown(false)}
                   className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
                 >
@@ -1031,12 +1093,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   }
 
                   return displayed.map((notif) => (
-                    <div 
+                    <div
                       key={notif.id}
                       onClick={() => {
                         // Mark as read
                         if (!notif.isRead) {
-                            setReadNotifications(prev => [...prev, notif.id]);
+                          setReadNotifications(prev => [...prev, notif.id]);
                         }
                         setShowNotificationsDropdown(false);
                         // Go to abacus directly
@@ -1044,16 +1106,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           onGoToAbacus(notif.taskTitle, notif.taskDescription);
                         }
                       }}
-                      className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${
-                        !notif.isRead ? 'bg-indigo-50/10' : ''
-                      }`}
+                      className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${!notif.isRead ? 'bg-indigo-50/10' : ''
+                        }`}
                     >
                       {/* Avatar section with badge */}
                       <div className="relative flex-shrink-0 select-none">
-                        <img 
-                          alt="Teacher avatar" 
-                          className="w-12 h-12 rounded-full object-cover border border-slate-100" 
-                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N" 
+                        <img
+                          alt="Teacher avatar"
+                          className="w-12 h-12 rounded-full object-cover border border-slate-100"
+                          src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N"
                         />
                         <div className="absolute -right-1 -bottom-1 bg-purple-600 text-white p-0.5 rounded-full border-2 border-white flex items-center justify-center">
                           <span className="material-symbols-outlined text-[10px] block font-black">assignment</span>
@@ -1064,7 +1125,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start">
                           <p className="text-sm font-semibold text-slate-900">
-                            Prof. Marcos 
+                            Prof. Marcos
                             <span className="text-slate-400 font-normal ml-2 text-xs">
                               {formatTimeAgo(notif.createdAt)}
                             </span>
@@ -1076,7 +1137,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <p className="text-sm mt-0.5 text-slate-900">
                           Enviou a tarefa: <span className="font-semibold">{notif.taskTitle}</span>
                         </p>
-                        <p 
+                        <p
                           className="text-xs mt-1.5 text-slate-500 leading-relaxed"
                           style={{
                             display: '-webkit-box',
@@ -1100,11 +1161,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       <AnimatePresence>
         {showProfileMenu && (
           <div className="fixed inset-0 z-[150] block lg:hidden">
-            <div 
-              onClick={() => setShowProfileMenu(false)} 
+            <div
+              onClick={() => setShowProfileMenu(false)}
               className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
             ></div>
             <motion.div
+              ref={mobileProfileMenuRef}
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -1117,7 +1179,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* Header */}
               <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
                 <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
-                <button 
+                <button
                   onClick={() => setShowProfileMenu(false)}
                   className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
                 >
@@ -1130,10 +1192,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 {/* User info details */}
                 <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                   <div className="relative shrink-0">
-                    <img 
-                      alt="Avatar" 
-                      className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif" 
+                    <img
+                      alt="Avatar"
+                      className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20"
+                      src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
                     />
                     <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                       <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1155,11 +1217,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
                       <span className="material-symbols-outlined text-indigo-500 text-lg">emoji_events</span>
                     </div>
-                    
+
                     {/* Progress bar */}
                     <div className="w-full h-2.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
-                      <div 
-                        className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500" 
+                      <div
+                        className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
                         style={{ width: `${(completedCount / NUMERAL_ITEMS.length) * 100}%` }}
                       ></div>
                     </div>
@@ -1168,7 +1230,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                 {/* Dropdown Menu Actions */}
                 <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
-                  <button 
+                  <button
                     onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
                     className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
                   >
@@ -1178,16 +1240,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </span>
                     <span className="material-symbols-outlined text-[18px]">chevron_right</span>
                   </button>
-                  
-                  <button 
-                    onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+
+                  <button
+                    onClick={() => setShowMobileAvatarSelector(true)}
                     className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                   >
                     <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
                     Editar Perfil
                   </button>
-                  
-                  <button 
+
+                  <button
                     onClick={() => { setShowProfileMenu(false); onLogout(); }}
                     className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
                   >
@@ -1201,23 +1263,112 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         )}
       </AnimatePresence>
 
+      {/* MOBILE AVATAR SELECTOR BOTTOM SHEET */}
+      <AnimatePresence>
+        {showMobileAvatarSelector && (
+          <div className="fixed inset-0 z-[205] block lg:hidden">
+            <div
+              onClick={() => setShowMobileAvatarSelector(false)}
+              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
+            ></div>
+            <motion.div
+              ref={mobileAvatarSelectorRef}
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 220 }}
+              className="fixed bottom-0 inset-x-0 z-[210] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left"
+            >
+              {/* Top Drag Indicator */}
+              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
+
+              {/* Header */}
+              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <span className="material-symbols-outlined">account_circle</span>
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900">Escolha seu Avatar</h2>
+                    <p className="text-[10px] text-slate-400 font-medium">Selecione uma imagem para o seu perfil</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowMobileAvatarSelector(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
+                >
+                  Voltar
+                </button>
+              </div>
+
+              {/* Scrollable Content */}
+              <div className="overflow-y-auto bg-white p-5 space-y-6">
+                {/* Presets Grid */}
+                <div className="space-y-2">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Avatares Recomendados</label>
+                  <div className="grid grid-cols-4 gap-4 py-2">
+                    {PRESET_AVATARS.map((url, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectAvatar(url)}
+                        className={`w-14 h-14 rounded-full overflow-hidden border-3 hover:scale-105 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent flex items-center justify-center ${
+                          user.img === url ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-transparent'
+                        }`}
+                      >
+                        <img src={url} alt={`Preset Avatar ${i + 1}`} className="w-full h-full object-cover" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Custom URL Field */}
+                <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">URL de Imagem Personalizada</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={customAvatarUrl}
+                      onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                      placeholder="https://exemplo.com/sua-foto.jpg..."
+                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none text-sm placeholder-slate-400 transition-all text-slate-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (customAvatarUrl.trim()) {
+                          handleSelectAvatar(customAvatarUrl.trim());
+                        } else {
+                          alert('Por favor, insira uma URL de imagem válida.');
+                        }
+                      }}
+                      className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer border-none text-sm whitespace-nowrap"
+                    >
+                      Aplicar
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-normal pl-1">Insira a URL de uma imagem pública leve.</p>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* Mobile Sidebar Overlay Drawer (Symmetrical to Teacher's style) */}
       <div className={`fixed inset-0 z-50 flex lg:hidden transition-all duration-300 ${mobileSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
-        <div 
-          onClick={() => setMobileSidebarOpen(false)} 
-          className={`fixed inset-0 bg-slate-900/45 backdrop-blur-xs transition-opacity duration-300 ${
-            mobileSidebarOpen ? 'opacity-100' : 'opacity-0'
-          }`}
+        <div
+          onClick={() => setMobileSidebarOpen(false)}
+          className={`fixed inset-0 bg-slate-900/45 backdrop-blur-xs transition-opacity duration-300 ${mobileSidebarOpen ? 'opacity-100' : 'opacity-0'
+            }`}
         ></div>
-        
-        <div 
-          className={`relative w-[280px] sm:w-[320px] shrink-0 bg-white h-full shadow-2xl p-6 flex flex-col justify-between text-left z-10 transition-transform duration-300 ease-out ${
-            mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
-          }`}
+
+        <div
+          className={`relative w-[280px] sm:w-[320px] shrink-0 bg-white h-full shadow-2xl p-6 flex flex-col justify-between text-left z-10 transition-transform duration-300 ease-out ${mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            }`}
         >
           <div>
             <div className="flex items-center justify-between pb-6 border-b border-gray-100">
-              <div 
+              <div
                 onClick={() => onGoToLanding && onGoToLanding()}
                 className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
                 title="Voltar para a página principal"
@@ -1228,7 +1379,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => setMobileSidebarOpen(false)}
                 className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center"
               >
@@ -1258,9 +1409,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   setMobileSidebarOpen(false);
                   setStudentView('tasks-list');
                 }}
-                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${
-                  studentView === 'tasks-list' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
-                }`}
+                className={`flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer w-full text-left transition-all ${studentView === 'tasks-list' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                  }`}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                 Tarefas
@@ -1296,7 +1446,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* Desktop Sidebar (Identical to teacher's styling) */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 flex-col p-6 z-40 bg-white border-r border-gray-100 h-screen w-64 justify-between">
         <div className="space-y-8 flex-1 flex flex-col">
-          <div 
+          <div
             onClick={() => onGoToLanding && onGoToLanding()}
             className="flex items-center gap-3 px-2 cursor-pointer hover:opacity-90 active:scale-[0.99] transition-all"
             title="Voltar para a página principal"
@@ -1307,7 +1457,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <p className="text-[10px] font-medium text-gray-500">Portal da Educação</p>
             </div>
           </div>
-          
+
           <nav className="space-y-2">
             <button
               onClick={() => {
@@ -1324,21 +1474,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
               <span className="text-sm">Início</span>
             </button>
-            
+
             <button
               onClick={() => setStudentView('tasks-list')}
-              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${
-                studentView === 'tasks-list'
-                  ? 'bg-[#0073e0] text-white'
-                  : 'bg-transparent text-slate-600 hover:bg-slate-50'
-              }`}
+              className={`w-full flex items-center gap-3 px-4 py-3 font-bold rounded-xl border-none cursor-pointer text-left transition-all ${studentView === 'tasks-list'
+                ? 'bg-[#0073e0] text-white'
+                : 'bg-transparent text-slate-600 hover:bg-slate-50'
+                }`}
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
               <span className="text-sm">Tarefas</span>
             </button>
           </nav>
         </div>
-        
+
         <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
           <button
             onClick={() => alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.')}
@@ -1347,7 +1496,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
             <span className="text-sm">Ajuda</span>
           </button>
-          <button 
+          <button
             onClick={onLogout}
             className="flex items-center gap-3 px-4 py-3 text-red-600 text-sm font-bold rounded-xl hover:bg-red-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
@@ -1363,7 +1512,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <header className="sticky top-0 bg-white border-b border-gray-100 py-3.5 px-4 sm:px-6 z-40 shadow-xs block lg:hidden w-full">
           <div className="max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <button 
+              <button
                 onClick={() => setMobileSidebarOpen(true)}
                 className="p-2 rounded-xl hover:bg-slate-100 active:scale-95 transition-all border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-700"
               >
@@ -1374,9 +1523,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </svg>
               </button>
             </div>
-            
+
             <div className="flex items-center gap-3">
-              <button 
+              <button
                 onClick={() => setSearchExpanded(true)}
                 className="p-0 border-none bg-transparent cursor-pointer flex items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95"
                 title="Pesquisar Atividades"
@@ -1387,7 +1536,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </svg>
               </button>
 
-              <button 
+              <button
                 onClick={() => setShowNotificationsDropdown(prev => !prev)}
                 className="p-0 border-none bg-transparent cursor-pointer flex items-center justify-center w-10 h-10 rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 relative"
                 title="Notificações"
@@ -1400,7 +1549,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#10B981] rounded-full animate-pulse"></span>
                 )}
               </button>
-              
+
               <button
                 onClick={() => setShowProfileMenu(prev => !prev)}
                 className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
@@ -1409,7 +1558,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif"
+                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
                 />
               </button>
             </div>
@@ -1421,10 +1570,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           <div className="flex items-center gap-md flex-1">
             <h2 className="text-lg text-slate-800 font-extrabold lg:block hidden">Área do Aluno</h2>
           </div>
-          
+
           <div className="flex items-center gap-4 relative">
             {/* Search Lupa Button */}
-            <button 
+            <button
               onClick={() => setSearchExpanded(true)}
               className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent"
               title="Pesquisar Atividades (Lupa)"
@@ -1437,7 +1586,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             {/* Notifications Bell Button */}
             <div className="relative">
-              <button 
+              <button
                 ref={bellButtonRef}
                 onClick={() => setShowNotificationsDropdown(prev => !prev)}
                 className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent relative"
@@ -1452,9 +1601,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 )}
               </button>
             </div>
-            
+
             <div className="w-px h-6 bg-gray-100 hidden lg:block mx-1"></div>
- 
+
             {/* Profile Avatar & Dropdowns */}
             <div className="relative">
               <button
@@ -1466,10 +1615,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif"
+                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
                 />
               </button>
- 
+
               {/* Notifications Dropdown (Aligned perfectly with the right edge of the profile photo) */}
               <AnimatePresence>
                 {showNotificationsDropdown && (
@@ -1478,9 +1627,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     initial={{ opacity: 0, y: 6, scale: 0.99 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.99 }}
-                    transition={{ 
-                      type: "spring", 
-                      damping: 30, 
+                    transition={{
+                      type: "spring",
+                      damping: 30,
                       stiffness: 400
                     }}
                     className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col overflow-hidden text-left origin-top-right hidden lg:flex"
@@ -1495,38 +1644,36 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           </span>
                         )}
                       </h2>
-                      
+
                       <div className="flex bg-slate-100 p-1 rounded-xl items-center gap-1">
-                        <button 
+                        <button
                           onClick={() => setNotificationFilter('all')}
-                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
-                            notificationFilter === 'all' 
-                              ? 'bg-white shadow-sm text-slate-900' 
-                              : 'bg-transparent text-slate-500 hover:text-slate-700'
-                          }`}
+                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${notificationFilter === 'all'
+                            ? 'bg-white shadow-sm text-slate-900'
+                            : 'bg-transparent text-slate-500 hover:text-slate-700'
+                            }`}
                         >
                           Todas
                         </button>
-                        <button 
+                        <button
                           onClick={() => setNotificationFilter('unread')}
-                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${
-                            notificationFilter === 'unread' 
-                              ? 'bg-white shadow-sm text-slate-900' 
-                              : 'bg-transparent text-slate-500 hover:text-slate-700'
-                          }`}
+                          className={`px-4 py-1 text-sm rounded-lg transition-all cursor-pointer border-none font-semibold ${notificationFilter === 'unread'
+                            ? 'bg-white shadow-sm text-slate-900'
+                            : 'bg-transparent text-slate-500 hover:text-slate-700'
+                            }`}
                         >
                           Não lidas
                         </button>
                       </div>
                     </div>
- 
+
                     {/* Dropdown Content with smooth height animation */}
-                    <motion.div 
+                    <motion.div
                       animate={{ height: 'auto' }}
-                      transition={{ 
-                        type: "spring", 
-                        damping: 30, 
-                        stiffness: 400 
+                      transition={{
+                        type: "spring",
+                        damping: 30,
+                        stiffness: 400
                       }}
                       style={{ overflow: 'hidden' }}
                       className="bg-white"
@@ -1537,7 +1684,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             if (notificationFilter === 'unread') return !n.isRead;
                             return true;
                           });
- 
+
                           if (displayed.length === 0) {
                             return (
                               <div className="px-5 py-8 text-center text-slate-400 text-xs font-semibold">
@@ -1545,14 +1692,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                               </div>
                             );
                           }
- 
+
                           return displayed.map((notif) => (
-                            <div 
+                            <div
                               key={notif.id}
                               onClick={() => {
                                 // Mark as read
                                 if (!notif.isRead) {
-                                    setReadNotifications(prev => [...prev, notif.id]);
+                                  setReadNotifications(prev => [...prev, notif.id]);
                                 }
                                 setShowNotificationsDropdown(false);
                                 // Go to abacus directly
@@ -1560,27 +1707,26 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                   onGoToAbacus(notif.taskTitle, notif.taskDescription);
                                 }
                               }}
-                              className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${
-                                !notif.isRead ? 'bg-indigo-50/10' : ''
-                              }`}
+                              className={`p-4 flex gap-4 hover:bg-slate-50 transition-colors relative cursor-pointer text-left ${!notif.isRead ? 'bg-indigo-50/10' : ''
+                                }`}
                             >
                               {/* Avatar section with badge */}
                               <div className="relative flex-shrink-0 select-none">
-                                <img 
-                                  alt="Teacher avatar" 
-                                  className="w-12 h-12 rounded-full object-cover border border-slate-100" 
-                                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N" 
+                                <img
+                                  alt="Teacher avatar"
+                                  className="w-12 h-12 rounded-full object-cover border border-slate-100"
+                                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCX_vJ2RV-84eqC7hDG99QfvJN_YFDSCNvV5QYBANyHN-SQPSIwaBX7mCuBPrKMK1lOT1cBrC8fhzTMWltyDOw7Kvu5RRMu6C4IJ5mq5NMCsMKSx9FS3PAOyElWaDPdRnt4B-Je0ZY5P78nnBFGIUyAGI_udrG0i0iiu8rLlbp89jqa0p2fnmZTZWoSiF1QcYMJAsMvgq0y9K7coEW_H0f4a9sR1zi-5VpmBcW_9PwU9UNcd_XW5G5baBMAGoVuKtVnSmDfqv6P2P2N"
                                 />
                                 <div className="absolute -right-1 -bottom-1 bg-purple-600 text-white p-0.5 rounded-full border-2 border-white flex items-center justify-center">
                                   <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>
                                 </div>
                               </div>
- 
+
                               {/* Notification details */}
                               <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-start">
                                   <p className="text-sm font-semibold text-slate-900">
-                                    Prof. Marcos 
+                                    Prof. Marcos
                                     <span className="text-slate-400 font-normal ml-2 text-xs">
                                       {formatTimeAgo(notif.createdAt)}
                                     </span>
@@ -1592,7 +1738,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 <p className="text-sm mt-0.5 text-slate-900">
                                   Enviou a tarefa: <span className="font-semibold">{notif.taskTitle}</span>
                                 </p>
-                                <p 
+                                <p
                                   className="text-xs mt-1.5 text-slate-500 leading-relaxed"
                                   style={{
                                     display: '-webkit-box',
@@ -1609,7 +1755,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         })()}
                       </div>
                     </motion.div>
- 
+
                     {/* Dropdown Footer */}
                     {derivedNotifications.filter(n => !n.isRead).length > 0 && (
                       <div className="p-3 border-t border-slate-100 text-center bg-slate-50/50 select-none">
@@ -1628,7 +1774,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </motion.div>
                 )}
               </AnimatePresence>
- 
+
               {/* Profile Dropdown (Symmetric and right-aligned to the profile photo) */}
               <AnimatePresence>
                 {showProfileMenu && (
@@ -1637,9 +1783,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     initial={{ opacity: 0, y: 6, scale: 0.99 }}
                     animate={{ opacity: 1, y: 0, scale: 1 }}
                     exit={{ opacity: 0, y: 6, scale: 0.99 }}
-                    transition={{ 
-                      type: "spring", 
-                      damping: 30, 
+                    transition={{
+                      type: "spring",
+                      damping: 30,
                       stiffness: 400
                     }}
                     className="absolute right-0 top-[calc(100%+4px)] z-[300] w-[420px] max-w-[calc(100vw-32px)] bg-white rounded-3xl shadow-2xl border border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left origin-top-right hidden lg:flex"
@@ -1649,16 +1795,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <h2 className="text-lg font-bold text-slate-900">Perfil do Aluno</h2>
                       <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
                     </div>
- 
+
                     {/* Scrollable Content */}
                     <div className="overflow-y-auto bg-white">
                       {/* User info details */}
                       <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                         <div className="relative shrink-0">
-                          <img 
-                            alt="Avatar" 
-                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                            src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif" 
+                          <img
+                            alt="Avatar"
+                            className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20"
+                            src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
                           />
                           <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                             <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1669,7 +1815,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'aluno@abbadigital.com'}</p>
                         </div>
                       </div>
- 
+
                       {/* Progress card */}
                       <div className="p-5 flex flex-col gap-3">
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
@@ -1680,20 +1826,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             </div>
                             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-indigo-500"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H4v2h16v-2h-5c-.55 0-1-.45-1-1v-2.34"></path><path d="M12 2a6 6 0 0 1 6 6v3.5c0 1.66-1.34 3-3 3H9a3 3 0 0 1-3-3V8a6 6 0 0 1 6-6z"></path></svg>
                           </div>
-                          
+
                           {/* Progress bar */}
                           <div className="w-full h-2.5 bg-slate-200 rounded-full mt-4 overflow-hidden">
-                            <div 
-                              className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500" 
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full transition-all duration-500"
                               style={{ width: `${(completedCount / NUMERAL_ITEMS.length) * 100}%` }}
                             ></div>
                           </div>
                         </div>
                       </div>
- 
+
                       {/* Dropdown Menu Actions */}
                       <div className="p-4 border-t border-slate-100 flex flex-col gap-1.5 bg-white">
-                        <button 
+                        <button
                           onClick={() => { setStudentView('tasks-list'); setShowProfileMenu(false); }}
                           className="w-full flex items-center justify-between p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer"
                         >
@@ -1703,16 +1849,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           </span>
                           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-400"><polyline points="9 18 15 12 9 6"></polyline></svg>
                         </button>
-                        
-                        <button 
-                          onClick={() => { setShowProfileMenu(false); alert('Funcionalidade de edição de perfil em breve!'); }}
+
+                        <button
+                          onClick={() => { setShowProfileMenu(false); setShowAvatarSelector(true); }}
                           className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="shrink-0 text-slate-500"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                           Editar Perfil
                         </button>
-                        
-                        <button 
+
+                        <button
                           onClick={() => { setShowProfileMenu(false); onLogout(); }}
                           className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-red-50 transition-colors text-sm text-red-500 font-bold border-none bg-transparent cursor-pointer text-left"
                         >
@@ -1733,7 +1879,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
         {/* Main Canvas */}
         <main className="p-margin-desktop max-w-[1200px] mx-auto w-full flex-1">
-          
+
           {studentView === 'tasks-list' ? (
             /* RENDERING THE TASKS BENTO GRID SCREEN */
             <div className="animate-fade-in space-y-lg">
@@ -1790,12 +1936,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           setShowProcessingQueue(true);
                         }
                       }}
-                      className={`border-2 border-dashed rounded-xl p-6 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer flex-grow min-h-[160px] ${
-                        dragActive
-                          ? 'border-primary bg-primary/5'
-                          : 'border-slate-200 hover:border-primary/40 hover:bg-slate-50/50'
-                      }`}
+                      className={`relative overflow-hidden rounded-2xl p-6 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer flex-grow min-h-[160px] border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md hover:shadow-emerald-50/50 group ${dragActive ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}
                       onClick={() => fileInputRef.current?.click()}
+                      style={{ backgroundColor: '#f0fdf4' }}
                     >
                       <input
                         ref={fileInputRef}
@@ -1804,14 +1947,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         onChange={handleFileChange}
                         accept=".pdf"
                       />
-                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center transition-transform hover:scale-110">
-                        <span className="material-symbols-outlined text-primary text-[24px]">upload_file</span>
+                      <div className="w-14 h-14 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-2xl flex items-center justify-center text-white shadow-md shadow-emerald-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
+                        <span className="material-symbols-outlined text-white text-[28px] font-variation-settings-fill">upload_file</span>
                       </div>
-                      <div className="text-center">
-                        <p className="text-sm font-semibold text-slate-700">Arraste um arquivo aqui</p>
-                        <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para selecionar</span></p>
+                      <div className="text-center space-y-1">
+                        <p className="text-sm font-bold text-slate-800 tracking-tight">Arraste seu arquivo aqui</p>
+                        <p className="text-xs text-slate-500">ou <span className="text-emerald-600 font-bold group-hover:underline">clique para selecionar</span></p>
                       </div>
-                      <p className="text-[10px] text-slate-400">PDF ou Imagens — máx. 5 MB</p>
+                      <span className="bg-emerald-500/10 text-emerald-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                        PDF — MÁX. 5 MB
+                      </span>
                     </div>
                   </div>
 
@@ -1837,13 +1982,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           onBlur={(e) => validateAndPreviewLink(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
                           placeholder="Cole o link ou código de 6 dígitos..."
-                          className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${
-                            linkError
-                              ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
-                              : validatedLink
+                          className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${linkError
+                            ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
+                            : validatedLink
                               ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
                               : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
-                          }`}
+                            }`}
                         />
                         {uploadLink && (
                           <button
@@ -2043,21 +2187,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <div className="flex flex-wrap items-center gap-1.5 p-1 rounded-xl bg-slate-50 border border-slate-100">
                   <button
                     onClick={() => setActiveTabLabel('recebidas')}
-                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      activeTabLabel === 'recebidas'
-                        ? 'bg-primary text-on-primary font-bold shadow-sm'
-                        : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
-                    }`}
+                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'recebidas'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
+                      : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
+                      }`}
                   >
                     Recebidas
                   </button>
                   <button
                     onClick={() => setActiveTabLabel('enviadas')}
-                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${
-                      activeTabLabel === 'enviadas'
-                        ? 'bg-primary text-on-primary font-bold shadow-sm'
-                        : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
-                    }`}
+                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'enviadas'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
+                      : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
+                      }`}
                   >
                     Enviadas
                   </button>
@@ -2084,7 +2226,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">essas atividades foram enviadas pelo professor</p>
                   </>
-) : (
+                ) : (
                   <>
                     <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
                       Atividades enviadas
@@ -2097,36 +2239,36 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* Bento Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg min-h-[320px]">
                 <AnimatePresence mode="popLayout">
-                {(() => {
-                  const autoAssignedTasks = teacherTasks.filter(task => 
-                    task.status === 'active' && 
-                    (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
-                  );
+                  {(() => {
+                    const autoAssignedTasks = teacherTasks.filter(task =>
+                      task.status === 'active' &&
+                      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
+                    );
 
-                  const mergedRecebidas = [...acceptedTaskLinks];
-                  autoAssignedTasks.forEach(task => {
-                    if (!mergedRecebidas.some(link => link.taskId === task.id)) {
-                      mergedRecebidas.push({
-                        id: `AUTO-${task.id}`,
-                        studentName: user.name,
-                        taskId: task.id,
-                        taskTitle: task.title,
-                        createdAt: task.startDate || new Date().toISOString(),
-                        link: 'Atribuição direta do professor'
-                      });
-                    }
-                  });
+                    const mergedRecebidas = [...acceptedTaskLinks];
+                    autoAssignedTasks.forEach(task => {
+                      if (!mergedRecebidas.some(link => link.taskId === task.id)) {
+                        mergedRecebidas.push({
+                          id: `AUTO-${task.id}`,
+                          studentName: user.name,
+                          taskId: task.id,
+                          taskTitle: task.title,
+                          createdAt: task.startDate || new Date().toISOString(),
+                          link: 'Atribuição direta do professor'
+                        });
+                      }
+                    });
 
-                  const listToRender = activeTabLabel === 'recebidas'
-                    ? mergedRecebidas.map(link => {
+                    const listToRender = activeTabLabel === 'recebidas'
+                      ? mergedRecebidas.map(link => {
                         const dbTask = teacherTasks.find(t => t.id === link.taskId);
                         const isTask1 = dbTask?.id === 'task-1';
                         const progress = isTask1 ? progressPercent : 0;
-                        const status = progress === 100 
-                          ? 'completed' 
-                          : progress > 0 
-                          ? 'in-progress' 
-                          : 'pending';
+                        const status = progress === 100
+                          ? 'completed'
+                          : progress > 0
+                            ? 'in-progress'
+                            : 'pending';
 
                         return {
                           id: link.id,
@@ -2150,7 +2292,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           }
                         };
                       })
-                    : sentActivities.map(activity => {
+                      : sentActivities.map(activity => {
                         return {
                           id: activity.id,
                           title: activity.taskTitle,
@@ -2168,198 +2310,196 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         };
                       });
 
-                  const filtered = listToRender.filter(t => {
-                    return t.title.toLowerCase().includes(generalSearchQuery.toLowerCase()) || 
-                           t.description.toLowerCase().includes(generalSearchQuery.toLowerCase());
-                  });
+                    const filtered = listToRender.filter(t => {
+                      return t.title.toLowerCase().includes(generalSearchQuery.toLowerCase()) ||
+                        t.description.toLowerCase().includes(generalSearchQuery.toLowerCase());
+                    });
 
-                  if (filtered.length === 0) {
-                    return (
-                      <div className="col-span-full py-16 text-center text-slate-400 text-sm">
-                        Nenhuma atividade encontrada nesta seção.
-                      </div>
-                    );
-                  }
-
-                  return filtered.map((task) => {
-                    return (
-                      <motion.div 
-                        layout
-                        initial={{ opacity: 0, y: 15, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -15, scale: 0.98 }}
-                        whileHover={{ 
-                          y: -6,
-                          boxShadow: "0 12px 20px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -8px rgba(0, 0, 0, 0.04)"
-                        }}
-                        transition={{ 
-                          type: "spring",
-                          damping: 26,
-                          stiffness: 280
-                        }}
-                        key={task.id} 
-                        className="bg-white rounded-2xl border border-slate-200/85 p-6 flex flex-col gap-4 relative overflow-hidden min-h-[290px] shadow-xs w-full hover:border-slate-300 transition-colors"
-                      >
-                        {/* Left Stripe Indicator */}
-                        <div className={`absolute top-0 left-0 w-1.5 h-full ${getLeftStripe(task.status)}`} />
-                        
-                        {/* Header Row */}
-                        <div className="flex items-start justify-between w-full pl-1">
-                          <div className="flex items-center gap-3">
-                            {/* Stylized Logo Square */}
-                            <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${getLogoGradient(task.id)}`}>
-                              <span className="material-symbols-outlined text-[22px] font-medium">
-                                {getLogoIcon(task.id)}
-                              </span>
-                            </div>
-                            
-                            {/* Category Tag & Metadata */}
-                            <div className="flex flex-col gap-0.5">
-                              <span className={`text-[10px] font-extrabold tracking-wider uppercase ${
-                                task.urgent ? 'text-red-600' : 'text-slate-400'
-                              }`}>
-                                {getCategoryTag(task.id)}
-                              </span>
-                              <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
-                                <span className="material-symbols-outlined text-[12px]">schedule</span>
-                                {task.dueDate.replace('Entrega: ', '').replace('Concluído em: ', '').replace('Enviado em: ', '')}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Action badge */}
-                          <div className="flex items-center gap-1">
-                            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                              task.status === 'completed' ? 'bg-green-50 text-green-600 border border-green-100' :
-                              task.status === 'in-progress' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
-                              'bg-red-50 text-red-600 border border-red-100'
-                            }`}>
-                              {task.status === 'completed' ? 'Concluída' : task.status === 'in-progress' ? 'Fazendo' : 'Pendente'}
-                            </span>
-                          </div>
+                    if (filtered.length === 0) {
+                      return (
+                        <div className="col-span-full py-16 text-center text-slate-400 text-sm">
+                          Nenhuma atividade encontrada nesta seção.
                         </div>
+                      );
+                    }
 
-                        {/* Content Area */}
-                        <div className="space-y-1.5 pl-1">
-                          <h3 className="font-extrabold text-slate-800 text-sm tracking-tight leading-snug font-display">
-                            {task.title}
-                          </h3>
-                          <p className="text-xs text-slate-500 font-sans line-clamp-2 leading-relaxed">
-                            {task.description}
-                          </p>
-                        </div>
+                    return filtered.map((task) => {
+                      return (
+                        <motion.div
+                          layout
+                          initial={{ opacity: 0, y: 15, scale: 0.98 }}
+                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                          exit={{ opacity: 0, y: -15, scale: 0.98 }}
+                          whileHover={{
+                            y: -6,
+                            boxShadow: "0 12px 20px -8px rgba(0, 0, 0, 0.08), 0 4px 12px -8px rgba(0, 0, 0, 0.04)"
+                          }}
+                          transition={{
+                            type: "spring",
+                            damping: 26,
+                            stiffness: 280
+                          }}
+                          key={task.id}
+                          className="bg-white rounded-2xl border border-slate-200/85 p-6 flex flex-col gap-4 relative overflow-hidden min-h-[290px] shadow-xs w-full hover:border-slate-300 transition-colors"
+                        >
+                          {/* Left Stripe Indicator */}
+                          <div className={`absolute top-0 left-0 w-1.5 h-full ${getLeftStripe(task.status)}`} />
 
-                        {/* Progress Area if Active */}
-                        {task.status === 'in-progress' && (
-                          <div className="space-y-1 mt-1 pl-1">
-                            <div className="flex justify-between text-[10px] font-bold text-slate-400">
-                              <span>Progresso</span>
-                              <span className="text-primary">{task.progress}%</span>
+                          {/* Header Row */}
+                          <div className="flex items-start justify-between w-full pl-1">
+                            <div className="flex items-center gap-3">
+                              {/* Stylized Logo Square */}
+                              <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-white ${getLogoGradient(task.id)}`}>
+                                <span className="material-symbols-outlined text-[22px] font-medium">
+                                  {getLogoIcon(task.id)}
+                                </span>
+                              </div>
+
+                              {/* Category Tag & Metadata */}
+                              <div className="flex flex-col gap-0.5">
+                                <span className={`text-[10px] font-extrabold tracking-wider uppercase ${task.urgent ? 'text-red-600' : 'text-slate-400'
+                                  }`}>
+                                  {getCategoryTag(task.id)}
+                                </span>
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1 font-medium">
+                                  <span className="material-symbols-outlined text-[12px]">schedule</span>
+                                  {task.dueDate.replace('Entrega: ', '').replace('Concluído em: ', '').replace('Enviado em: ', '')}
+                                </span>
+                              </div>
                             </div>
-                            <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
-                              <div 
-                                className="bg-gradient-to-r from-primary to-indigo-500 h-full rounded-full transition-all duration-500" 
-                                style={{ width: `${task.progress}%` }} 
-                              />
+
+                            {/* Action badge */}
+                            <div className="flex items-center gap-1">
+                              <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${task.status === 'completed' ? 'bg-green-50 text-green-600 border border-green-100' :
+                                task.status === 'in-progress' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                  'bg-red-50 text-red-600 border border-red-100'
+                                }`}>
+                                {task.status === 'completed' ? 'Concluída' : task.status === 'in-progress' ? 'Fazendo' : 'Pendente'}
+                              </span>
                             </div>
                           </div>
-                        )}
 
-                        {/* Support Files Area (PDF or Images from Teacher) */}
-                        {task.supportFiles && task.supportFiles.length > 0 && (
-                          <div className="space-y-1.5 mt-1 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
-                            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                              <span className="material-symbols-outlined text-[12px]">folder_open</span>
-                              Arquivos de Apoio ({task.supportFiles.length})
-                            </span>
-                            <div className="flex flex-col gap-1 max-h-[85px] overflow-y-auto pr-1">
-                              {task.supportFiles.map((file: any, idx: number) => {
-                                const isPdf = file.name.toLowerCase().endsWith('.pdf');
-                                return (
-                                  <a
-                                    key={idx}
-                                    href={file.url}
-                                    download={file.name}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="flex items-center justify-between p-1.5 bg-white border border-slate-200/80 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left no-underline group cursor-pointer"
-                                    title={`Baixar ${file.name} (${file.size})`}
-                                  >
-                                    <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                      <span className={`material-symbols-outlined text-[15px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
-                                        {isPdf ? 'picture_as_pdf' : 'image'}
-                                      </span>
-                                      <span className="text-[11px] text-slate-700 font-semibold truncate group-hover:text-primary transition-colors">
-                                        {file.name}
-                                      </span>
-                                    </div>
-                                    <span className="text-[8px] text-slate-400 font-mono ml-2 shrink-0 group-hover:text-primary/70 transition-colors">
-                                      {file.size}
-                                    </span>
-                                  </a>
-                                );
-                              })}
-                            </div>
+                          {/* Content Area */}
+                          <div className="space-y-1.5 pl-1">
+                            <h3 className="font-extrabold text-slate-800 text-sm tracking-tight leading-snug font-display">
+                              {task.title}
+                            </h3>
+                            <p className="text-xs text-slate-500 font-sans line-clamp-2 leading-relaxed">
+                              {task.description}
+                            </p>
                           </div>
-                        )}
 
-                        {/* Divider & Footer */}
-                        <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between pl-1">
-                          <div className="flex items-center gap-2">
-                            {task.grade ? (
-                              <div className="flex items-center gap-0.5 text-emerald-600 font-extrabold text-[11px] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
-                                <span className="material-symbols-outlined text-[13px]">grade</span>
-                                <span>Status: {task.grade}</span>
+                          {/* Progress Area if Active */}
+                          {task.status === 'in-progress' && (
+                            <div className="space-y-1 mt-1 pl-1">
+                              <div className="flex justify-between text-[10px] font-bold text-slate-400">
+                                <span>Progresso</span>
+                                <span className="text-primary">{task.progress}%</span>
                               </div>
-                            ) : task.filesCount > 0 ? (
-                              <div className="flex items-center gap-1 text-slate-400 text-[11px]">
-                                <span className="material-symbols-outlined text-[14px]">attachment</span>
-                                <span>{task.filesCount} {task.filesCount === 1 ? 'palavra' : 'palavras'}</span>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-1.5">
-                                <img 
-                                  src={task.teacherImg} 
-                                  alt="Professor" 
-                                  className="w-6 h-6 rounded-full object-cover border border-slate-200" 
+                              <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-gradient-to-r from-primary to-indigo-500 h-full rounded-full transition-all duration-500"
+                                  style={{ width: `${task.progress}%` }}
                                 />
-                                <span className="text-[10px] text-slate-400 font-medium">Prof. Décio</span>
                               </div>
-                            )}
-                          </div>
+                            </div>
+                          )}
 
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={task.onAction}
-                              className={`px-4 py-1.5 rounded-full font-extrabold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 duration-100 border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50`}
-                            >
-                              <span>{task.actionLabel}</span>
-                              <span className="material-symbols-outlined text-[12px] font-bold">open_in_new</span>
-                            </button>
-                            
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
-                                  if (activeTabLabel === 'recebidas') {
-                                    setAcceptedTaskLinks(prev => prev.filter(l => l.id !== task.id));
-                                  } else {
-                                    setSentActivities(prev => prev.filter(a => a.id !== task.id));
+                          {/* Support Files Area (PDF or Images from Teacher) */}
+                          {task.supportFiles && task.supportFiles.length > 0 && (
+                            <div className="space-y-1.5 mt-1 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
+                              <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[12px]">folder_open</span>
+                                Arquivos de Apoio ({task.supportFiles.length})
+                              </span>
+                              <div className="flex flex-col gap-1 max-h-[85px] overflow-y-auto pr-1">
+                                {task.supportFiles.map((file: any, idx: number) => {
+                                  const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                                  return (
+                                    <a
+                                      key={idx}
+                                      href={file.url}
+                                      download={file.name}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="flex items-center justify-between p-1.5 bg-white border border-slate-200/80 rounded-lg hover:border-primary hover:bg-primary/5 transition-all text-left no-underline group cursor-pointer"
+                                      title={`Baixar ${file.name} (${file.size})`}
+                                    >
+                                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                        <span className={`material-symbols-outlined text-[15px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
+                                          {isPdf ? 'picture_as_pdf' : 'image'}
+                                        </span>
+                                        <span className="text-[11px] text-slate-700 font-semibold truncate group-hover:text-primary transition-colors">
+                                          {file.name}
+                                        </span>
+                                      </div>
+                                      <span className="text-[8px] text-slate-400 font-mono ml-2 shrink-0 group-hover:text-primary/70 transition-colors">
+                                        {file.size}
+                                      </span>
+                                    </a>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Divider & Footer */}
+                          <div className="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between pl-1">
+                            <div className="flex items-center gap-2">
+                              {task.grade ? (
+                                <div className="flex items-center gap-0.5 text-emerald-600 font-extrabold text-[11px] bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">
+                                  <span className="material-symbols-outlined text-[13px]">grade</span>
+                                  <span>Status: {task.grade}</span>
+                                </div>
+                              ) : task.filesCount > 0 ? (
+                                <div className="flex items-center gap-1 text-slate-400 text-[11px]">
+                                  <span className="material-symbols-outlined text-[14px]">attachment</span>
+                                  <span>{task.filesCount} {task.filesCount === 1 ? 'palavra' : 'palavras'}</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1.5">
+                                  <img
+                                    src={task.teacherImg}
+                                    alt="Professor"
+                                    className="w-6 h-6 rounded-full object-cover border border-slate-200"
+                                  />
+                                  <span className="text-[10px] text-slate-400 font-medium">Prof. Décio</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={task.onAction}
+                                className={`px-4 py-1.5 rounded-full font-extrabold text-[11px] transition-all flex items-center gap-1 cursor-pointer active:scale-95 duration-100 border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50`}
+                              >
+                                <span>{task.actionLabel}</span>
+                                <span className="material-symbols-outlined text-[12px] font-bold">open_in_new</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
+                                    if (activeTabLabel === 'recebidas') {
+                                      setAcceptedTaskLinks(prev => prev.filter(l => l.id !== task.id));
+                                    } else {
+                                      setSentActivities(prev => prev.filter(a => a.id !== task.id));
+                                    }
                                   }
-                                }
-                              }}
-                              className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border-none cursor-pointer flex items-center justify-center"
-                              title="Remover"
-                            >
-                              <span className="material-symbols-outlined text-[16px]">delete</span>
-                            </button>
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all border-none cursor-pointer flex items-center justify-center"
+                                title="Remover"
+                              >
+                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    );
-                  });
-                })()}
+                        </motion.div>
+                      );
+                    });
+                  })()}
                 </AnimatePresence>
               </div>
 
@@ -2413,7 +2553,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         Capriche na pronúncia e na escrita correta de cada termo. Cada um separado: <span className="font-bold">ZERO</span>, preto; <span className="text-primary font-bold">ZERO</span>, azul; <span className="text-tertiary font-bold">NULL</span>, vermelho.
                       </p>
                     </div>
-                    <button 
+                    <button
                       onClick={() => {
                         if (onGoToAbacus) {
                           onGoToAbacus(
@@ -2430,20 +2570,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </div>
 
                   {/* Upload Area */}
-                  <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-lg shadow-sm">
-                    <div className="flex items-center justify-between mb-md">
-                      <h3 className="font-headline-md text-headline-md text-on-surface">Arquivos da Tarefa</h3>
-                      <span className="text-label-sm text-on-surface-variant">PDF e Imagens — máx. 5 MB</span>
-                    </div>
-
-                    <input 
-                      type="file" 
-                      ref={fileInputRef} 
-                      onChange={handleFileChange} 
-                      className="hidden" 
+                  <div className="bg-white rounded-3xl border border-slate-100 p-lg shadow-xs">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileChange}
+                      className="hidden"
                       accept=".pdf"
                     />
-                    <div 
+                    <div
                       onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
                       onDragLeave={() => setDragActive(false)}
                       onDrop={(e) => {
@@ -2477,16 +2612,71 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           fileInputRef.current.click();
                         }
                       }}
-                      className={`border-2 border-dashed rounded-xl bg-surface-container-low/50 hover:bg-surface-container-low transition-all group flex flex-col items-center justify-center p-xl cursor-pointer duration-150 ${
-                        dragActive ? 'border-primary bg-surface-container-high' : 'border-outline-variant'
+                      className={`w-full relative rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/8 to-emerald-500/3 p-5 sm:p-6 text-left overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 cursor-pointer hover:shadow-md hover:border-emerald-500/40 transition-all duration-200 group ${
+                        dragActive ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
                       }`}
+                      style={{ backgroundColor: '#f0fdf4' }}
                     >
-                      <div className="w-14 h-14 bg-surface-container-highest rounded-full flex items-center justify-center text-primary mb-md group-hover:scale-110 transition-transform">
-                        <span className="material-symbols-outlined text-[32px]">cloud_upload</span>
+                      <div className="flex items-center gap-4">
+                        <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/10 group-hover:scale-105 transition-transform duration-300 relative shadow-inner">
+                          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            {/* Left PDF Icon */}
+                            <g transform="translate(4, 8)">
+                              {/* Document Base */}
+                              <rect x="0" y="0" width="16" height="22" rx="3" fill="#FFF5F5" stroke="#F87171" strokeWidth="1.5"/>
+                              {/* Lines inside */}
+                              <line x1="4" y1="6" x2="12" y2="6" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
+                              <line x1="4" y1="10" x2="10" y2="10" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
+                              {/* PDF text label badge inside */}
+                              <rect x="3" y="14" width="10" height="5" rx="1" fill="#EF4444"/>
+                              <path d="M5 17.5H6.5M8 17.5H9.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                            </g>
+                            
+                            {/* Right PDF Icon */}
+                            <g transform="translate(28, 14)">
+                              {/* Document Base */}
+                              <rect x="0" y="0" width="16" height="22" rx="3" fill="#FFF5F5" stroke="#F87171" strokeWidth="1.5"/>
+                              {/* Lines inside */}
+                              <line x1="4" y1="6" x2="12" y2="6" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
+                              <line x1="4" y1="10" x2="10" y2="10" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
+                              {/* PDF text label badge inside */}
+                              <rect x="3" y="14" width="10" height="5" rx="1" fill="#EF4444"/>
+                              <path d="M5 17.5H6.5M8 17.5H9.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
+                            </g>
+                            
+                            {/* Link in the middle connecting them */}
+                            <g transform="translate(17, 18)">
+                              {/* White background pill for the link */}
+                              <rect x="0" y="0" width="14" height="10" rx="5" fill="white" stroke="#9CA3AF" strokeWidth="1.5"/>
+                              {/* Link chain look */}
+                              <path d="M4 5H10" stroke="#4B5563" strokeWidth="2" strokeLinecap="round"/>
+                            </g>
+                          </svg>
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-emerald-600/10">
+                              Arquivos da Tarefa
+                            </span>
+                          </div>
+                          <h3 className="font-display font-extrabold text-lg sm:text-xl text-slate-900 tracking-tight leading-tight mb-0.5">
+                            Envie sua tarefa
+                          </h3>
+                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                            Envie sua tarefa para o Teatcher e anexe seus arquivos em formato PDF.
+                          </p>
+                        </div>
                       </div>
-                      <p className="font-headline-md text-headline-md text-on-surface mb-xs">Upload de Arquivos</p>
-                      <p className="font-body-md text-body-md text-on-surface-variant">Arraste seus arquivos ou clique para selecionar</p>
-                      <p className="font-label-sm text-label-sm text-on-secondary-container mt-md">Tamanho máximo: 5MB</p>
+
+                      <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
+                        <button
+                          type="button"
+                          className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+                        >
+                          <span className="material-symbols-outlined text-[18px]">upload_file</span>
+                          <span>Selecionar PDF</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Placeholder for uploaded files */}
@@ -2503,7 +2693,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 <p className="text-[10px] text-on-surface-variant">{fileObj.size}</p>
                               </div>
                             </div>
-                            <button 
+                            <button
                               onClick={() => setTaskFiles(taskFiles.filter((_, i) => i !== idx))}
                               className="text-on-surface-variant hover:text-error transition-colors cursor-pointer bg-transparent border-none p-0"
                             >
@@ -2513,7 +2703,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         ))
                       )}
 
-                      <button 
+                      <button
                         onClick={() => {
                           if (completedCount === 0) {
                             alert('Atenção: Você ainda não soletrou nenhuma palavra no ábaco. É altamente recomendado soletrar pelo menos alguns numerais antes de enviar a tarefa.');
@@ -2521,11 +2711,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           setShowShareModal(true);
                         }}
                         disabled={taskFiles.length === 0}
-                        className={`w-full mt-lg flex items-center justify-center gap-sm py-md px-lg rounded-lg font-bold font-label-md transition-all shadow-sm border-none ${
-                          taskFiles.length === 0
-                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
-                            : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
-                        }`}
+                        className={`w-full mt-lg flex items-center justify-center gap-sm py-md px-lg rounded-lg font-bold font-label-md transition-all shadow-sm border-none ${taskFiles.length === 0
+                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
+                          : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
+                          }`}
                         title={taskFiles.length === 0 ? 'Por favor, anexe a tarefa clicando na área de upload acima antes de enviar.' : 'Enviar tarefa'}
                       >
                         <span className="material-symbols-outlined">send</span>
@@ -2543,7 +2732,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         Cole abaixo o link do WhatsApp enviado pelo professor para realizar a sua tarefa.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-sm items-center mt-xs w-full">
-                        <input 
+                        <input
                           type="url"
                           value={uploadLink}
                           onChange={(e) => setUploadLink(e.target.value)}
@@ -2570,11 +2759,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           }}
                           type="button"
                           disabled={!uploadLink.trim()}
-                          className={`w-full sm:w-auto flex items-center justify-center gap-sm py-3 px-lg rounded-lg font-bold font-label-md transition-all shadow-sm border-none shrink-0 ${
-                            !uploadLink.trim()
-                              ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
-                              : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
-                          }`}
+                          className={`w-full sm:w-auto flex items-center justify-center gap-sm py-3 px-lg rounded-lg font-bold font-label-md transition-all shadow-sm border-none shrink-0 ${!uploadLink.trim()
+                            ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
+                            : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
+                            }`}
                         >
                           <span className="material-symbols-outlined text-[18px]">attachment</span>
                           <span>Anexar Link</span>
@@ -2623,20 +2811,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
                       <div className="pt-md mt-md border-t border-outline-variant/30">
                         <p className="font-label-sm text-label-sm text-on-surface-variant mb-xs">Status de atividade</p>
-                        <div className={`inline-flex items-center gap-xs px-md py-xs rounded-full font-label-md text-label-md font-bold ${
-                          completedCount === NUMERAL_ITEMS.length
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            : completedCount > 0
+                        <div className={`inline-flex items-center gap-xs px-md py-xs rounded-full font-label-md text-label-md font-bold ${completedCount === NUMERAL_ITEMS.length
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                          : completedCount > 0
                             ? 'bg-blue-50 text-blue-700 border border-blue-100'
                             : 'bg-red-50 text-red-700 border border-red-100'
-                        }`}>
-                          <span className={`w-2 h-2 rounded-full ${
-                            completedCount === NUMERAL_ITEMS.length
-                              ? 'bg-emerald-500'
-                              : completedCount > 0
+                          }`}>
+                          <span className={`w-2 h-2 rounded-full ${completedCount === NUMERAL_ITEMS.length
+                            ? 'bg-emerald-500'
+                            : completedCount > 0
                               ? 'bg-blue-500 animate-pulse'
                               : 'bg-red-500'
-                          }`}></span>
+                            }`}></span>
                           {completedCount === NUMERAL_ITEMS.length ? 'Concluído' : completedCount > 0 ? 'Em andamento' : 'Pendente'}
                         </div>
                       </div>
@@ -2647,9 +2833,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <div className="bg-surface-container-lowest border border-outline-variant rounded-xl p-md shadow-sm">
                     <p className="font-label-sm text-label-sm text-on-surface-variant mb-md">Professor Responsável</p>
                     <div className="flex items-center gap-md">
-                      <img 
-                        alt="Avatar do Professor" 
-                        className="w-12 h-12 rounded-full object-cover ring-2 ring-primary-container/30" 
+                      <img
+                        alt="Avatar do Professor"
+                        className="w-12 h-12 rounded-full object-cover ring-2 ring-primary-container/30"
                         src="src/assets/Imagens/profdecioperfil.avif"
                       />
                       <div>
@@ -2657,7 +2843,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         <p className="font-label-sm text-label-sm text-on-surface-variant">Projeto Brasil bilíngue</p>
                       </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => setShowWhatsappModal(true)}
                       className="w-full mt-md py-xs border border-primary text-primary rounded-lg font-label-md text-label-md hover:bg-primary-container/10 transition-colors cursor-pointer bg-transparent"
                     >
@@ -2667,9 +2853,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                   {/* Task Image Reference (Contextual) */}
                   <div className="rounded-xl overflow-hidden shadow-sm h-48 relative group">
-                    <img 
-                      alt="Material de apoio" 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" 
+                    <img
+                      alt="Material de apoio"
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                       src="https://lh3.googleusercontent.com/aida-public/AB6AXuAGGGtwFfvjetdboO-4SfeJb17cGynQ2Q5xpB2scHQJuPYgpmN_Uv6_uBH-8T1XnZZSraoUghUNlF202q5GyaoiEmI4sNT_YPtpizMCN3leqMeR1yqB55XPdvBXdVSqwKBF4lxKOh8nSSlSMjhxJd5N1NVULlgi34Yx1_8cc3VVqvuEAI9oDsj2zoB8BPSJw4Kd_kJzzmbVJvMF9ZrMpQVXsB9bBBgiwwYxN9LO6O3jgppgcNRNnp3hYerzRRjvzxR-NMAinf8yaDnr"
                     />
                     <div className="absolute inset-0 bg-gradient-to-t from-on-surface/60 to-transparent flex items-end p-md">
@@ -2698,7 +2884,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <p className="text-xs text-on-surface-variant leading-relaxed font-light">
                     Desafio trilíngue! Soletre os números de 0 a 9 em Português, Inglês e Alemão. Clique em **Soletrar** para abrir o ábaco e montar as palavras com as cores de fio recomendadas.
                   </p>
-                  
+
                   {/* Real Progress indicator */}
                   <div className="pt-2 max-w-md space-y-1.5">
                     <div className="flex justify-between text-[11px] font-bold text-slate-500">
@@ -2706,7 +2892,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <span className="text-primary font-extrabold">{completedCount} / {NUMERAL_ITEMS.length} ({progressPercent}%)</span>
                     </div>
                     <div className="w-full bg-[#eaedff] h-3 rounded-full overflow-hidden">
-                      <div 
+                      <div
                         className="bg-gradient-to-r from-primary to-primary-container h-full rounded-full transition-all duration-500"
                         style={{ width: `${progressPercent}%` }}
                       />
@@ -2746,33 +2932,29 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <div className="flex items-center gap-1 bg-surface-container-high p-1 rounded-xl self-start sm:self-auto border border-outline-variant/40">
                     <button
                       onClick={() => setFilterLanguage('all')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
-                        filterLanguage === 'all' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${filterLanguage === 'all' ? 'bg-white text-primary shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
+                        }`}
                     >
                       Todos
                     </button>
                     <button
                       onClick={() => setFilterLanguage('pt')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
-                        filterLanguage === 'pt' ? 'bg-white text-slate-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${filterLanguage === 'pt' ? 'bg-white text-slate-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
+                        }`}
                     >
                       Português
                     </button>
                     <button
                       onClick={() => setFilterLanguage('en')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
-                        filterLanguage === 'en' ? 'bg-white text-blue-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${filterLanguage === 'en' ? 'bg-white text-blue-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
+                        }`}
                     >
                       Inglês
                     </button>
                     <button
                       onClick={() => setFilterLanguage('de')}
-                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${
-                        filterLanguage === 'de' ? 'bg-white text-red-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
-                      }`}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border-none ${filterLanguage === 'de' ? 'bg-white text-red-700 shadow-sm' : 'text-on-surface-variant hover:text-on-surface bg-transparent'
+                        }`}
                     >
                       Alemão
                     </button>
@@ -2782,95 +2964,91 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 {/* Numeral Items Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 min-h-[220px]">
                   <AnimatePresence>
-                  {filteredItems.length === 0 ? (
-                    <div className="col-span-full text-center py-8 text-slate-400 italic text-sm">
-                      Nenhuma palavra encontrada.
-                    </div>
-                  ) : (
-                    filteredItems.map((item, idx) => {
-                      const displayWord = item.word.includes('_EN') ? 'ZERO' : item.word;
-                      const isDone = isWordCompleted(item.word);
-                      
-                      return (
-                        <motion.div 
-                          key={item.word + '-' + item.language}
-                          layout="position"
-                          initial={{ opacity: 0, scale: 0.95 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.95 }}
-                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                          className="bg-white rounded-2xl border border-slate-200/85 p-5 flex flex-col gap-4 transition-all hover:translate-y-[-4px] hover:shadow-md duration-300 relative overflow-hidden min-h-[195px] shadow-xs"
-                        >
-                          {/* Left Stripe Indicator */}
-                          <div className={`absolute top-0 left-0 w-1.5 h-full ${
-                            isDone 
-                              ? 'bg-gradient-to-b from-emerald-400 to-green-600' 
-                              : 'bg-gradient-to-b from-slate-200 to-slate-400'
-                          }`} />
+                    {filteredItems.length === 0 ? (
+                      <div className="col-span-full text-center py-8 text-slate-400 italic text-sm">
+                        Nenhuma palavra encontrada.
+                      </div>
+                    ) : (
+                      filteredItems.map((item, idx) => {
+                        const displayWord = item.word.includes('_EN') ? 'ZERO' : item.word;
+                        const isDone = isWordCompleted(item.word);
 
-                          {/* Header Row */}
-                          <div className="flex items-start justify-between w-full pl-1">
-                            <div className="flex items-center gap-2">
-                              {/* Language Logo Square */}
-                              <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-black tracking-tighter ${
-                                item.language === 'pt' 
+                        return (
+                          <motion.div
+                            key={item.word + '-' + item.language}
+                            layout="position"
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                            className="bg-white rounded-2xl border border-slate-200/85 p-5 flex flex-col gap-4 transition-all hover:translate-y-[-4px] hover:shadow-md duration-300 relative overflow-hidden min-h-[195px] shadow-xs"
+                          >
+                            {/* Left Stripe Indicator */}
+                            <div className={`absolute top-0 left-0 w-1.5 h-full ${isDone
+                              ? 'bg-gradient-to-b from-emerald-400 to-green-600'
+                              : 'bg-gradient-to-b from-slate-200 to-slate-400'
+                              }`} />
+
+                            {/* Header Row */}
+                            <div className="flex items-start justify-between w-full pl-1">
+                              <div className="flex items-center gap-2">
+                                {/* Language Logo Square */}
+                                <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-white text-xs font-black tracking-tighter ${item.language === 'pt'
                                   ? 'bg-gradient-to-br from-green-500 to-emerald-600 shadow-xs shadow-green-100'
                                   : item.language === 'en'
-                                  ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-xs shadow-blue-100'
-                                  : 'bg-gradient-to-br from-red-500 to-amber-600 shadow-xs shadow-red-100'
-                              }`}>
-                                {item.language.toUpperCase()}
+                                    ? 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-xs shadow-blue-100'
+                                    : 'bg-gradient-to-br from-red-500 to-amber-600 shadow-xs shadow-red-100'
+                                  }`}>
+                                  {item.language.toUpperCase()}
+                                </div>
+
+                                {/* Language Label */}
+                                <div className="flex flex-col">
+                                  <span className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
+                                    {item.langLabel}
+                                  </span>
+                                </div>
                               </div>
-                              
-                              {/* Language Label */}
-                              <div className="flex flex-col">
-                                <span className="text-[10px] font-extrabold tracking-wider text-slate-400 uppercase">
-                                  {item.langLabel}
-                                </span>
+
+                              {/* Status Icon */}
+                              <span className={`material-symbols-outlined text-[20px] ${isDone ? 'text-green-500 font-bold' : 'text-slate-300'
+                                }`} title={isDone ? 'Concluída' : 'Pendente'}>
+                                {isDone ? 'check_circle' : 'hourglass_empty'}
+                              </span>
+                            </div>
+
+                            {/* Spelled Word */}
+                            <div className="pl-1 space-y-1">
+                              <h4 className="font-black text-lg tracking-wider text-slate-800 font-mono uppercase leading-none">
+                                {displayWord}
+                              </h4>
+                              <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
+                                <span>Fio recomendado:</span>
+                                <div
+                                  className="w-3.5 h-3.5 rounded-full border border-slate-200 shadow-xs shrink-0"
+                                  style={{ backgroundColor: item.color }}
+                                  title={`Cor do Fio: ${item.color}`}
+                                />
                               </div>
                             </div>
 
-                            {/* Status Icon */}
-                            <span className={`material-symbols-outlined text-[20px] ${
-                              isDone ? 'text-green-500 font-bold' : 'text-slate-300'
-                            }`} title={isDone ? 'Concluída' : 'Pendente'}>
-                              {isDone ? 'check_circle' : 'hourglass_empty'}
-                            </span>
-                          </div>
-
-                          {/* Spelled Word */}
-                          <div className="pl-1 space-y-1">
-                            <h4 className="font-black text-lg tracking-wider text-slate-800 font-mono uppercase leading-none">
-                              {displayWord}
-                            </h4>
-                            <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-medium">
-                              <span>Fio recomendado:</span>
-                              <div 
-                                className="w-3.5 h-3.5 rounded-full border border-slate-200 shadow-xs shrink-0" 
-                                style={{ backgroundColor: item.color }} 
-                                title={`Cor do Fio: ${item.color}`}
-                              />
-                            </div>
-                          </div>
-
-                          {/* Footer Action Outline Button */}
-                          <button
-                            onClick={() => onLaunchSpellingTask(displayWord, item.language, item.color)}
-                            className={`w-full py-2 rounded-full font-extrabold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 duration-100 pl-1 border-none ${
-                              isDone 
-                                ? 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200' 
+                            {/* Footer Action Outline Button */}
+                            <button
+                              onClick={() => onLaunchSpellingTask(displayWord, item.language, item.color)}
+                              className={`w-full py-2 rounded-full font-extrabold text-[11px] transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 duration-100 pl-1 border-none ${isDone
+                                ? 'bg-green-50 hover:bg-green-100 text-green-700 border border-green-200'
                                 : 'bg-white border border-slate-300 hover:border-slate-400 text-slate-700 hover:bg-slate-50'
-                            }`}
-                          >
-                            <span className="material-symbols-outlined text-[13px]">
-                              {isDone ? 'replay' : 'keyboard'}
-                            </span>
-                            <span>{isDone ? 'Soletrar Novamente' : 'Soletrar'}</span>
-                          </button>
-                        </motion.div>
-                      );
-                    })
-                  )}
+                                }`}
+                            >
+                              <span className="material-symbols-outlined text-[13px]">
+                                {isDone ? 'replay' : 'keyboard'}
+                              </span>
+                              <span>{isDone ? 'Soletrar Novamente' : 'Soletrar'}</span>
+                            </button>
+                          </motion.div>
+                        );
+                      })
+                    )}
                   </AnimatePresence>
                 </div>
               </section>
@@ -2893,13 +3071,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* SHARE / SUBMISSION MODAL */}
       <AnimatePresence>
         {showShareModal && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-[#131b2e]/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 w-screen h-screen"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
@@ -2910,7 +3088,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <span className="material-symbols-outlined text-green-500">task_alt</span>
                   Finalizar e Entregar
                 </h3>
-                <button 
+                <button
                   onClick={() => setShowShareModal(false)}
                   className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none"
                 >
@@ -2946,7 +3124,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     ))
                   )}
                 </div>
-                
+
                 {taskFiles.length > 0 && (
                   <div>
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Arquivos Físicos Anexados ({taskFiles.length})</h4>
@@ -2962,7 +3140,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {/* Delivery Channels */}
               <div className="space-y-3">
                 <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Selecione o Canal de Envio</h4>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <button
                     onClick={handleShareWhatsApp}
@@ -3015,14 +3193,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       {/* PROCESSING QUEUE MODAL */}
       <AnimatePresence>
         {showProcessingQueue && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[9999] flex items-center justify-center p-4 w-screen h-screen"
           >
             {/* Scoped CSS styling for pure CSS synchro-triggers */}
-            <style dangerouslySetInnerHTML={{__html: `
+            <style dangerouslySetInnerHTML={{
+              __html: `
               /* ================= ANIMAÇÕES DE TEMPO CONFIGURADAS ================= */
               
               /* 1. Giro do Ícone Superior (1.5s) */
@@ -3091,7 +3270,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
             <input type="checkbox" id="trigger" checked={true} readOnly className="hidden" />
 
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95 }}
               animate={{ scale: 1 }}
               exit={{ scale: 0.95 }}
@@ -3101,7 +3280,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <div className="flex items-center gap-4 text-left">
                   <div className="w-12 h-12 bg-[#0052cc] text-white rounded-full flex items-center justify-center shadow-md">
                     <div id="syncIcon" className="w-5 h-5 flex items-center justify-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="w-5 h-5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="w-5 h-5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" /></svg>
                     </div>
                   </div>
                   <div>
@@ -3111,7 +3290,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button 
+                  <button
                     onClick={() => setShowProcessingQueue(false)}
                     className="w-8 h-8 bg-[#ebf2ff] hover:bg-[#d0e0ff] text-[#0052cc] rounded-full flex items-center justify-center transition-colors cursor-pointer border-none"
                   >
@@ -3126,21 +3305,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <div className="flex items-center justify-between gap-4 h-9 relative">
                       <div className="flex items-center gap-4">
                         <div id="icon1" className="text-slate-400 shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M9 15a1 1 0 1 0 2 0 1 1 0 1 0-2 0Z"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M9 15a1 1 0 1 0 2 0 1 1 0 1 0-2 0Z" /></svg>
                         </div>
                         <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Processando anexo em formato PDF...</span>
                       </div>
-                      
+
                       <div className="relative w-28 h-full flex items-center justify-end">
-                        <button 
-                          id="btnCancel1" 
+                        <button
+                          id="btnCancel1"
                           onClick={() => setShowProcessingQueue(false)}
                           className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
                         >
                           Cancelar
                         </button>
-                        <button 
-                          id="btnActivity1" 
+                        <button
+                          id="btnActivity1"
                           onClick={() => setShowProcessingQueue(false)}
                           className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
                         >
@@ -3166,17 +3345,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </div>
                         <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Processando link de entrega do WhatsApp...</span>
                       </div>
-                      
+
                       <div className="relative w-28 h-full flex items-center justify-end">
-                        <button 
-                          id="btnCancel1" 
+                        <button
+                          id="btnCancel1"
                           onClick={() => setShowProcessingQueue(false)}
                           className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
                         >
                           Cancelar
                         </button>
-                        <button 
-                          id="btnActivity1" 
+                        <button
+                          id="btnActivity1"
                           onClick={() => setShowProcessingQueue(false)}
                           className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
                         >
@@ -3208,13 +3387,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           />
 
           {/* Modal de Pesquisa posicionado no centro, por cima do cabeçalho e ocupando metade da tela */}
-          <div 
+          <div
             className="fixed top-0 w-full max-w-[800px] md:w-1/2 min-w-[600px] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden animate-search-panel z-[9999] mt-4"
-            style={{ 
-              left: '50%', 
-              transform: 'translateX(-50%)', 
-              height: '80vh', 
-              maxHeight: '800px' 
+            style={{
+              left: '50%',
+              transform: 'translateX(-50%)',
+              height: '80vh',
+              maxHeight: '800px'
             }}
             data-purpose="search-modal"
           >
@@ -3237,7 +3416,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 placeholder="Pesquisar no ABBA Digital..."
                 className="flex-1 text-lg border-none focus:ring-0 text-slate-600 placeholder-slate-400 font-medium outline-none"
               />
-              <button 
+              <button
                 onClick={() => { setSearchExpanded(false); setGeneralSearchQuery(''); setTaskSearchQuery(''); }}
                 className="p-2 text-slate-300 hover:text-slate-500 transition-colors bg-transparent border-none cursor-pointer"
               >
@@ -3250,15 +3429,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             {/* Modal Body */}
             <div className="flex-grow overflow-y-auto p-8 custom-scrollbar flex flex-col">
               <h2 className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mb-8">Atividades &amp; Tarefas</h2>
-              
+
               {/* Carrossel Horizontal de Cards de Atividades */}
               <div className="relative group/carousel w-full mb-6">
                 <div className="flex flex-nowrap overflow-x-auto gap-4 no-scrollbar pb-4 scroll-smooth">
                   {(() => {
                     const query = studentView === 'tasks-list' ? generalSearchQuery : taskSearchQuery;
-                    
-                    const autoAssigned = teacherTasks.filter(task => 
-                      task.status === 'active' && 
+
+                    const autoAssigned = teacherTasks.filter(task =>
+                      task.status === 'active' &&
                       (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
                     );
 
@@ -3280,11 +3459,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       const dbTask = teacherTasks.find(t => t.id === link.taskId);
                       const isTask1 = dbTask?.id === 'task-1';
                       const progress = isTask1 ? progressPercent : 0;
-                      const status = progress === 100 
-                        ? 'completed' 
-                        : progress > 0 
-                        ? 'in-progress' 
-                        : 'pending';
+                      const status = progress === 100
+                        ? 'completed'
+                        : progress > 0
+                          ? 'in-progress'
+                          : 'pending';
 
                       return {
                         id: link.id,
@@ -3304,11 +3483,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     // Filter out any excluded cards
                     const actualSearchTasks = mapped.filter(t => !excludedSearchTaskIds.includes(t.id));
 
-                    const filteredSearchTasks = actualSearchTasks.filter(task => 
+                    const filteredSearchTasks = actualSearchTasks.filter(task =>
                       task.title.toLowerCase().includes(query.toLowerCase()) ||
                       task.description.toLowerCase().includes(query.toLowerCase())
                     );
-                    
+
                     return (
                       <>
                         {filteredSearchTasks.map((task) => (
@@ -3347,11 +3526,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                               <figure className="w-full h-full flex items-center justify-center p-2 opacity-85 group-hover:opacity-100 transition-opacity">
                                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 234" className="w-full h-full max-h-20 object-contain">
-                                  <image 
-                                    style={{ isolation: 'isolate' }} 
-                                    width="240" 
-                                    height="234" 
-                                    href={cardImageBase64} 
+                                  <image
+                                    style={{ isolation: 'isolate' }}
+                                    width="240"
+                                    height="234"
+                                    href={cardImageBase64}
                                   />
                                 </svg>
                               </figure>
@@ -3388,13 +3567,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                               {/* Footer / Action row */}
                               <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-auto">
                                 <div className="flex items-center gap-1.5">
-                                  <span className={`w-2 h-2 rounded-full ${
-                                    task.status === 'completed' 
-                                      ? 'bg-emerald-500' 
-                                      : task.status === 'in-progress' 
-                                        ? 'bg-blue-500' 
-                                        : 'bg-red-500'
-                                  }`} />
+                                  <span className={`w-2 h-2 rounded-full ${task.status === 'completed'
+                                    ? 'bg-emerald-500'
+                                    : task.status === 'in-progress'
+                                      ? 'bg-blue-500'
+                                      : 'bg-red-500'
+                                    }`} />
                                   <span className="text-[9px] text-slate-400 font-semibold uppercase tracking-wider">
                                     {task.status === 'completed' ? 'Concluído' : task.status === 'in-progress' ? 'Pendente' : 'Não Iniciado'}
                                   </span>
@@ -3417,7 +3595,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
 
                 {/* Navigation Arrow */}
-                <button 
+                <button
                   onClick={(e) => {
                     const carousel = e.currentTarget.previousElementSibling;
                     if (carousel) {
@@ -3510,7 +3688,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             >
               <AnimatePresence>
                 {isWhatsappSending && (
-                  <motion.div 
+                  <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
@@ -3525,7 +3703,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </AnimatePresence>
 
               {/* Close Button */}
-              <button 
+              <button
                 onClick={() => setShowWhatsappModal(false)}
                 className="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 text-slate-500 transition-colors cursor-pointer border-none bg-transparent"
               >
@@ -3535,10 +3713,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <div className="flex flex-wrap gap-5 items-center w-full mb-8">
                 <div className="flex flex-wrap flex-1 shrink gap-5 items-center">
                   <div className="flex relative shrink-0 justify-center items-center h-[70px] rounded-[16px] overflow-hidden w-[70px] bg-gray-100">
-                    <img 
-                      src="src/assets/Imagens/profdecioperfil.avif" 
+                    <img
+                      src="src/assets/Imagens/profdecioperfil.avif"
                       alt="Prof. José Décio de Alencar"
-                      className="w-full h-full object-cover object-center" 
+                      className="w-full h-full object-cover object-center"
                     />
                   </div>
                   <div className="flex flex-col flex-1 shrink justify-center">
@@ -3555,7 +3733,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
               </div>
 
-              <form 
+              <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   setIsWhatsappSending(true);
@@ -3569,9 +3747,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               >
                 <div className="space-y-6 mb-8">
                   <div className="relative">
-                    <input 
-                      type="text" 
-                      id="wa_student_name" 
+                    <input
+                      type="text"
+                      id="wa_student_name"
                       value={whatsappName}
                       onChange={(e) => setWhatsappName(e.target.value)}
                       required
@@ -3584,8 +3762,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </div>
 
                   <div className="relative">
-                    <textarea 
-                      id="wa_student_message" 
+                    <textarea
+                      id="wa_student_message"
                       value={whatsappMessage}
                       onChange={(e) => setWhatsappMessage(e.target.value)}
                       required
@@ -3599,8 +3777,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 </div>
 
                 <div className="flex flex-col sm:flex-row-reverse gap-4">
-                  <button 
-                    className="w-full sm:w-fit rounded-lg text-sm px-6 py-2 h-[50px] font-semibold text-white bg-[#25D366] hover:bg-[#1ebd5a] transition-all shadow-md active:scale-95 border-none cursor-pointer flex items-center justify-center gap-1.5" 
+                  <button
+                    className="w-full sm:w-fit rounded-lg text-sm px-6 py-2 h-[50px] font-semibold text-white bg-[#25D366] hover:bg-[#1ebd5a] transition-all shadow-md active:scale-95 border-none cursor-pointer flex items-center justify-center gap-1.5"
                     type="submit"
                   >
                     <svg className="w-5 h-5 fill-current" viewBox="0 0 24 24">
@@ -3608,9 +3786,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </svg>
                     <span>Enviar no WhatsApp</span>
                   </button>
-                  <button 
-                    type="button" 
-                    className="w-full sm:w-fit rounded-lg text-sm px-6 py-2 h-[50px] font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all cursor-pointer bg-white active:scale-95" 
+                  <button
+                    type="button"
+                    className="w-full sm:w-fit rounded-lg text-sm px-6 py-2 h-[50px] font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-all cursor-pointer bg-white active:scale-95"
                     onClick={() => setShowWhatsappModal(false)}
                   >
                     Cancelar
@@ -3655,6 +3833,91 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               >
                 Entendido
               </button>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* AVATAR SELECTOR MODAL */}
+      <AnimatePresence>
+        {showAvatarSelector && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowAvatarSelector(false)}
+              className="fixed inset-0 bg-slate-900/60"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl relative z-10 flex flex-col gap-6"
+            >
+              <div className="flex justify-between items-center select-none">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <span className="material-symbols-outlined">account_circle</span>
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">Escolha seu Avatar</h3>
+                    <p className="text-xs text-slate-400 mt-[2px]">Selecione uma imagem premium para o seu perfil</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowAvatarSelector(false)}
+                  className="p-2 hover:bg-slate-100 rounded-full border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-400"
+                  title="Fechar"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+
+              {/* Presets Grid */}
+              <div className="grid grid-cols-4 sm:grid-cols-7 gap-4 py-2">
+                {PRESET_AVATARS.map((url, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSelectAvatar(url)}
+                    className={`w-14 h-14 rounded-full overflow-hidden border-3 hover:scale-105 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent flex items-center justify-center ${
+                      user.img === url ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-transparent'
+                    }`}
+                  >
+                    <img src={url} alt={`Preset Avatar ${i + 1}`} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+
+              {/* Custom URL Field */}
+              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
+                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">URL de Imagem Personalizada (Leve)</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={customAvatarUrl}
+                    onChange={(e) => setCustomAvatarUrl(e.target.value)}
+                    placeholder="https://exemplo.com/sua-foto.jpg..."
+                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none text-sm placeholder-slate-400 transition-all text-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (customAvatarUrl.trim()) {
+                        handleSelectAvatar(customAvatarUrl.trim());
+                      } else {
+                        alert('Por favor, insira uma URL de imagem válida.');
+                      }
+                    }}
+                    className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer border-none text-sm whitespace-nowrap"
+                  >
+                    Aplicar URL
+                  </button>
+                </div>
+                <p className="text-[10px] text-slate-400 leading-normal pl-1">Insira a URL de uma imagem pública leve (PNG, JPG, SVG ou WebP) para economizar recursos.</p>
+              </div>
+
             </motion.div>
           </div>
         )}

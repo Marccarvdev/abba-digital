@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User } from '../types';
-import { supabase } from '../supabaseClient';
+import { supabase, logUserAction } from '../supabaseClient';
 
 interface LoginScreenProps {
   onLoginSuccess: (user: User) => void;
@@ -81,8 +81,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         const { data: { session } } = await supabase.auth.getSession();
         if (session && session.user) {
           const loggedUser: User = {
-            name: session.user.user_metadata?.name || 'Professor',
-            email: session.user.email || '',
+            name: 'José Décio de Alencar',
+            email: 'inglesdecio@gmail.com',
             role: 'teacher'
           };
           setSuccessMsg('Autenticação social realizada com sucesso! Redirecionando...');
@@ -117,8 +117,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     // Default teacher account bypass for fast demonstration
     if (email === 'inglesdecio@gmail.com' && password === 'admin') {
       const teacherUser: User = {
-        name: 'Professor Décio Silva',
-        email: email,
+        name: 'José Décio de Alencar',
+        email: 'inglesdecio@gmail.com',
         role: 'teacher'
       };
       setSuccessMsg('Login realizado com sucesso! Redirecionando...');
@@ -141,8 +141,8 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 
       if (data.user) {
         const user: User = {
-          name: data.user.user_metadata?.name || 'Professor',
-          email: data.user.email || '',
+          name: 'José Décio de Alencar',
+          email: 'inglesdecio@gmail.com',
           role: 'teacher'
         };
         setSuccessMsg('Login realizado com sucesso! Redirecionando...');
@@ -167,6 +167,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 
     const trimmedCode = accessCode.trim().toUpperCase();
     const cleanCode = trimmedCode.replace('ABBA-', '');
+
+    if (cleanCode === 'PROF123' || cleanCode === 'ABC123DEF') {
+      setErrorMsg('Código inválido para login de aluno. Teatchers devem entrar pela Área do Teatcher.');
+      return;
+    }
 
     // 1. Validate student email input (must be Gmail or Outlook format)
     if (!studentEmailInput.trim()) {
@@ -202,7 +207,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 
     if (matchedRecord) {
       if (Date.now() > matchedRecord.expiresAt) {
-        setErrorMsg('Este código de acesso expirou. Solicite um novo ao professor.');
+        setErrorMsg('Este código de acesso expirou. Solicite um novo ao Teatcher.');
         return;
       }
 
@@ -274,6 +279,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             login_method: 'code'
           }
         ]);
+        await logUserAction({
+          userName: matchedRecord.name,
+          userEmail: emailLower,
+          role: 'student',
+          actionType: 'login_code',
+          actionDetails: `Acessou com o código: ${matchedRecord.code}`
+        });
       } catch (dbErr) {
         console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
       }
@@ -303,7 +315,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 
       // Check expiration
       if (Date.now() > sessionData.expiresAt) {
-        setErrorMsg('Este código de acesso expirou. Solicite um novo ao professor.');
+        setErrorMsg('Este código de acesso expirou. Solicite um novo ao Teatcher.');
         return;
       }
 
@@ -376,6 +388,13 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             login_method: 'link'
           }
         ]);
+        await logUserAction({
+          userName: sessionData.name,
+          userEmail: `student-${sessionData.codeId}@abba.com`,
+          role: 'student',
+          actionType: 'login_link',
+          actionDetails: `Acessou com o link do código: ${trimmedCode}`
+        });
       } catch (dbErr) {
         console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
       }
@@ -397,22 +416,37 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
 
     const trimmed = alphanumericCode.trim().toUpperCase();
     if (!trimmed) {
-      setErrorMsg('Por favor, insira o código alfanumérico do professor.');
+      setErrorMsg('Por favor, insira o código alfanumérico do Teatcher.');
       return;
     }
 
+    const cleanCode = trimmed.replace('ABBA-', '');
+    if (cleanCode === 'ALUNO123') {
+      setErrorMsg('Código inválido para login de Teatcher. Alunos devem entrar pela Área do Aluno.');
+      return;
+    }
+    const registryKey = 'abba_invite_codes_registry';
+    try {
+      const localRegistry = localStorage.getItem(registryKey);
+      const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+      if (registryList.some((item: any) => item.code === cleanCode)) {
+        setErrorMsg('Código inválido para login de Teatcher. Alunos devem entrar pela Área do Aluno.');
+        return;
+      }
+    } catch {}
+
     if (trimmed === 'ABC123DEF' || trimmed === 'PROF123') {
       const teacherUser: User = {
-        name: 'Professor Décio Silva',
+        name: 'José Décio de Alencar',
         email: 'inglesdecio@gmail.com',
         role: 'teacher'
       };
-      setSuccessMsg('Login de professor realizado com sucesso! Redirecionando...');
+      setSuccessMsg('Login de Teatcher realizado com sucesso! Redirecionando...');
       setTimeout(() => {
         onLoginSuccess(teacherUser);
       }, 1000);
     } else {
-      setErrorMsg('Código incorreto. Tente "PROF123" para demonstração.');
+      setErrorMsg('Código incorreto. Tente "PROF123" para demonstração de Teatcher.');
     }
   };
 
@@ -466,7 +500,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             onClick={() => setIsTeacherCodeMode(prev => !prev)}
             className="font-semibold text-xs sm:text-sm text-[#005bb3] hover:text-[#00468c] transition-colors cursor-pointer"
           >
-            {isTeacherCodeMode ? 'Área do Aluno' : 'Área do Professor'}
+            {isTeacherCodeMode ? 'Área do Aluno' : 'Área do Teatcher'}
           </button>
           <span className="font-medium text-xs sm:text-sm text-[#5b5f61] cursor-pointer hover:text-[#005bb3] transition-colors">
             Help
@@ -514,7 +548,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                     <span className="material-symbols-outlined shrink-0 text-red-600 mt-0.5">wifi_off</span>
                     <div>
                       <span className="font-bold block mb-1">Você está Offline!</span>
-                      Login por e-mail indisponível. Utilize seu **Código de Acesso Único** fornecido pelo professor para acessar o aplicativo localmente.
+                      Login por e-mail indisponível. Utilize seu **Código de Acesso Único** fornecido pelo Teatcher para acessar o aplicativo localmente.
                     </div>
                   </motion.div>
                 )}
@@ -612,7 +646,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                   </span>
                 </div>
                 <h1 className="font-extrabold text-2xl tracking-tight text-[#131b2e] mb-1">
-                  Login do Professor
+                  Login do Teatcher
                 </h1>
                 <p className="text-xs text-[#414754]">
                   Acesse sua conta para entrar

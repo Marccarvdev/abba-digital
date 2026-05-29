@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, TaskItem, StudentSubmission, AccessCode, SavedWord } from '../types';
 import abbaLogo from '../assets/logo abba.svg';
-import { supabase } from '../supabaseClient';
+import { supabase, logUserAction } from '../supabaseClient';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 
 const parseTeacherNoteAndFiles = (rawNote: string) => {
@@ -171,6 +171,8 @@ const INITIAL_SUBMISSIONS: StudentSubmission[] = [
 ];
 
 export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode, onGoToLanding }) => {
+  const teacherName = 'José Décio de Alencar';
+  const teacherEmail = 'inglesdecio@gmail.com';
   const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsSounds, setSettingsSounds] = useState(() => {
@@ -288,6 +290,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
   useEffect(() => {
     localStorage.setItem('abba_students_list', JSON.stringify(students));
+    
+    // Background sync of all students to Supabase
+    const syncAll = async () => {
+      for (const s of students) {
+        await syncSingleStudentToSupabase(s);
+      }
+    };
+    syncAll();
   }, [students]);
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     const local = localStorage.getItem('abba_teacher_tasks');
@@ -466,6 +476,35 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       }
     } catch (e) {
       console.warn('Falha na conexão com o Supabase ao salvar tarefa:', e);
+    }
+  };
+
+  const syncSingleStudentToSupabase = async (student: any) => {
+    try {
+      const dbPayload = {
+        id: student.id,
+        name: student.name,
+        class: student.class,
+        img: student.img,
+        progress: student.progress,
+        matricula: student.matricula,
+        gender: student.gender,
+        email: student.email,
+        last_access_at: student.lastAccessAt || new Date().toISOString(),
+        login_method: student.loginMethod
+      };
+      
+      const { error } = await supabase
+        .from('students')
+        .upsert([dbPayload], { onConflict: 'id' });
+        
+      if (!error) {
+        console.log(`⚡ Estudante "${student.name}" sincronizado com o Supabase!`);
+      } else {
+        console.warn('Erro ao salvar estudante no Supabase:', error);
+      }
+    } catch (e) {
+      console.warn('Falha na conexão com o Supabase ao salvar estudante:', e);
     }
   };
 
@@ -742,7 +781,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [isAddStudentOpen, setIsAddStudentOpen] = useState(false);
   const [newStudentName, setNewStudentName] = useState('');
   const [newStudentEmail, setNewStudentEmail] = useState('');
-  const [newStudentClass, setNewStudentClass] = useState('Turma A - 3º Ano');
+  const [newStudentClass, setNewStudentClass] = useState('');
   const [newStudentProgress, setNewStudentProgress] = useState(0);
 
   // Modals for Cloud Save and Batch Delete
@@ -1618,7 +1657,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
               {/* Header */}
               <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
-                <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
+                <h2 className="text-lg font-bold text-slate-900">Perfil do Teatcher</h2>
                 <button 
                   onClick={() => setShowProfileMenu(false)}
                   className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
@@ -1642,8 +1681,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     </div>
                   </div>
                   <div className="text-left min-w-0">
-                    <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
-                    <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                    <p className="font-bold text-base text-slate-900 truncate">{teacherName}</p>
+                    <p className="text-xs text-slate-400 mt-1 truncate">{teacherEmail}</p>
                   </div>
                 </div>
 
@@ -1652,8 +1691,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="text-xs font-bold text-slate-700">Função: Professor</p>
-                                <p className="text-[11px] text-slate-400 mt-1">Professor de inglês e idiomas</p>
+                        <p className="text-xs font-bold text-slate-700">Função: Teatcher</p>
+                                <p className="text-[11px] text-slate-400 mt-1">Teatcher de inglês e idiomas</p>
                       </div>
                       <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
                     </div>
@@ -1757,7 +1796,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   activeTab === 'students' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+                <img 
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" 
+                  className="w-[18px] h-[18px] object-contain shrink-0"
+                  style={{ filter: activeTab === 'students' ? 'brightness(0) invert(1)' : 'none' }}
+                  alt="Alunos"
+                />
                 Alunos
               </button>
               <button
@@ -1766,7 +1810,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   activeTab === 'tasks' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                <img 
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" 
+                  className="w-[18px] h-[18px] object-contain shrink-0"
+                  style={{ filter: activeTab === 'tasks' ? 'brightness(0) invert(1)' : 'none' }}
+                  alt="Tarefas"
+                />
                 Tarefas
               </button>
               <button
@@ -1775,7 +1824,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   activeTab === 'access' ? 'bg-blue-50 text-blue-600' : 'bg-transparent text-slate-600 hover:bg-slate-50'
                 }`}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                <img 
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                  className="w-[18px] h-[18px] object-contain shrink-0"
+                  style={{ filter: activeTab === 'access' ? 'brightness(0) invert(1)' : 'none' }}
+                  alt="Acessos"
+                />
                 Acessos
               </button>
             </nav>
@@ -1834,7 +1888,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   : 'bg-transparent text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+              <img 
+                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" 
+                className="w-[18px] h-[18px] object-contain shrink-0"
+                style={{ filter: activeTab === 'students' ? 'brightness(0) invert(1)' : 'none' }}
+                alt="Alunos"
+              />
               <span className="text-sm">Alunos</span>
             </button>
 
@@ -1846,7 +1905,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   : 'bg-transparent text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+              <img 
+                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" 
+                className="w-[18px] h-[18px] object-contain shrink-0"
+                style={{ filter: activeTab === 'tasks' ? 'brightness(0) invert(1)' : 'none' }}
+                alt="Tarefas"
+              />
               <span className="text-sm">Tarefas</span>
             </button>
 
@@ -1858,7 +1922,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   : 'bg-transparent text-slate-600 hover:bg-slate-50'
               }`}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+              <img 
+                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                className="w-[18px] h-[18px] object-contain shrink-0"
+                style={{ filter: activeTab === 'access' ? 'brightness(0) invert(1)' : 'none' }}
+                alt="Acessos"
+              />
               <span className="text-sm">Acessos</span>
             </button>
           </nav>
@@ -1908,7 +1977,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 onClick={() => setShowProfileMenu(prev => !prev)}
                 className="avatar-btn-mobile w-9 h-9 rounded-full overflow-hidden border border-gray-200 p-0 bg-transparent cursor-pointer flex items-center justify-center"
               >
-                <img src="src/assets/Imagens/profdecioperfil.avif" alt="Professor" className="w-full h-full object-cover" />
+                <img src="src/assets/Imagens/profdecioperfil.avif" alt="Teatcher" className="w-full h-full object-cover" />
               </button>
             </div>
           </div>
@@ -1917,7 +1986,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         {/* Desktop Header (Original, untouched) */}
         <header className="hidden md:flex items-center justify-between px-margin-desktop w-full sticky top-0 z-50 bg-white/80 backdrop-blur-md h-16 border-b border-gray-100">
           <div className="flex items-center gap-md flex-1">
-            <h2 className="text-lg text-slate-800 font-extrabold md:block hidden">Área do Professor</h2>
+            <h2 className="text-lg text-slate-800 font-extrabold md:block hidden">Área do Teatcher</h2>
             {activeTab === 'students' && (
               <div className="flex items-center gap-2 ml-4">
                 <button 
@@ -2079,7 +2148,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     >
                       {/* Header */}
                       <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
-                        <h2 className="text-lg font-bold text-slate-900">Perfil do Professor</h2>
+                        <h2 className="text-lg font-bold text-slate-900">Perfil do Teatcher</h2>
                         <span className="material-symbols-outlined text-slate-400">school</span>
                       </div>
  
@@ -2098,8 +2167,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             </div>
                           </div>
                           <div className="text-left min-w-0">
-                            <p className="font-bold text-base text-slate-900 truncate">{user.name}</p>
-                            <p className="text-xs text-slate-400 mt-1 truncate">{user.email || 'professor@abbadigital.com'}</p>
+                            <p className="font-bold text-base text-slate-900 truncate">{teacherName}</p>
+                            <p className="text-xs text-slate-400 mt-1 truncate">{teacherEmail}</p>
                           </div>
                         </div>
  
@@ -2108,8 +2177,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-left">
                             <div className="flex justify-between items-start">
                               <div>
-                                <p className="text-xs font-bold text-slate-700">Função: Professor</p>
-                        <p className="text-[11px] text-slate-400 mt-1">Professor de inglês e idiomas</p>
+                                <p className="text-xs font-bold text-slate-700">Função: Teatcher</p>
+                        <p className="text-[11px] text-slate-400 mt-1">Teatcher de inglês e idiomas</p>
                               </div>
                               <span className="material-symbols-outlined text-indigo-500 text-lg">verified_user</span>
                             </div>
@@ -2174,7 +2243,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               <div className="hidden md:block space-y-6">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm text-left">
                   <div>
-                    <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Bem-vindo de volta, Professor! 👋</h2>
+                    <h2 className="text-2xl font-extrabold tracking-tight text-slate-900">Bem-vindo de volta, Teatcher! 👋</h2>
                     <p className="text-sm text-slate-500 mt-1">Aqui está a visão geral da alfabetização bilingue de suas turmas.</p>
                   </div>
                   <button
@@ -2187,11 +2256,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
 
                 {/* Bento Grid Stats */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
                   {/* Card 1 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-blue-600"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M17 11a3 3 0 1 1-3-3M22 21v-2a4 4 0 0 0-3-3.87"></path></svg>
+                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" className="w-6 h-6 object-contain" alt="Alunos Ativos" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{students.length}</h3>
@@ -2202,7 +2271,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 2 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-purple-600"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" className="w-6 h-6 object-contain" alt="Tarefas Totais" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{tasks.length}</h3>
@@ -2213,7 +2282,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 3 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-orange-600"><path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"></path><polyline points="12 6 12 12 16 14"></polyline></svg>
+                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_PEDENTES_avamwc.svg" className="w-6 h-6 object-contain" alt="Entregas Pendentes" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{submissions.length}</h3>
@@ -2224,13 +2293,26 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 4 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-green-600"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="m9 11 2 2 4-4"></path></svg>
+                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" className="w-6 h-6 object-contain" alt="Códigos Ativos" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">
                         {activeCodes.filter(c => c.expiresAt > Date.now()).length}
                       </h3>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Códigos Ativos</p>
+                    </div>
+                  </div>
+
+                  {/* Card 5 */}
+                  <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
+                    <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_CONCLUIDAS_pgfbco.svg" className="w-6 h-6 object-contain" alt="Tarefas Concluídas" />
+                    </div>
+                    <div>
+                      <h3 className="text-3xl font-black text-slate-900 leading-none">
+                        {tasks.filter(t => t.status === 'completed').length}
+                      </h3>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">Tarefas Concluídas</p>
                     </div>
                   </div>
                 </div>
@@ -2393,13 +2475,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               <div className="block md:hidden space-y-6">
                 {/* Mobile Title */}
                 <div className="mb-1 text-left">
-                  <h2 className="text-xl font-bold text-slate-900">Área do Professor</h2>
+                  <h2 className="text-xl font-bold text-slate-900">Área do Teatcher</h2>
                 </div>
 
                 <div className="flex flex-col gap-4 bg-white p-5 rounded-[24px] border border-slate-200 shadow-sm text-left">
                   <div>
                     <h3 className="text-xl font-extrabold tracking-tight text-slate-950 flex items-center gap-2">
-                      Bem-vindo de volta, Professor! 👋
+                      Bem-vindo de volta, Teatcher! 👋
                     </h3>
                     <p className="text-sm text-slate-500 mt-1">
                       Aqui está a visão geral da alfabetização bilíngue de suas turmas.
@@ -2419,8 +2501,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 1 */}
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0">
-                        <span className="material-symbols-outlined text-[20px]">group</span>
+                      <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0 flex items-center justify-center">
+                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" className="w-[20px] h-[20px] object-contain" alt="Alunos Ativos" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{students.length}</div>
                     </div>
@@ -2432,8 +2514,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 2 */}
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0">
-                        <span className="material-symbols-outlined text-[20px]">assignment</span>
+                      <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0 flex items-center justify-center">
+                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Totais" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{tasks.length}</div>
                     </div>
@@ -2445,8 +2527,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 3 */}
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0">
-                        <span className="material-symbols-outlined text-[20px]">pending_actions</span>
+                      <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0 flex items-center justify-center">
+                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_PEDENTES_avamwc.svg" className="w-[20px] h-[20px] object-contain" alt="Entregas Pendentes" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{submissions.length}</div>
                     </div>
@@ -2458,8 +2540,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {/* Card 4 */}
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
-                      <div className="p-3 bg-green-50 text-green-600 rounded-xl shrink-0">
-                        <span className="material-symbols-outlined text-[20px]">verified_user</span>
+                      <div className="p-3 bg-green-50 text-green-600 rounded-xl shrink-0 flex items-center justify-center">
+                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" className="w-[20px] h-[20px] object-contain" alt="Códigos Ativos" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">
                         {activeCodes.filter(c => c.expiresAt > Date.now()).length}
@@ -2467,6 +2549,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     </div>
                     <div>
                       <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Códigos Ativos</div>
+                    </div>
+                  </div>
+
+                  {/* Card 5 */}
+                  <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left col-span-2">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0 flex items-center justify-center">
+                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_CONCLUIDAS_pgfbco.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Concluídas" />
+                      </div>
+                      <div className="text-2xl font-black text-slate-950 leading-none">
+                        {tasks.filter(t => t.status === 'completed').length}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider whitespace-nowrap">Tarefas Concluídas</div>
                     </div>
                   </div>
                 </div>
@@ -4203,7 +4300,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                     {/* Note from Teacher */}
                     <div className="md:col-span-2 flex flex-col gap-1.5">
-                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota do Professor (Dica especial)</label>
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wide">Nota do Teatcher (Dica especial)</label>
                       <textarea
                         placeholder="Adicione observações ou instruções adicionais de pronúncia..."
                         value={newTaskTeacherNote}
@@ -5503,34 +5600,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                   {/* Class field */}
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Turma</label>
-                    <div className="relative">
-                      <select
-                        value={newStudentClass}
-                        onChange={(e) => setNewStudentClass(e.target.value)}
-                        className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface appearance-none cursor-pointer"
-                      >
-                        <option value="Turma A - 3º Ano">Turma A - 3º Ano</option>
-                        <option value="Turma B - 3º Ano">Turma B - 3º Ano</option>
-                        <option value="Turma C - 3º Ano">Turma C - 3º Ano</option>
-                      </select>
-                      <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg font-variation-settings-fill">arrow_drop_down</span>
-                    </div>
-                  </div>
-
-                  {/* Progress range slider */}
-                  <div className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center pr-1">
-                      <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Progresso Inicial</label>
-                      <span className="text-xs font-extrabold text-primary bg-primary/10 px-2.5 py-0.5 rounded-full">{newStudentProgress}%</span>
-                    </div>
+                    <label className="text-[10px] text-slate-500 font-semibold uppercase tracking-wider pl-1">Informação adicional</label>
                     <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={newStudentProgress}
-                      onChange={(e) => setNewStudentProgress(Number(e.target.value))}
-                      className="w-full h-1.5 bg-[#eaedff] rounded-lg appearance-none cursor-pointer accent-primary"
+                      type="text"
+                      value={newStudentClass}
+                      onChange={(e) => setNewStudentClass(e.target.value)}
+                      placeholder="Ex: Aluno da IFSC"
+                      className="w-full px-4 py-3 bg-surface-container-lowest border border-outline-variant rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none font-body-md text-body-md transition-all text-on-surface"
                     />
                   </div>
 
@@ -5625,9 +5701,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             };
                             
                             setStudents([...students, newStudent]);
+                            logUserAction({
+                              userName: teacherName,
+                              userEmail: teacherEmail,
+                              role: 'teacher',
+                              actionType: 'add_student',
+                              actionDetails: `Adicionou o aluno "${newStudent.name}" (${newStudent.email}) via Código de Acesso.`
+                            });
                             setIsAddStudentOpen(false);
                             setNewStudentName('');
                             setNewStudentEmail('');
+                            setNewStudentClass('');
                             setNewStudentProgress(0);
 
                             alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o código de acesso foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
@@ -5722,18 +5806,28 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             };
                             
                             setStudents([...students, newStudent]);
+                            logUserAction({
+                              userName: teacherName,
+                              userEmail: teacherEmail,
+                              role: 'teacher',
+                              actionType: 'add_student',
+                              actionDetails: `Adicionou o aluno "${newStudent.name}" (${newStudent.email}) via Link de Acesso.`
+                            });
                             setIsAddStudentOpen(false);
                             setNewStudentName('');
                             setNewStudentEmail('');
+                            setNewStudentClass('');
                             setNewStudentProgress(0);
 
                             alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o link de acesso rápido foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
                           }}
                           className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
                         >
-                          <span className="material-symbols-outlined text-sm">
-                            link
-                          </span>
+                          <img 
+                            src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                            className="w-4 h-4 object-contain" 
+                            alt="Link" 
+                          />
                           Copiar por Link
                         </button>
                       </div>
@@ -5782,9 +5876,17 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       loginMethod: 'login'
                     };
                     setStudents([...students, newStudent]);
+                    logUserAction({
+                      userName: teacherName,
+                      userEmail: teacherEmail,
+                      role: 'teacher',
+                      actionType: 'add_student',
+                      actionDetails: `Adicionou o aluno "${newStudent.name}" (${newStudent.email}) via cadastro manual.`
+                    });
                     setIsAddStudentOpen(false);
                     setNewStudentName('');
                     setNewStudentEmail('');
+                    setNewStudentClass('');
                     setNewStudentProgress(0);
                     alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso (sem convite)!`);
                   }}
@@ -6006,6 +6108,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         if (confirm(`Tem certeza de que deseja excluir permanentemente os ${selectedStudentIdsDelete.length} alunos selecionados?`)) {
                           // Update students list
                           setStudents(prev => prev.filter(s => !selectedStudentIdsDelete.includes(s.id)));
+                          // Delete from database
+                          selectedStudentIdsDelete.forEach(async (id) => {
+                            try {
+                              await supabase.from('students').delete().eq('id', id);
+                            } catch (err) {
+                              console.warn('Erro ao excluir no banco:', err);
+                            }
+                          });
                           // Clear selection
                           setSelectedStudentIdsDelete([]);
                           // Close modal
@@ -6786,7 +6896,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   </div>
                   <div>
                     <h2 className="text-lg font-black text-slate-900 leading-tight">Configurações</h2>
-                    <p className="text-xs text-slate-400 mt-0.5">Personalize sua área do professor</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Personalize sua área do Teatcher</p>
                   </div>
                 </div>
                 <button
