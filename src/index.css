@@ -392,6 +392,7 @@ html {
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 16px;
 }
+
 .mask-gradient {
   mask-image: linear-gradient(to bottom, black 35%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 100%);
@@ -404,3 +405,13 @@ html.dragging-active,
 html.dragging-active * {
   scroll-behavior: auto !important;
 }
+
+/* Prevent automatic zoom on inputs, selects, and textareas on mobile devices (iOS Safari default behavior) */
+@media (max-width: 767px) {
+  input, 
+  textarea, 
+  select {
+    font-size: 16px !important;
+  }
+}
+
