@@ -162,6 +162,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   }, [isChatModalOpen]);
 
+  useEffect(() => {
+    if (isChatModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isChatModalOpen]);
+
   // Screen Toggles and Upload state parameters
   const [studentView, setStudentView] = useState<'tasks-list' | 'details'>(() => {
     const saved = localStorage.getItem('abba_student_view');
@@ -4182,7 +4193,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* STUDENT CHAT WHATSAPP MODAL */}
       <AnimatePresence>
         {isChatModalOpen && chatTarget && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 select-text">
+          <div className="fixed inset-0 z-[99999] flex items-stretch md:items-center justify-stretch md:justify-center p-0 md:p-4 select-text">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -4192,7 +4203,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 setIsChatModalOpen(false);
                 setChatTarget(null);
               }}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md cursor-pointer"
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md cursor-pointer hidden md:block"
             />
             
             <motion.div
@@ -4201,12 +4212,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[580px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
+              className="w-full h-full md:h-auto md:max-w-[580px] lg:max-w-[850px] bg-white md:bg-gradient-to-b md:from-white/70 md:via-white/20 md:to-black/[0.04] p-0 md:p-[1px] rounded-none md:rounded-[32px] shadow-none md:shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
+              <div className="bg-white rounded-none md:rounded-[31px] p-4 sm:p-5 lg:p-8 flex flex-col gap-3 md:gap-4 text-left border-none md:border md:border-black/[0.02] w-full h-[100dvh] md:h-[550px] lg:h-[650px] max-h-[100dvh] md:max-h-[90vh] justify-between overflow-hidden relative">
                 
                 {/* Header Container */}
-                <div className="w-full py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
+                <div className="w-full py-3 md:py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative shrink-0">
                   {/* Close button */}
                   <button 
                     onClick={() => {

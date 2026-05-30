@@ -292,6 +292,17 @@ export default function App() {
   const [showChatModal, setShowChatModal] = useState(false);
   const [chatSubject, setChatSubject] = useState("");
   const [chatInput, setChatInput] = useState("");
+
+  useEffect(() => {
+    if (showChatModal || isChatModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showChatModal, isChatModalOpen]);
   const [chatMessage, setChatMessage] = useState<string | null>(null);
   const [teacherReply, setTeacherReply] = useState<string | null>(null);
 
@@ -5489,7 +5500,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* PREMIUM CHAT UPLOAD MODAL BY SUBJECT */}
       <AnimatePresence>
         {showChatModal && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 antialiased select-none">
+          <div className="fixed inset-0 z-[99999] flex items-stretch md:items-center justify-stretch md:justify-center p-0 md:p-4 antialiased select-none">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -5498,7 +5509,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               onClick={() => {
                 setShowChatModal(false);
               }}
-              className="absolute inset-0 bg-[#0B1121]/60 backdrop-blur-sm cursor-pointer"
+              className="absolute inset-0 bg-[#0B1121]/60 backdrop-blur-sm cursor-pointer hidden md:block"
             />
             
             <motion.div
@@ -5506,9 +5517,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="relative z-10 w-full max-w-[620px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)]"
+              className="relative z-10 w-full h-full md:h-auto md:max-w-[620px] lg:max-w-[850px] bg-white md:bg-gradient-to-b md:from-white/70 md:via-white/20 md:to-black/[0.04] p-0 md:p-[1px] rounded-none md:rounded-[32px] shadow-none md:shadow-[0_15px_35px_rgba(15,23,42,0.06)] overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-5 lg:gap-4 text-left border border-black/[0.02] relative h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
+              <div className="bg-white rounded-none md:rounded-[31px] p-4 sm:p-5 lg:p-8 flex flex-col gap-3 md:gap-4 text-left border-none md:border md:border-black/[0.02] relative w-full h-[100dvh] md:h-[550px] lg:h-[650px] max-h-[100dvh] md:max-h-[90vh] justify-between overflow-hidden">
                 
                 {/* Header Actions: Fechar and Excluir Lixeira (Always Visible and Active!) */}
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -5542,7 +5553,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </div>
 
                 {/* Dashed Upload / Header box */}
-                <div className="w-full py-8 border-2 border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
+                <div className="w-full py-4 md:py-8 border md:border-2 border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative shrink-0">
                   <div className="flex items-center -space-x-2 mb-3">
                     <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center p-1 shadow-xs rotate-[-6deg]">
                       <img 
@@ -5707,7 +5718,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* STUDENT CHAT WHATSAPP MODAL */}
       <AnimatePresence>
         {isChatModalOpen && chatTarget && (
-          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 select-text">
+          <div className="fixed inset-0 z-[99999] flex items-stretch md:items-center justify-stretch md:justify-center p-0 md:p-4 select-text">
             {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
@@ -5717,7 +5728,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 setIsChatModalOpen(false);
                 setChatTarget(null);
               }}
-              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md cursor-pointer"
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md cursor-pointer hidden md:block"
             />
             
             <motion.div
@@ -5726,12 +5737,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[580px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
+              className="w-full h-full md:h-auto md:max-w-[580px] lg:max-w-[850px] bg-white md:bg-gradient-to-b md:from-white/70 md:via-white/20 md:to-black/[0.04] p-0 md:p-[1px] rounded-none md:rounded-[32px] shadow-none md:shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
+              <div className="bg-white rounded-none md:rounded-[31px] p-4 sm:p-5 lg:p-8 flex flex-col gap-3 md:gap-4 text-left border-none md:border md:border-black/[0.02] w-full h-[100dvh] md:h-[550px] lg:h-[650px] max-h-[100dvh] md:max-h-[90vh] justify-between overflow-hidden relative">
                 
                 {/* Header Container */}
-                <div className="w-full py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
+                <div className="w-full py-3 md:py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative shrink-0">
                   {/* Close button */}
                   <button 
                     onClick={() => {
