@@ -258,6 +258,7 @@ export default function App() {
   const [savingProgressText, setSavingProgressText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[]; code?: string } | null>(null);
+  const [teacherDraftingTask, setTeacherDraftingTask] = useState<TaskItem | null>(null);
 
   // States for Chat WhatsApp integration
   const [isChatModalOpen, setIsChatModalOpen] = useState(false);
@@ -799,6 +800,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   }, [spelledRows]);
 
   const handleOpenSaveModal = (rIdx: number) => {
+    if (teacherDraftingTask) {
+      alert("No modo de configuração de rascunho, utilize o botão 'Salvar Palavras' no banner azul localizado no topo do painel para gravar as palavras do rascunho de atividade.");
+      return;
+    }
     const initialSelected: Record<number, boolean> = {};
     spelledRows.forEach((row, idx) => {
       if (row.length > 0) {
@@ -2538,6 +2543,17 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           setCurrentScreen('abacus');
           setActiveTab('app');
         }}
+        onDraftCreated={(task) => {
+          setTeacherDraftingTask(task);
+          // Limpa o ábaco para começar com as prateleiras limpas
+          setSpelledRows([[], [], [], [], [], []]);
+          setRowColors({});
+          setSavedWordsList([]);
+          
+          setCurrentScreen('abacus');
+          setShowLanding(false);
+          setActiveTab('app');
+        }}
       />
     );
   }
@@ -2992,7 +3008,81 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* BODY CONTENT AREA */}
       <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
         
-        {activeReviewSubmission ? (
+        {teacherDraftingTask ? (
+          <div className="bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent border border-blue-300 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="bg-blue-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                  <span className="material-symbols-outlined text-[12px] font-bold">edit_document</span>
+                  Configurando Rascunho
+                </span>
+              </div>
+              <h2 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight leading-tight mb-1">
+                {teacherDraftingTask.title}
+              </h2>
+              <p className="text-xs text-slate-650 mt-0.5">
+                Monte e salve as palavras que desejar para este rascunho usando os blocos abaixo. Cada linha no ábaco representará uma palavra no rascunho.
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center">
+              <button
+                onClick={() => {
+                  // Compile spelling words on the board
+                  const finalWords = spelledRows
+                    .map(row => row.map(l => l.letter).join("").trim())
+                    .filter(w => w.length > 0)
+                    .map(w => ({
+                      word: w.toUpperCase(),
+                      language: 'pt' as const,
+                      color: '#1e293b'
+                    }));
+
+                  if (finalWords.length === 0) {
+                    alert("Por favor, construa pelo menos uma palavra no ábaco para salvar!");
+                    return;
+                  }
+
+                  // 1. Update teacher tasks in local storage
+                  const local = localStorage.getItem('abba_teacher_tasks');
+                  let tasksList: TaskItem[] = local ? JSON.parse(local) : [];
+                  tasksList = tasksList.map(t => {
+                    if (t.id === teacherDraftingTask.id) {
+                      return {
+                        ...t,
+                        targetWords: finalWords
+                      };
+                    }
+                    return t;
+                  });
+                  localStorage.setItem('abba_teacher_tasks', JSON.stringify(tasksList));
+
+                  alert("Rascunho de atividade atualizado com as novas palavras! 🚀");
+                  
+                  // Go back to teacher dashboard
+                  setTeacherDraftingTask(null);
+                  setCurrentScreen('teacher-dashboard');
+                }}
+                className="inline-flex items-center justify-center gap-2 bg-[#00aa6c] hover:bg-[#00925c] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+              >
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                <span>Salvar Palavras</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  if (window.confirm("Deseja cancelar a configuração do rascunho? O progresso não salvo no ábaco será perdido.")) {
+                    setTeacherDraftingTask(null);
+                    setCurrentScreen('teacher-dashboard');
+                  }
+                }}
+                className="inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+              >
+                <span>Cancelar</span>
+              </button>
+            </div>
+          </div>
+        ) : activeReviewSubmission ? (
           <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
@@ -4741,7 +4831,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative z-10 text-left"
+              className="w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative z-10 text-left min-h-[500px]"
             >
               {/* Header Decorative Confetti Ribbon */}
               <div className="h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-indigo-500" />

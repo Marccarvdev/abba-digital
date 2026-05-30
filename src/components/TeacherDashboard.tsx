@@ -55,130 +55,23 @@ interface TeacherDashboardProps {
   onLogout: () => void;
   onLaunchReviewMode: (submission: StudentSubmission) => void;
   onGoToLanding?: () => void;
+  onDraftCreated?: (task: TaskItem) => void;
 }
 
 // Initial Mock Data
 const INITIAL_STUDENTS: any[] = [];
 
-const INITIAL_TASKS: TaskItem[] = [
-  {
-    id: 'task-1',
-    title: 'Exercício de Numerais Multilingue',
-    description: 'Soletrar os numerais de 0 a 9 em Português, Inglês e Alemão usando as cores de fios correspondentes.',
-    dueDate: '2026-06-15',
-    status: 'active',
-    targetWords: [
-      { word: 'ZERO', language: 'pt', color: '#1e293b' },
-      { word: 'UM', language: 'pt', color: '#1e293b' },
-      { word: 'DOIS', language: 'pt', color: '#1e293b' },
-      { word: 'THREE', language: 'en', color: '#3b82f6' },
-      { word: 'FOUR', language: 'en', color: '#3b82f6' },
-      { word: 'FIVE', language: 'en', color: '#3b82f6' },
-      { word: 'SECHS', language: 'de', color: '#ef4444' },
-      { word: 'SIEBEN', language: 'de', color: '#ef4444' },
-      { word: 'ACHT', language: 'de', color: '#ef4444' }
-    ],
-    submissionsCount: 15
-  },
-  {
-    id: 'task-2',
-    title: 'Gramática Básica - Unidade 4',
-    description: 'Exercícios práticos de tempos verbais e estruturação de frases no idioma nativo.',
-    dueDate: '2026-06-25',
-    status: 'draft',
-    targetWords: [
-      { word: 'ESTUDAR', language: 'pt', color: '#1e293b' },
-      { word: 'APRENDER', language: 'pt', color: '#1e293b' }
-    ],
-    submissionsCount: 0
-  },
-  {
-    id: 'task-3',
-    title: 'História das Civilizações',
-    description: 'Soletrar conceitos-chave do surgimento das sociedades clássicas.',
-    dueDate: '2026-06-28',
-    status: 'active',
-    targetWords: [
-      { word: 'ROMA', language: 'pt', color: '#1e293b' },
-      { word: 'ATENAS', language: 'pt', color: '#1e293b' }
-    ],
-    submissionsCount: 8
-  },
-  {
-    id: 'task-4',
-    title: 'Revisão de Verbos Irregulares',
-    description: 'Atividade concluída de conjugação de verbos em múltiplos idiomas.',
-    dueDate: '2026-05-10',
-    status: 'completed',
-    targetWords: [
-      { word: 'BE', language: 'en', color: '#3b82f6' },
-      { word: 'HAVE', language: 'en', color: '#3b82f6' }
-    ],
-    submissionsCount: 20
-  },
-  {
-    id: 'task-5',
-    title: 'Cálculo Diferencial Avançado',
-    description: 'Montar os símbolos fundamentais de cálculo no ábaco numérico.',
-    dueDate: '2026-07-02',
-    status: 'active',
-    targetWords: [
-      { word: 'LIMITE', language: 'pt', color: '#1e293b' },
-      { word: 'DERIVADA', language: 'pt', color: '#1e293b' }
-    ],
-    submissionsCount: 19
-  }
-];
+const INITIAL_TASKS: TaskItem[] = [];
 
-const INITIAL_SUBMISSIONS: StudentSubmission[] = [
-  {
-    id: 'sub-1',
-    studentName: 'Ana Beatriz Silva',
-    taskTitle: 'Exercício de Numerais Multilingue',
-    submittedAt: '2026-05-23T14:30:00Z',
-    spelledWords: [
-      {
-        word: 'ZERO',
-        letters: [
-          { id: 'l1', letter: 'Z', originCubeId: 'cube-z', color: '#1e293b' },
-          { id: 'l2', letter: 'E', originCubeId: 'cube-e', color: '#1e293b' },
-          { id: 'l3', letter: 'R', originCubeId: 'cube-r', color: '#1e293b' },
-          { id: 'l4', letter: 'O', originCubeId: 'cube-o', color: '#1e293b' }
-        ],
-        themeColor: '#1e293b'
-      },
-      {
-        word: 'THREE',
-        letters: [
-          { id: 'l5', letter: 'T', originCubeId: 'cube-t', color: '#3b82f6' },
-          { id: 'l6', letter: 'H', originCubeId: 'cube-h', color: '#3b82f6' },
-          { id: 'l7', letter: 'R', originCubeId: 'cube-r', color: '#3b82f6' },
-          { id: 'l8', letter: 'E', originCubeId: 'cube-e', color: '#3b82f6' },
-          { id: 'l9', letter: 'E', originCubeId: 'cube-e', color: '#3b82f6' }
-        ],
-        themeColor: '#3b82f6'
-      }
-    ]
-  },
-  {
-    id: 'sub-2',
-    studentName: 'Carlos andré',
-    taskTitle: 'Exercício de Numerais Multilingue',
-    submittedAt: '2026-05-24T10:15:00Z',
-    spelledWords: [
-      {
-        word: 'UM',
-        letters: [
-          { id: 'l10', letter: 'U', originCubeId: 'cube-u', color: '#1e293b' },
-          { id: 'l11', letter: 'M', originCubeId: 'cube-m', color: '#1e293b' }
-        ],
-        themeColor: '#1e293b'
-      }
-    ]
-  }
-];
+const INITIAL_SUBMISSIONS: StudentSubmission[] = [];
 
-export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogout, onLaunchReviewMode, onGoToLanding }) => {
+export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ 
+  user, 
+  onLogout, 
+  onLaunchReviewMode, 
+  onGoToLanding,
+  onDraftCreated
+}) => {
   const teacherName = 'José Décio de Alencar';
   const teacherEmail = 'inglesdecio@gmail.com';
   const [activeTab, setActiveTab] = useState<'home' | 'tasks' | 'students' | 'access'>('home');
@@ -392,12 +285,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   }, [students]);
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     const local = localStorage.getItem('abba_teacher_tasks');
-    return local ? JSON.parse(local) : INITIAL_TASKS;
+    const loaded: TaskItem[] = local ? JSON.parse(local) : INITIAL_TASKS;
+    return loaded.filter(t => !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id));
   });
   
   const [submissions, setSubmissions] = useState<StudentSubmission[]>(() => {
     const local = localStorage.getItem('abba_student_submissions');
-    return local ? JSON.parse(local) : INITIAL_SUBMISSIONS;
+    const loaded: StudentSubmission[] = local ? JSON.parse(local) : INITIAL_SUBMISSIONS;
+    return loaded.filter(s => !['sub-1', 'sub-2'].includes(s.id));
   });
 
   // Sound effects listener for newly received submissions
@@ -1160,6 +1055,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
 
   // Add Task Modal State
   const [isAddTaskOpen, setIsAddTaskOpen] = useState(false);
+  const [isDraftCreator, setIsDraftCreator] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskDesc, setNewTaskDesc] = useState('');
   const [newTaskDueDate, setNewTaskDueDate] = useState('2026-06-30');
@@ -1559,7 +1455,31 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
     });
     localStorage.setItem(registryKey, JSON.stringify(registryList));
 
-    // O registro no Supabase será criado dinamicamente apenas quando o aluno realizar o seu primeiro login.
+    // Save to Supabase immediately so the student's app on other devices can recognize this code!
+    const newStudent = {
+      id: codeId,
+      name: name,
+      class: "Turma A - 3º Ano",
+      img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+      progress: 0,
+      matricula: code,
+      gender: detectGenderFromName(name),
+      email: '',
+      lastAccessAt: null,
+      loginMethod: 'code'
+    };
+
+    // Update teacher student list
+    setStudents(prev => [newStudent, ...prev]);
+    try {
+      const currentStudents = JSON.parse(localStorage.getItem('abba_students_list') || '[]');
+      localStorage.setItem('abba_students_list', JSON.stringify([newStudent, ...currentStudents]));
+    } catch (err) {
+      console.error(err);
+    }
+
+    // Push to Supabase database
+    syncSingleStudentToSupabase(newStudent);
 
     const friendlyCode = code;
     const token = code;
@@ -1825,7 +1745,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
         color: w.color
       }));
 
-    if (cleanWords.length === 0) {
+    if (cleanWords.length === 0 && !isDraftCreator) {
       alert('Adicione pelo menos uma palavra para a tarefa.');
       return;
     }
@@ -1835,8 +1755,8 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       title: newTaskTitle.trim(),
       description: newTaskDesc.trim(),
       dueDate: newTaskDueDate,
-      status: 'active',
-      targetWords: cleanWords,
+      status: isDraftCreator ? 'draft' : 'active',
+      targetWords: cleanWords.length > 0 ? cleanWords : [{ word: 'DIGITE', language: 'pt', color: '#1e293b' }],
       submissionsCount: 0,
       startDate: newTaskStartDate,
       teacherNote: newTaskTeacherNote.trim() || undefined,
@@ -1903,9 +1823,6 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       setTasks(prev => [savedTask, ...prev]);
       setIsAddTaskOpen(false);
       
-      // Trigger the beautiful success overlay
-      showAssignmentSuccessOverlay(savedTask.title, savedTask.id, assignedStudentIds);
-
       // Reset Create Form
       setNewTaskTitle('');
       setNewTaskDesc('');
@@ -1914,6 +1831,13 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       setNewTaskDueDate('2026-06-30');
       setNewTaskWords([{ word: 'CASA', language: 'pt', color: '#1e293b' }]);
       setSelectedStudentIds([]);
+
+      if (isDraftCreator && onDraftCreated) {
+        onDraftCreated(savedTask);
+      } else {
+        // Trigger the beautiful success overlay
+        showAssignmentSuccessOverlay(savedTask.title, savedTask.id, assignedStudentIds);
+      }
     } else {
       setTasks(prev => prev.map(t => t.id === task.id ? savedTask : t));
       setEditingTask(null);
@@ -2665,7 +2589,10 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                     <p className="text-sm text-slate-500 mt-1">Aqui está a visão geral da alfabetização bilingue de suas turmas.</p>
                   </div>
                   <button
-                    onClick={() => setIsAddTaskOpen(true)}
+                    onClick={() => {
+                      setIsDraftCreator(false);
+                      setIsAddTaskOpen(true);
+                    }}
                     className="flex items-center justify-center gap-2 px-5 py-3.5 bg-[#005bb3] hover:bg-[#00468c] text-white text-sm font-bold rounded-xl transition-all shadow-sm active:scale-95 cursor-pointer border-none"
                   >
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" className="text-white shrink-0"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
@@ -2906,7 +2833,10 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                     </p>
                   </div>
                   <button
-                    onClick={() => setIsAddTaskOpen(true)}
+                    onClick={() => {
+                      setIsDraftCreator(false);
+                      setIsAddTaskOpen(true);
+                    }}
                     className="inline-flex items-center justify-center gap-2 bg-[#005ba4] hover:bg-[#004780] text-white px-5 py-3.5 rounded-2xl font-bold text-sm shadow-sm transition-all active:scale-95 w-full shrink-0 border-none cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-[16px]">add</span>
@@ -3519,7 +3449,10 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                     {/* Nova Tarefa Button */}
                     <button
                       type="button"
-                      onClick={() => setIsAddTaskOpen(true)}
+                      onClick={() => {
+                        setIsDraftCreator(false);
+                        setIsAddTaskOpen(true);
+                      }}
                       className="flex items-center gap-sm px-lg py-md bg-primary text-on-primary rounded-xl font-label-md text-label-md hover:opacity-90 transition-all shadow-sm active:scale-95 cursor-pointer border-none"
                     >
                       <span className="material-symbols-outlined">add</span>
@@ -3575,9 +3508,12 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 {/* Bento Grid Layout */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg min-h-[350px]">
                   {/* Create New Task Card - Outside AnimatePresence to prevent StrictMode duplication */}
-                  {tasksPage === 1 && (tasksFilter === 'all' || tasksFilter === 'draft') && (
+                  {tasksPage === 1 && tasksFilter === 'all' && (
                     <button
-                      onClick={() => setIsAddTaskOpen(true)}
+                      onClick={() => {
+                        setIsDraftCreator(false);
+                        setIsAddTaskOpen(true);
+                      }}
                       className="flex flex-col items-center justify-center border-2 border-dashed border-outline-variant rounded-xl p-xl bg-surface-container-lowest hover:bg-surface-container-low hover:border-primary transition-all group min-h-[280px] w-full cursor-pointer"
                     >
                       <div className="w-16 h-16 rounded-full bg-surface-container-high flex items-center justify-center text-primary mb-md group-hover:scale-110 transition-transform">
@@ -3585,6 +3521,23 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       </div>
                       <span className="font-headline-md text-headline-md text-on-surface">Criar nova tarefa</span>
                       <span className="font-body-md text-body-md text-on-surface-variant mt-xs">Clique para iniciar uma nova atividade</span>
+                    </button>
+                  )}
+
+                  {/* Create Draft Card */}
+                  {tasksPage === 1 && tasksFilter === 'draft' && (
+                    <button
+                      onClick={() => {
+                        setIsDraftCreator(true);
+                        setIsAddTaskOpen(true);
+                      }}
+                      className="flex flex-col items-center justify-center border-2 border-dashed border-[#c1c6d6] rounded-xl p-xl bg-surface-container-lowest hover:bg-slate-50 hover:border-primary transition-all group min-h-[280px] w-full cursor-pointer"
+                    >
+                      <div className="w-16 h-16 rounded-full bg-[#f2f3ff] flex items-center justify-center text-primary mb-md group-hover:scale-110 transition-transform">
+                        <span className="material-symbols-outlined text-[32px]">edit_document</span>
+                      </div>
+                      <span className="font-headline-md text-headline-md text-on-surface">Criar rascunho</span>
+                      <span className="font-body-md text-body-md text-on-surface-variant mt-xs">Clique para iniciar um novo rascunho de atividade</span>
                     </button>
                   )}
 
