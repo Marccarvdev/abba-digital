@@ -294,6 +294,124 @@ export default function App() {
   const [chatMessage, setChatMessage] = useState<string | null>(null);
   const [teacherReply, setTeacherReply] = useState<string | null>(null);
 
+  // States for Teacher Review Commenting
+  const [reviewCommentText, setReviewCommentText] = useState<string | null>(null);
+  const [reviewTeacherReplyInput, setReviewTeacherReplyInput] = useState("");
+  const [reviewTeacherReplySaved, setReviewTeacherReplySaved] = useState<string | null>(null);
+
+  // Load subject comment when teacher launches review mode
+  useEffect(() => {
+    const loadReviewComment = async () => {
+      if (!activeReviewSubmission) {
+        setReviewCommentText(null);
+        setReviewTeacherReplyInput("");
+        setReviewTeacherReplySaved(null);
+        return;
+      }
+      
+      const studentEmail = activeReviewSubmission.studentEmail || "aluno@abbadigital.com";
+      const subject = activeReviewSubmission.taskTitle || "Exercício de Numerais Multilingue";
+      
+      try {
+        // Try fetching the comment from Supabase
+        const { data, error } = await supabase
+          .from('subject_comments')
+          .select('*')
+          .eq('student_email', studentEmail)
+          .eq('subject', subject)
+          .maybeSingle();
+        
+        if (!error && data) {
+          setReviewCommentText(data.comment_text || null);
+          setReviewTeacherReplySaved(data.teacher_reply || null);
+          setReviewTeacherReplyInput(data.teacher_reply || "");
+        } else {
+          // Check localStorage as fallback
+          const allCommentsRaw = localStorage.getItem('abba_subject_comments');
+          const allComments = allCommentsRaw ? JSON.parse(allCommentsRaw) : {};
+          const subjectData = allComments[subject];
+          if (subjectData) {
+            setReviewCommentText(subjectData.comment || null);
+            setReviewTeacherReplySaved(subjectData.reply || null);
+            setReviewTeacherReplyInput(subjectData.reply || "");
+          } else {
+            setReviewCommentText(null);
+            setReviewTeacherReplySaved(null);
+            setReviewTeacherReplyInput("");
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar comentário de revisão:', err);
+      }
+    };
+    
+    loadReviewComment();
+  }, [activeReviewSubmission]);
+
+  // Handle Save Teacher Reply
+  const handleSaveTeacherReply = async () => {
+    if (!activeReviewSubmission || !reviewCommentText) return;
+    
+    const studentEmail = activeReviewSubmission.studentEmail || "aluno@abbadigital.com";
+    const studentName = activeReviewSubmission.studentName || "Estudante";
+    const subject = activeReviewSubmission.taskTitle || "Exercício de Numerais Multilingue";
+    const replyText = reviewTeacherReplyInput.trim();
+    
+    if (!replyText) {
+      alert("Por favor, digite uma resposta.");
+      return;
+    }
+    
+    // 1. Update state
+    setReviewTeacherReplySaved(replyText);
+    
+    // 2. Save in Supabase
+    try {
+      const { error } = await supabase
+        .from('subject_comments')
+        .upsert({
+          student_name: studentName,
+          student_email: studentEmail,
+          subject: subject,
+          comment_text: reviewCommentText,
+          teacher_reply: replyText,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'student_email,subject'
+        });
+      
+      if (!error) {
+        console.log("Resposta do professor salva no Supabase com sucesso!");
+      }
+    } catch (err) {
+      console.warn("Erro ao salvar resposta no Supabase:", err);
+    }
+    
+    // 3. Update localStorage (simulate sync)
+    try {
+      const allCommentsRaw = localStorage.getItem('abba_subject_comments');
+      const allComments = allCommentsRaw ? JSON.parse(allCommentsRaw) : {};
+      allComments[subject] = {
+        comment: reviewCommentText,
+        reply: replyText
+      };
+      localStorage.setItem('abba_subject_comments', JSON.stringify(allComments));
+    } catch (e) {
+      console.error(e);
+    }
+    
+    // 4. Log Action
+    await logUserAction({
+      userName: user?.name || "José Décio de Alencar",
+      userEmail: user?.email || "inglesdecio@gmail.com",
+      role: 'teacher',
+      actionType: 'teacher_reply_saved',
+      actionDetails: `Respondeu ao comentário do aluno ${studentName} na matéria "${subject}": "${replyText}"`
+    });
+    
+    alert("Resposta enviada com sucesso! 🚀");
+  };
+
   // Load comment for a subject
   const loadCommentForSubject = async (subject: string) => {
     if (!subject) return;
@@ -354,35 +472,23 @@ export default function App() {
     const studentName = user?.name || "Estudante";
     const studentEmail = user?.email || "aluno@abbadigital.com";
 
-    // Auto-generate a premium contextual teacher reply if not exists
-    let generatedReply = "Excelente trabalho! Continue se dedicando bastante.";
-    const lowerSub = chatSubject.toLowerCase();
-    if (lowerSub.includes("numerais") || lowerSub.includes("número")) {
-      generatedReply = "Muito bom! Sua escrita de numerais está ficando cada vez mais precisa. Parabéns!";
-    } else if (lowerSub.includes("core") || lowerSub.includes("color")) {
-      generatedReply = "Adorei como você associou as cores! O aprendizado bilíngue é muito importante.";
-    } else if (lowerSub.includes("soletrar") || lowerSub.includes("soletração")) {
-      generatedReply = "Que incrível! Soletrar corretamente nos ajuda a entender a estrutura de cada palavra.";
-    }
-
-    // 1. Update state
+    // Update state (preserve existing real teacherReply if already loaded)
     setChatMessage(textToSave);
-    setTeacherReply(generatedReply);
 
-    // 2. Save to localStorage
+    // Save to localStorage
     try {
       const allCommentsRaw = localStorage.getItem('abba_subject_comments');
       const allComments = allCommentsRaw ? JSON.parse(allCommentsRaw) : {};
       allComments[chatSubject] = {
         comment: textToSave,
-        reply: generatedReply
+        reply: teacherReply
       };
       localStorage.setItem('abba_subject_comments', JSON.stringify(allComments));
     } catch (e) {
       console.error(e);
     }
 
-    // 3. Try to save to Supabase
+    // Try to save to Supabase
     try {
       const { error } = await supabase
         .from('subject_comments')
@@ -391,7 +497,7 @@ export default function App() {
           student_email: studentEmail,
           subject: chatSubject,
           comment_text: textToSave,
-          teacher_reply: generatedReply,
+          teacher_reply: teacherReply,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'student_email,subject'
@@ -404,7 +510,7 @@ export default function App() {
       console.warn("Erro ao enviar comentário para o Supabase (silencioso):", err);
     }
 
-    // 4. Log User Action
+    // Log User Action
     await logUserAction({
       userName: studentName,
       userEmail: studentEmail,
@@ -3202,8 +3308,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeReviewSubmission ? (
-          <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
+          <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex-1">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="bg-[#0004fd] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                   Revisão de Atividade
@@ -3219,11 +3325,53 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               <p className="text-gray-600 text-sm">
                 Aluno(a): <strong className="text-gray-950 font-bold">{activeReviewSubmission.studentName}</strong>
               </p>
+
+              {/* Mensagem da Matéria do Aluno e Resposta do Professor */}
+              {reviewCommentText && (
+                <div className="mt-4 pt-3 border-t border-slate-200/80 max-w-xl">
+                  <div className="bg-slate-100/90 p-3 rounded-2xl text-xs text-slate-700 leading-relaxed shadow-3xs">
+                    <span className="block font-bold text-slate-800 mb-1 flex items-center gap-1 select-none">
+                      <span className="material-symbols-outlined text-[14px]">message</span>
+                      Mensagem da Matéria enviada pelo aluno:
+                    </span>
+                    <p className="italic font-medium">"{reviewCommentText}"</p>
+                  </div>
+                  
+                  {/* Campo de Resposta */}
+                  <div className="mt-3 flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={reviewTeacherReplyInput}
+                      onChange={(e) => setReviewTeacherReplyInput(e.target.value)}
+                      placeholder={reviewTeacherReplySaved ? "Editar resposta..." : "Responder comentário do aluno..."}
+                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none text-slate-700 font-medium placeholder-slate-400"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleSaveTeacherReply();
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={handleSaveTeacherReply}
+                      className="bg-[#0004fd] hover:bg-[#0003c7] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border-none shadow-sm transition-all active:scale-95"
+                    >
+                      {reviewTeacherReplySaved ? "Salvar" : "Enviar Resposta"}
+                    </button>
+                  </div>
+                  
+                  {reviewTeacherReplySaved && (
+                    <div className="mt-1 text-[10px] text-emerald-600 font-bold flex items-center gap-1 select-none">
+                      <span className="material-symbols-outlined text-[12px] font-bold">check_circle</span>
+                      Resposta enviada: "{reviewTeacherReplySaved}"
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             <button
               onClick={handleCloseReviewMode}
-              className="inline-flex items-center justify-center gap-2 bg-[#0004fd] hover:bg-[#0003c7] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap self-start sm:self-center border-none"
+              className="inline-flex items-center justify-center gap-2 bg-[#0004fd] hover:bg-[#0003c7] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap self-start md:self-center border-none"
             >
               <span>Concluir Revisão</span>
             </button>
@@ -5204,12 +5352,14 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       </div>
                     </div>
 
-                    {/* Teacher reply bubble */}
-                    <div className="flex justify-end w-full pl-10">
-                      <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
-                        {teacherReply || "Olá! Atividade recebida em tempo real. Continue estudando!"}
+                    {/* Teacher reply bubble - Rendered only if the teacher actually replied */}
+                    {teacherReply && (
+                      <div className="flex justify-end w-full pl-10">
+                        <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
+                          {teacherReply}
+                        </div>
                       </div>
-                    </div>
+                    )}
                   </div>
                 ) : (
                   <div className="text-center py-6 text-slate-400 font-medium text-[12px]">

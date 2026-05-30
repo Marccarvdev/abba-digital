@@ -130,6 +130,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
       const newMockSubmission: StudentSubmission = {
         id: `mock-sub-${Date.now()}`,
         studentName: 'Gabriel Oliveira',
+        studentEmail: 'gabriel@gmail.com',
         taskTitle: 'Exercício de Numerais Multilingue',
         submittedAt: new Date().toISOString(),
         spelledWords: [
@@ -578,6 +579,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const mappedSubs: StudentSubmission[] = dbSubs.map((s: any) => ({
           id: s.id.toString(),
           studentName: s.student_name,
+          studentEmail: s.student_email,
           taskTitle: s.task_title,
           submittedAt: s.submitted_at,
           spelledWords: typeof s.spelled_words === 'string'

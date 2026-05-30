@@ -59,6 +59,7 @@ export interface TaskItem {
 export interface StudentSubmission {
   id: string;
   studentName: string;
+  studentEmail?: string;
   taskTitle: string;
   submittedAt: string;
   spelledWords: SavedWord[];
