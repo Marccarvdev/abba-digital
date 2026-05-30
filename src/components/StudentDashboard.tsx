@@ -536,7 +536,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
         setTeacherTasks(prev => {
           const merged = [...prev];
-          mappedTasks.forEach(mt => {
+          // Filtrar tarefas mock temporárias para consistência com o painel do professor
+          const cleanMappedTasks = mappedTasks.filter(t => !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id));
+          
+          cleanMappedTasks.forEach(mt => {
             const index = merged.findIndex(x => x.id === mt.id);
             if (index !== -1) {
               merged[index] = { ...merged[index], ...mt };
