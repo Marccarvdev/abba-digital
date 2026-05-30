@@ -53,3 +53,29 @@ export const Undo2: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
     </g>
   </svg>
 );
+
+export const SafeAvatar: React.FC<{ src?: string; name?: string; className?: string }> = ({ src, name, className = "w-10 h-10" }) => {
+  const [failed, setFailed] = React.useState(false);
+  const initials = (name || "U").substring(0, 2).toUpperCase();
+
+  // Se a imagem falhar, não for uma URL válida, ou se estivermos offline sem cache
+  if (failed || !src || typeof src !== 'string' || !src.startsWith('http')) {
+    return (
+      <div 
+        className={`${className} rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white select-none shadow-sm shrink-0`} 
+        style={{ fontSize: '11px', letterSpacing: '0.5px' }}
+      >
+        {initials}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={name}
+      className={`${className} rounded-full object-cover shrink-0`}
+      onError={() => setFailed(true)}
+    />
+  );
+};

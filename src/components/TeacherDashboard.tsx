@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, TaskItem, StudentSubmission, AccessCode, SavedWord } from '../types';
 import abbaLogo from '../assets/logo abba.svg';
 import { supabase, logUserAction } from '../supabaseClient';
+import { SafeAvatar } from './CustomIcons';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 
 const detectGenderFromName = (fullName: string): 'F' | 'M' => {

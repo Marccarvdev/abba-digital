@@ -5,6 +5,7 @@ import abbaLogo from '../assets/logo abba.svg';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 import Loader from './Loader';
 import { supabase, logUserAction } from '../supabaseClient';
+import { SafeAvatar } from './CustomIcons';
 
 const parseTeacherNoteAndFiles = (rawNote: string) => {
   if (!rawNote) return { note: '', files: [] };
@@ -1397,10 +1398,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 {/* User info details */}
                 <div className="p-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                   <div className="relative shrink-0">
-                    <img
-                      alt="Avatar"
-                      className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20"
-                      src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                    <SafeAvatar
+                      name={user.name}
+                      className="w-14 h-14 border-2 border-indigo-500/20"
+                      src={user.img}
                     />
                     <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                       <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1671,10 +1672,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 className="w-10 h-10 rounded-full overflow-hidden border border-gray-200 hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
                 title="Perfil"
               >
-                <img
-                  alt={`${user.name} Avatar`}
-                  className="w-full h-full object-cover"
-                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                <SafeAvatar
+                  name={user.name}
+                  className="w-full h-full"
+                  src={user.img}
                 />
               </button>
             </div>
@@ -1728,10 +1729,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 className="w-10 h-10 rounded-full overflow-hidden border-2 border-transparent hover:border-indigo-500 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent outline-none ring-0 focus:outline-none flex items-center justify-center"
                 title="Perfil"
               >
-                <img
-                  alt={`${user.name} Avatar`}
-                  className="w-full h-full object-cover"
-                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                <SafeAvatar
+                  name={user.name}
+                  className="w-full h-full"
+                  src={user.img}
                 />
               </button>
 
@@ -1917,10 +1918,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       {/* User info details */}
                       <div className="py-3 px-5 flex gap-4 items-center border-b border-slate-100 bg-slate-50/30 select-none">
                         <div className="relative shrink-0">
-                          <img
-                            alt="Avatar"
-                            className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20"
-                            src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                          <SafeAvatar
+                            name={user.name}
+                            className="w-12 h-12 border-2 border-indigo-500/20"
+                            src={user.img}
                           />
                           <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                             <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
