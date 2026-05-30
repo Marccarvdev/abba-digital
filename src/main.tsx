@@ -24,10 +24,22 @@ if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then((registration) => {
           console.log('Service Worker registered successfully with scope:', registration.scope);
+          // Check for service worker updates immediately
+          registration.update();
         })
         .catch((error) => {
           console.error('Service Worker registration failed:', error);
         });
+
+      // Sincronização e recarregamento automático no cliente quando a PWA atualiza
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          console.log('Novo Service Worker detectado. Recarregando a página para aplicar atualizações...');
+          window.location.reload();
+        }
+      });
     }
   });
 }
