@@ -257,7 +257,7 @@ export default function App() {
   const [isSavingActivity, setIsSavingActivity] = useState(false);
   const [savingProgressText, setSavingProgressText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
-  const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[] } | null>(null);
+  const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[]; code?: string } | null>(null);
 
   // Spelled words list completed by student
   const [completedSpelledWords, setCompletedSpelledWords] = useState<SavedWord[]>(() => {
@@ -483,7 +483,7 @@ export default function App() {
     }, 1600);
     
     setTimeout(() => {
-      setSavingProgressText("Gerando relatório PDF e fechando atividade...");
+      setSavingProgressText("Gerando confirmação da atividade e fechando...");
     }, 2400);
 
     setTimeout(async () => {
@@ -546,7 +546,8 @@ export default function App() {
 
       setLastSavedTask({
         title: taskTitle,
-        words: newWords
+        words: newWords,
+        code: newSentItem.id
       });
 
       setIsSavingActivity(false);
@@ -557,147 +558,60 @@ export default function App() {
     }, 3200);
   };
 
-  const handleDownloadTaskPdf = () => {
+  const handleDownloadTaskCode = () => {
     if (!lastSavedTask) return;
     
     try {
-      const encoder = new TextEncoder();
-      const objects: Uint8Array[] = [];
-
-      const escapePdfText = (text: string) => {
-        if (!text) return "";
-        return text
-          .replace(/\\/g, "\\\\")
-          .replace(/\(/g, "\\(")
-          .replace(/\)/g, "\\)")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "");
-      };
-
-      objects.push(encoder.encode("<< /Type /Catalog /Pages 2 0 R >>"));
-      objects.push(encoder.encode("<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>"));
-      objects.push(encoder.encode("<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 595.27 841.89 ] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"));
-
       const dateStr = new Date().toLocaleDateString('pt-BR');
       const studentName = user?.name || "Estudante";
       const taskTitle = lastSavedTask.title;
       const completedWords = lastSavedTask.words;
+      const submissionCode = lastSavedTask.code || `SUB-${Date.now()}`;
 
-      const streamLines = [
-        "BT",
-        "/F1 20 Tf",
-        "50 780 Td",
-        "(ABBA DIGITAL - Relatorio de Atividades) Tj",
-        "0 -40 Td",
-        "/F1 13 Tf",
-        `(${escapePdfText("Tarefa: " + taskTitle)}) Tj`,
-        "0 -22 Td",
-        "/F2 11 Tf",
-        `(${escapePdfText("Estudante: " + studentName)}) Tj`,
-        "0 -18 Td",
-        `(${escapePdfText("Data de Conclusao: " + dateStr)}) Tj`,
-        "0 -18 Td",
-        `(${escapePdfText("Status da Atividade: CONCLUIDA E SALVA")}) Tj`,
-        "0 -40 Td",
-        "/F1 13 Tf",
-        "(Palavras Soletradas no Abaco Digital:) Tj",
-        "0 -12 Td"
-      ];
-
+      let spelledWordsText = "";
       if (completedWords.length === 0) {
-        streamLines.push(
-          "0 -20 Td",
-          "/F2 11 Tf",
-          "(Nenhuma palavra gravada ainda no abaco.) Tj"
-        );
+        spelledWordsText = "Nenhuma palavra gravada ainda no ábaco.";
       } else {
         completedWords.forEach((wordObj, i) => {
-          let langName = "Portugues";
-          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Ingles";
-          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemao";
+          let langName = "Português";
+          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Inglês";
+          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemão";
           else if (wordObj.themeColor === 'green' || wordObj.themeColor === '#10b981') langName = "Italiano";
 
-          const textLine = `${i + 1}. ${wordObj.word} (${langName})`;
-          streamLines.push(
-            "0 -20 Td",
-            "/F2 11 Tf",
-            `(${escapePdfText(textLine)}) Tj`
-          );
+          spelledWordsText += `${i + 1}. ${wordObj.word} (${langName})\n`;
         });
       }
 
-      streamLines.push(
-        "0 -50 Td",
-        "/F1 9 Tf",
-        "(Relatorio gerado em tempo real pelo Abaco Digital de Alfabetizacao.) Tj",
-        "0 -14 Td",
-        "(Acesse: abba-digital.vercel.app | Codigo de Autenticidade: ABBA-2026) Tj",
-        "ET"
-      );
+      const textContent = `==================================================
+        ABBA DIGITAL - CONFIRMAÇÃO DE ATIVIDADE
+==================================================
 
-      const streamContent = encoder.encode(streamLines.join("\n"));
+Estudante: ${studentName}
+Tarefa: ${taskTitle}
+Data de Conclusão: ${dateStr}
 
-      const headerStr = `<< /Length ${streamContent.length} >>\nstream\n`;
-      const footerStr = `\nendstream`;
-      const headerBin = encoder.encode(headerStr);
-      const footerBin = encoder.encode(footerStr);
+--------------------------------------------------
+CÓDIGO DE CONFIRMAÇÃO DA ATIVIDADE:
+👉 ${submissionCode}
+--------------------------------------------------
 
-      const contentStreamObj = new Uint8Array(headerBin.length + streamContent.length + footerBin.length);
-      contentStreamObj.set(headerBin, 0);
-      contentStreamObj.set(streamContent, headerBin.length);
-      contentStreamObj.set(footerBin, headerBin.length + streamContent.length);
+Palavras Soletradas no Ábaco Digital:
+${spelledWordsText}
+==================================================
+Relatório gerado em tempo real pelo Ábaco Digital.
+Acesse: abba-digital.vercel.app | Suporte Pedagógico
+==================================================`;
 
-      objects.push(contentStreamObj);
-      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"));
-      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"));
-
-      const chunks: Uint8Array[] = [];
-      chunks.push(encoder.encode("%PDF-1.4\n"));
-
-      const offsets: number[] = [];
-      let currentOffset = chunks[0].length;
-
-      for (let i = 0; i < objects.length; i++) {
-        offsets.push(currentOffset);
-        const objHeader = encoder.encode(`${i + 1} 0 obj\n`);
-        const objFooter = encoder.encode("\nendobj\n");
-
-        chunks.push(objHeader);
-        chunks.push(objects[i]);
-        chunks.push(objFooter);
-
-        currentOffset += objHeader.length + objects[i].length + objFooter.length;
-      }
-
-      const xrefOffset = currentOffset;
-
-      chunks.push(encoder.encode("xref\n"));
-      chunks.push(encoder.encode(`0 ${objects.length + 1}\n`));
-      chunks.push(encoder.encode("0000000000 65535 f\r\n"));
-
-      for (let i = 0; i < offsets.length; i++) {
-        const paddedOffset = String(offsets[i]).padStart(10, '0');
-        chunks.push(encoder.encode(`${paddedOffset} 00000 n\r\n`));
-      }
-
-      chunks.push(encoder.encode("trailer\n"));
-      chunks.push(encoder.encode(`<< /Size ${objects.length + 1} /Root 1 0 R >>\n`));
-      chunks.push(encoder.encode("startxref\n"));
-      chunks.push(encoder.encode(`${xrefOffset}\n`));
-      chunks.push(encoder.encode("%%EOF\n"));
-
-      const blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `relatorio-tarefa-${escapePdfText(taskTitle).toLowerCase().replace(/\s+/g, '-')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const element = document.createElement("a");
+      const file = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      element.href = URL.createObjectURL(file);
+      element.download = `confirmacao-${taskTitle.toLowerCase().replace(/\s+/g, '-')}-${studentName.toLowerCase().replace(/\s+/g, '-')}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+      console.error("Erro ao gerar arquivo de confirmação:", error);
+      alert("Houve um erro ao gerar o arquivo de confirmação. Tente novamente.");
     }
   };
 
@@ -4741,11 +4655,11 @@ export default function App() {
               {/* Footer Actions */}
               <div className="p-6 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
                 <button
-                  onClick={handleDownloadTaskPdf}
-                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-sm rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
+                  onClick={handleDownloadTaskCode}
+                  className="flex-1 inline-flex items-center justify-center gap-2 py-3 bg-[#0052cc] hover:bg-[#0043a4] text-white font-bold text-sm rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
                 >
-                  <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
-                  Baixar Relatório em PDF
+                  <span className="material-symbols-outlined text-[20px]">download</span>
+                  Baixar Confirmação (.txt)
                 </button>
                 
                 <button

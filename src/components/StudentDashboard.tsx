@@ -103,13 +103,13 @@ const detectTaskFromFilename = (fileName: string) => {
     return {
       taskId: 'cores-animais',
       taskTitle: 'Vocabulário de Cores e Animais',
-      description: 'Vocabulário de Cores e Animais - Anexo de Apoio em PDF.'
+      description: 'Vocabulário de Cores e Animais - Anexo de Apoio Visual.'
     };
   }
   return {
     taskId: 'numerais',
     taskTitle: 'Exercício de Numerais Multilingue',
-    description: 'Exercício de Numerais Multilingue - Anexo de Apoio em PDF.'
+    description: 'Exercício de Numerais Multilingue - Anexo de Apoio Visual.'
   };
 };
 
@@ -129,7 +129,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProcessingQueue, setShowProcessingQueue] = useState(false);
-  const [processingType, setProcessingType] = useState<'pdf' | 'link' | 'code' | null>(null);
+  const [processingType, setProcessingType] = useState<'link' | 'code' | null>(null);
 
   const [showSpellingLoader, setShowSpellingLoader] = useState(false);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
@@ -829,62 +829,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     localStorage.setItem('abba_student_view', studentView);
   }, [studentView]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const file = e.target.files[0];
-      const allowedExtensions = ['.pdf'];
-      const fileName = file.name.toLowerCase();
-      const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
 
-      if (!isAllowed) {
-        alert("Apenas arquivos em formato PDF são aceitos!");
-        return;
-      }
-
-      const maxSize = 5 * 1024 * 1024; // 5MB
-      if (file.size > maxSize) {
-        alert('O tamanho do arquivo excede o limite máximo de 5MB!');
-        return;
-      }
-
-      // Check student name match (Security validation)
-      if (user?.name && !isNameInFilename(file.name, user.name)) {
-        alert(`Erro de Upload: Este arquivo PDF não pertence a você! O nome do arquivo ("${file.name}") deve conter o seu nome (${user.name}) para ser validado.`);
-        return;
-      }
-
-      // Automatically map task and unlock
-      const taskInfo = detectTaskFromFilename(file.name);
-      const newLinkItem: ValidatedTaskLink = {
-        id: `PDF-${Date.now()}`,
-        studentName: user.name,
-        taskId: taskInfo.taskId,
-        taskTitle: taskInfo.taskTitle,
-        createdAt: new Date().toISOString(),
-        link: `Arquivo PDF: ${file.name}`
-      };
-      
-      setAcceptedTaskLinks(prev => {
-        if (prev.some(l => l.taskId === taskInfo.taskId)) return prev;
-        return [newLinkItem, ...prev];
-      });
-
-      // Save in unsynced queue for background synchronization
-      const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_links') || '[]');
-      localStorage.setItem('abba_unsynced_student_links', JSON.stringify([newLinkItem, ...unsynced]));
-      syncStudentLinks();
-
-      setActiveProcessingTask({
-        title: taskInfo.taskTitle,
-        description: taskInfo.description
-      });
-
-      const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-      setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
-      setProcessingType('pdf');
-      setShowProcessingQueue(true);
-    }
-  };
 
   // Check if a specific target word is completed (exact match)
   const isWordCompleted = (targetWord: string) => {
@@ -1016,146 +961,56 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     registerSentActivity(taskTitle);
   };
 
-  const handleDownloadPdf = () => {
+  const handleDownloadCode = () => {
     try {
-      const encoder = new TextEncoder();
-      const objects: Uint8Array[] = [];
-
-      const escapePdfText = (text: string) => {
-        if (!text) return "";
-        return text
-          .replace(/\\/g, "\\\\")
-          .replace(/\(/g, "\\(")
-          .replace(/\)/g, "\\)")
-          .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "");
-      };
-
-      objects.push(encoder.encode("<< /Type /Catalog /Pages 2 0 R >>"));
-      objects.push(encoder.encode("<< /Type /Pages /Kids [ 3 0 R ] /Count 1 >>"));
-      objects.push(encoder.encode("<< /Type /Page /Parent 2 0 R /MediaBox [ 0 0 595.27 841.89 ] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>"));
-
       const dateStr = new Date().toLocaleDateString('pt-BR');
       const progressText = `${completedCount} de ${NUMERAL_ITEMS.length} (${progressPercent}%)`;
       const studentName = user.name || "Estudante";
+      const studentCode = user.codeSession?.code || "CÓDIGO-OFFLINE";
 
-      const streamLines = [
-        "BT",
-        "/F1 20 Tf",
-        "50 780 Td",
-        "(ABBA DIGITAL - Relatorio de Atividades) Tj",
-        "0 -40 Td",
-        "/F1 13 Tf",
-        `(${escapePdfText("Estudante: " + studentName)}) Tj`,
-        "0 -22 Td",
-        "/F2 11 Tf",
-        `(${escapePdfText("Progresso Geral: " + progressText)}) Tj`,
-        "0 -18 Td",
-        `(${escapePdfText("Data de Emissao: " + dateStr)}) Tj`,
-        "0 -18 Td",
-        `(${escapePdfText("Status da Tarefa: Concluida")}) Tj`,
-        "0 -40 Td",
-        "/F1 13 Tf",
-        "(Palavras Registradas no Abaco:) Tj",
-        "0 -12 Td"
-      ];
-
+      let spelledWordsText = "";
       if (completedSpelledWords.length === 0) {
-        streamLines.push(
-          "0 -20 Td",
-          "/F2 11 Tf",
-          "(Nenhuma palavra gravada ainda no abaco.) Tj"
-        );
+        spelledWordsText = "Nenhuma palavra gravada ainda no ábaco.";
       } else {
         completedSpelledWords.forEach((wordObj, i) => {
-          let langName = "Portugues";
-          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Ingles";
-          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemao";
+          let langName = "Português";
+          if (wordObj.themeColor === 'blue' || wordObj.themeColor === '#0052cc') langName = "Inglês";
+          else if (wordObj.themeColor === 'red' || wordObj.themeColor === '#ef4444') langName = "Alemão";
           else if (wordObj.themeColor === 'green' || wordObj.themeColor === '#10b981') langName = "Italiano";
 
-          const textLine = `${i + 1}. ${wordObj.word} (${langName})`;
-          streamLines.push(
-            "0 -20 Td",
-            "/F2 11 Tf",
-            `(${escapePdfText(textLine)}) Tj`
-          );
+          spelledWordsText += `${i + 1}. ${wordObj.word} (${langName})\n`;
         });
       }
 
-      streamLines.push(
-        "0 -50 Td",
-        "/F1 9 Tf",
-        "(Relatorio gerado em tempo real pelo Abaco Digital de Alfabetizacao.) Tj",
-        "0 -14 Td",
-        "(Acesse: abba-digital.vercel.app | Codigo de Autenticidade: ABBA-2026) Tj",
-        "ET"
-      );
+      const textContent = `==================================================
+        ABBA DIGITAL - RELATÓRIO DE PROGRESSO
+==================================================
 
-      const streamContent = encoder.encode(streamLines.join("\n"));
+Estudante: ${studentName}
+Código de Acesso do Estudante: ${studentCode}
+Progresso Geral: ${progressText}
+Data de Emissão: ${dateStr}
+Status: Em Andamento / Concluído
 
-      const headerStr = `<< /Length ${streamContent.length} >>\nstream\n`;
-      const footerStr = `\nendstream`;
-      const headerBin = encoder.encode(headerStr);
-      const footerBin = encoder.encode(footerStr);
+Palavras Soletradas no Ábaco Digital:
+${spelledWordsText}
+==================================================
+Relatório gerado em tempo real pelo Ábaco Digital.
+Acesse: abba-digital.vercel.app | Suporte Pedagógico
+==================================================`;
 
-      const contentStreamObj = new Uint8Array(headerBin.length + streamContent.length + footerBin.length);
-      contentStreamObj.set(headerBin, 0);
-      contentStreamObj.set(streamContent, headerBin.length);
-      contentStreamObj.set(footerBin, headerBin.length + streamContent.length);
+      const element = document.createElement("a");
+      const file = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      element.href = URL.createObjectURL(file);
+      element.download = `progresso-abba-${studentName.toLowerCase().replace(/\s+/g, '-')}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
 
-      objects.push(contentStreamObj);
-      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>"));
-      objects.push(encoder.encode("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"));
-
-      const chunks: Uint8Array[] = [];
-      chunks.push(encoder.encode("%PDF-1.4\n"));
-
-      const offsets: number[] = [];
-      let currentOffset = chunks[0].length;
-
-      for (let i = 0; i < objects.length; i++) {
-        offsets.push(currentOffset);
-        const objHeader = encoder.encode(`${i + 1} 0 obj\n`);
-        const objFooter = encoder.encode("\nendobj\n");
-
-        chunks.push(objHeader);
-        chunks.push(objects[i]);
-        chunks.push(objFooter);
-
-        currentOffset += objHeader.length + objects[i].length + objFooter.length;
-      }
-
-      const xrefOffset = currentOffset;
-
-      chunks.push(encoder.encode("xref\n"));
-      chunks.push(encoder.encode(`0 ${objects.length + 1}\n`));
-      chunks.push(encoder.encode("0000000000 65535 f\r\n"));
-
-      for (let i = 0; i < offsets.length; i++) {
-        const paddedOffset = String(offsets[i]).padStart(10, '0');
-        chunks.push(encoder.encode(`${paddedOffset} 00000 n\r\n`));
-      }
-
-      chunks.push(encoder.encode("trailer\n"));
-      chunks.push(encoder.encode(`<< /Size ${objects.length + 1} /Root 1 0 R >>\n`));
-      chunks.push(encoder.encode("startxref\n"));
-      chunks.push(encoder.encode(`${xrefOffset}\n`));
-      chunks.push(encoder.encode("%%EOF\n"));
-
-      const blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `relatorio-abba-${studentName.toLowerCase().replace(/\s+/g, '-')}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      registerSentActivity('Relatório de Atividades em PDF');
+      registerSentActivity('Ficha de Progresso Alfanumérica');
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+      console.error("Erro ao gerar arquivo de progresso:", error);
+      alert("Houve um erro ao gerar o arquivo de progresso. Tente novamente.");
     }
   };
 
@@ -1961,203 +1816,144 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
 
               {/* Upload / Submission Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs mb-lg">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs mb-lg max-w-2xl mx-auto w-full">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="material-symbols-outlined text-primary text-[22px]">cloud_upload</span>
-                  <h3 className="text-lg font-bold text-slate-800">Upload da Atividade</h3>
+                  <span className="material-symbols-outlined text-primary text-[22px]">key</span>
+                  <h3 className="text-lg font-bold text-slate-800">Acesso via Código Alfanumérico</h3>
                 </div>
-                <p className="text-sm text-slate-500 mb-5">Faça o upload da sua atividade através de um arquivo PDF ou insira o código de acesso enviado pelo professor</p>
+                <p className="text-sm text-slate-500 mb-5">
+                  Insira o código de acesso alfanumérico enviado pelo seu professor para carregar os dados da tarefa ativa.
+                </p>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {/* File Upload */}
-                  <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4 bg-white shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-slate-400 text-[20px]">upload_file</span>
-                      <p className="text-sm font-semibold text-slate-700">Fazer o upload por arquivo</p>
-                    </div>
-
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                      onDragLeave={() => setDragActive(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragActive(false);
-                        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                          const file = e.dataTransfer.files[0];
-                          const allowedExtensions = ['.pdf'];
-                          const fileName = file.name.toLowerCase();
-                          const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
-
-                          if (!isAllowed) {
-                            alert("Apenas arquivos em formato PDF são aceitos!");
-                            return;
-                          }
-
-                          const maxSize = 5 * 1024 * 1024; // 5MB
-                          if (file.size > maxSize) {
-                            alert('O tamanho do arquivo excede o limite máximo de 5MB!');
-                            return;
-                          }
-
-                          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                          setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
-                          setProcessingType('pdf');
-                          setShowProcessingQueue(true);
-                        }
-                      }}
-                      className={`relative overflow-hidden rounded-2xl p-6 flex flex-col items-center justify-center gap-4 transition-all cursor-pointer flex-grow min-h-[160px] border border-emerald-500/20 hover:border-emerald-500/40 hover:shadow-md hover:shadow-emerald-50/50 group ${dragActive ? 'ring-2 ring-emerald-500 ring-offset-2' : ''}`}
-                      onClick={() => fileInputRef.current?.click()}
-                      style={{ backgroundColor: '#f0fdf4' }}
-                    >
-                      <input
-                        ref={fileInputRef}
-                        type="file"
-                        className="hidden"
-                        onChange={handleFileChange}
-                        accept=".pdf"
-                      />
-                      <div className="w-14 h-14 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-2xl flex items-center justify-center text-white shadow-md shadow-emerald-500/20 group-hover:scale-110 group-hover:rotate-3 transition-all duration-300">
-                        <span className="material-symbols-outlined text-white text-[28px] font-variation-settings-fill">upload_file</span>
-                      </div>
-                      <div className="text-center space-y-1">
-                        <p className="text-sm font-bold text-slate-800 tracking-tight">Arraste seu arquivo aqui</p>
-                        <p className="text-xs text-slate-500">ou <span className="text-emerald-600 font-bold group-hover:underline">clique para selecionar</span></p>
-                      </div>
-                      <span className="bg-emerald-500/10 text-emerald-700 text-[9px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                        PDF — MÁX. 5 MB
-                      </span>
-                    </div>
+                {/* Smart Teacher Code Input */}
+                <div className="border border-slate-100 rounded-xl p-6 flex flex-col gap-4 bg-slate-50/50">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-slate-400 text-[20px]">vpn_key</span>
+                    <p className="text-sm font-semibold text-slate-700">Código de acesso de 6 dígitos</p>
                   </div>
 
-                  {/* Smart Teacher Code Input */}
-                  <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4 bg-white shadow-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-slate-400 text-[20px]">key</span>
-                      <p className="text-sm font-semibold text-slate-700">Inserir código de acesso</p>
-                    </div>
-
-                    <div className="flex flex-col justify-center flex-grow gap-4">
-                      {/* Input field */}
-                      <div className="relative">
-                        <input
-                          type="text"
-                          id="task-link-input"
-                          value={uploadLink}
-                          onChange={(e) => {
-                            setUploadLink(e.target.value);
-                            setLinkError(null);
-                            setValidatedLink(null);
-                          }}
-                          onBlur={(e) => validateAndPreviewLink(e.target.value)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
-                          placeholder="Cole o código de acesso de 6 dígitos..."
-                          className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${linkError
-                            ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
-                            : validatedLink
-                              ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
-                              : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
-                            }`}
-                        />
-                        {uploadLink && (
-                          <button
-                            type="button"
-                            onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Validation error */}
-                      <AnimatePresence>
-                        {linkError && (
-                          <motion.div
-                            key="link-error"
-                            initial={{ opacity: 0, y: -6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
-                          >
-                            <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
-                            <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Validated link preview */}
-                      <AnimatePresence>
-                        {validatedLink && (
-                          <motion.div
-                            key="link-preview"
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                            style={{ overflow: 'hidden' }}
-                          >
-                            <div
-                              className="rounded-xl p-4 flex flex-col gap-3"
-                              style={{
-                                background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
-                                border: '1px solid rgba(99,102,241,0.2)'
-                              }}
-                            >
-                              {/* Tag */}
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
-                                  style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
-                                >
-                                  ✓ Código verificado
-                                </span>
-                              </div>
-
-                              {/* Task info */}
-                              <div className="flex items-start gap-3">
-                                <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                                  <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
-                                  <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
-                                  <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
-                                </div>
-                              </div>
-
-                              {/* Code preview text */}
-                              <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
-                                <p className="text-[11px] text-slate-400 font-medium truncate">Código de Acesso: {validatedLink.id}</p>
-                              </div>
-
-                              {/* Fazer tarefa button */}
-                              <button
-                                type="button"
-                                onClick={handleAcceptTaskLink}
-                                className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
-                                style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
-                              >
-                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
-                                Fazer tarefa
-                              </button>
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-
-                      {/* Validate button when no preview yet */}
-                      {!validatedLink && !linkError && (
+                  <div className="flex flex-col justify-center flex-grow gap-4">
+                    {/* Input field */}
+                    <div className="relative">
+                      <input
+                        type="text"
+                        id="task-link-input"
+                        value={uploadLink}
+                        onChange={(e) => {
+                          setUploadLink(e.target.value);
+                          setLinkError(null);
+                          setValidatedLink(null);
+                        }}
+                        onBlur={(e) => validateAndPreviewLink(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
+                        placeholder="Cole o código de acesso de 6 dígitos..."
+                        className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-white ${linkError
+                          ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
+                          : validatedLink
+                            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
+                            : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
+                          }`}
+                      />
+                      {uploadLink && (
                         <button
                           type="button"
-                          onClick={() => validateAndPreviewLink(uploadLink)}
-                          disabled={!uploadLink.trim()}
-                          className="w-full py-2.5 rounded-lg bg-primary disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold text-sm transition-all hover:bg-primary/95 disabled:hover:bg-slate-100 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
+                          onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
                         >
-                          Verificar Código
+                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
                         </button>
                       )}
                     </div>
+
+                    {/* Validation error */}
+                    <AnimatePresence>
+                      {linkError && (
+                        <motion.div
+                          key="link-error"
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
+                        >
+                          <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
+                          <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Validated link preview */}
+                    <AnimatePresence>
+                      {validatedLink && (
+                        <motion.div
+                          key="link-preview"
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                          style={{ overflow: 'hidden' }}
+                        >
+                          <div
+                            className="rounded-xl p-4 flex flex-col gap-3"
+                            style={{
+                              background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
+                              border: '1px solid rgba(99,102,241,0.2)'
+                            }}
+                          >
+                            {/* Tag */}
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
+                                style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                              >
+                                ✓ Código verificado
+                              </span>
+                            </div>
+
+                            {/* Task info */}
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
+                                <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
+                              </div>
+                              <div>
+                                <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
+                                <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
+                                <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
+                              </div>
+                            </div>
+
+                            {/* Code preview text */}
+                            <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
+                              <p className="text-[11px] text-slate-400 font-medium truncate">Código de Acesso: {validatedLink.id}</p>
+                            </div>
+
+                            {/* Fazer tarefa button */}
+                            <button
+                              type="button"
+                              onClick={handleAcceptTaskLink}
+                              className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
+                              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
+                              Fazer tarefa
+                            </button>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    {/* Validate button when no preview yet */}
+                    {!validatedLink && !linkError && (
+                      <button
+                        type="button"
+                        onClick={() => validateAndPreviewLink(uploadLink)}
+                        disabled={!uploadLink.trim()}
+                        className="w-full py-2.5 rounded-lg bg-[#0052cc] hover:bg-[#0043a4] disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold text-sm transition-all disabled:hover:bg-slate-100 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
+                      >
+                        Verificar Código
+                      </button>
+                    )}
                   </div>
+                </div>
 
                   {/* Accepted Task Links history */}
                   <AnimatePresence>
@@ -2221,7 +2017,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </div>
 
                 {/* Uploaded Files List */}
                 {taskFiles.length > 0 && (
@@ -2502,7 +2297,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             </div>
                           )}
 
-                          {/* Support Files Area (PDF or Images from Teacher) */}
+                          {/* Support Files Area (Images from Teacher) */}
                           {task.supportFiles && task.supportFiles.length > 0 && (
                             <div className="space-y-1.5 mt-1 bg-slate-50 border border-slate-100 rounded-xl p-2.5">
                               <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
@@ -2511,7 +2306,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                               </span>
                               <div className="flex flex-col gap-1 max-h-[85px] overflow-y-auto pr-1">
                                 {task.supportFiles.map((file: any, idx: number) => {
-                                  const isPdf = file.name.toLowerCase().endsWith('.pdf');
                                   return (
                                     <a
                                       key={idx}
@@ -2522,8 +2316,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                       title={`Baixar ${file.name} (${file.size})`}
                                     >
                                       <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                        <span className={`material-symbols-outlined text-[15px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
-                                          {isPdf ? 'picture_as_pdf' : 'image'}
+                                        <span className="material-symbols-outlined text-[15px] shrink-0 text-blue-500">
+                                          image
                                         </span>
                                         <span className="text-[11px] text-slate-700 font-semibold truncate group-hover:text-primary transition-colors">
                                           {file.name}
@@ -2666,158 +2460,48 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </button>
                   </div>
 
-                  {/* Upload Area */}
-                  <div className="bg-white rounded-3xl border border-slate-100 p-lg shadow-xs">
-                    <input
-                      type="file"
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="hidden"
-                      accept=".pdf"
-                    />
-                    <div
-                      onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
-                      onDragLeave={() => setDragActive(false)}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        setDragActive(false);
-                        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-                          const file = e.dataTransfer.files[0];
-                          const allowedExtensions = ['.pdf'];
-                          const fileName = file.name.toLowerCase();
-                          const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
-
-                          if (!isAllowed) {
-                            alert("Apenas arquivos em formato PDF são aceitos!");
-                            return;
-                          }
-
-                          const maxSize = 5 * 1024 * 1024; // 5MB
-                          if (file.size > maxSize) {
-                            alert('O tamanho do arquivo excede o limite máximo de 5MB!');
-                            return;
-                          }
-
-                          const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
-                          setTaskFiles([...taskFiles, { name: file.name, size: `${sizeMB} MB` }]);
-                          setProcessingType('pdf');
-                          setShowProcessingQueue(true);
-                        }
-                      }}
-                      onClick={() => {
-                        if (fileInputRef.current) {
-                          fileInputRef.current.click();
-                        }
-                      }}
-                      className={`w-full relative rounded-3xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/8 to-emerald-500/3 p-5 sm:p-6 text-left overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 cursor-pointer hover:shadow-md hover:border-emerald-500/40 transition-all duration-200 group ${
-                        dragActive ? 'ring-2 ring-emerald-500 ring-offset-2' : ''
-                      }`}
-                      style={{ backgroundColor: '#f0fdf4' }}
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-16 h-16 bg-emerald-50 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/10 group-hover:scale-105 transition-transform duration-300 relative shadow-inner">
-                          <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            {/* Left PDF Icon */}
-                            <g transform="translate(4, 8)">
-                              {/* Document Base */}
-                              <rect x="0" y="0" width="16" height="22" rx="3" fill="#FFF5F5" stroke="#F87171" strokeWidth="1.5"/>
-                              {/* Lines inside */}
-                              <line x1="4" y1="6" x2="12" y2="6" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
-                              <line x1="4" y1="10" x2="10" y2="10" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
-                              {/* PDF text label badge inside */}
-                              <rect x="3" y="14" width="10" height="5" rx="1" fill="#EF4444"/>
-                              <path d="M5 17.5H6.5M8 17.5H9.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
-                            </g>
-                            
-                            {/* Right PDF Icon */}
-                            <g transform="translate(28, 14)">
-                              {/* Document Base */}
-                              <rect x="0" y="0" width="16" height="22" rx="3" fill="#FFF5F5" stroke="#F87171" strokeWidth="1.5"/>
-                              {/* Lines inside */}
-                              <line x1="4" y1="6" x2="12" y2="6" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
-                              <line x1="4" y1="10" x2="10" y2="10" stroke="#F87171" strokeWidth="1.5" strokeLinecap="round"/>
-                              {/* PDF text label badge inside */}
-                              <rect x="3" y="14" width="10" height="5" rx="1" fill="#EF4444"/>
-                              <path d="M5 17.5H6.5M8 17.5H9.5" stroke="white" strokeWidth="1" strokeLinecap="round"/>
-                            </g>
-                            
-                            {/* Link in the middle connecting them */}
-                            <g transform="translate(17, 18)">
-                              {/* White background pill for the link */}
-                              <rect x="0" y="0" width="14" height="10" rx="5" fill="white" stroke="#9CA3AF" strokeWidth="1.5"/>
-                              {/* Link chain look */}
-                              <path d="M4 5H10" stroke="#4B5563" strokeWidth="2" strokeLinecap="round"/>
-                            </g>
-                          </svg>
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="bg-emerald-600 text-white text-[10px] font-extrabold px-2.5 py-0.5 rounded-full uppercase tracking-wider shadow-sm shadow-emerald-600/10">
-                              Arquivos da Tarefa
-                            </span>
-                          </div>
-                          <h3 className="font-display font-extrabold text-lg sm:text-xl text-slate-900 tracking-tight leading-tight mb-0.5">
-                            Envie sua tarefa
-                          </h3>
-                          <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                            Envie sua tarefa para o Teatcher e anexe seus arquivos em formato PDF.
-                          </p>
-                        </div>
+                  {/* Informational Code Card (Replaces Upload Area) */}
+                  <div className="bg-white rounded-3xl border border-slate-100 p-lg shadow-xs flex flex-col gap-5 text-left">
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center shrink-0 border border-emerald-500/10">
+                        <span className="material-symbols-outlined text-emerald-600 text-[24px]">vpn_key</span>
                       </div>
-
-                      <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
-                        <button
-                          type="button"
-                          className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
-                        >
-                          <span className="material-symbols-outlined text-[18px]">upload_file</span>
-                          <span>Selecionar PDF</span>
-                        </button>
+                      <div>
+                        <h4 className="font-display font-extrabold text-base text-slate-800 tracking-tight">Sincronização Ativa via Código</h4>
+                        <p className="text-xs text-slate-500 mt-0.5">Todo o seu progresso é salvo e enviado automaticamente</p>
                       </div>
                     </div>
 
-                    {/* Placeholder for uploaded files */}
-                    <div className="mt-lg space-y-sm">
-                      {taskFiles.length === 0 ? (
-                        <p className="text-xs text-slate-400 italic text-center py-2">Nenhum arquivo anexado.</p>
-                      ) : (
-                        taskFiles.map((fileObj, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-sm border border-outline-variant rounded-lg bg-surface flex-wrap sm:flex-nowrap">
-                            <div className="flex items-center gap-sm">
-                              <span className="material-symbols-outlined text-primary">article</span>
-                              <div>
-                                <p className="font-label-md text-label-md text-on-surface">{fileObj.name}</p>
-                                <p className="text-[10px] text-on-surface-variant">{fileObj.size}</p>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => setTaskFiles(taskFiles.filter((_, i) => i !== idx))}
-                              className="text-on-surface-variant hover:text-error transition-colors cursor-pointer bg-transparent border-none p-0"
-                            >
-                              <span className="material-symbols-outlined text-[20px]">delete</span>
-                            </button>
-                          </div>
-                        ))
-                      )}
-
+                    <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+                      <div className="space-y-0.5 text-center sm:text-left">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seu Código de Confirmação</span>
+                        <p className="text-lg font-black text-slate-800 font-mono tracking-wider">
+                          {user.codeSession?.code || 'CÓDIGO-OFFLINE'}
+                        </p>
+                      </div>
+                      
                       <button
+                        type="button"
                         onClick={() => {
-                          if (completedCount === 0) {
-                            alert('Atenção: Você ainda não soletrou nenhuma palavra no ábaco. É altamente recomendado soletrar pelo menos alguns numerais antes de enviar a tarefa.');
+                          const activeCode = user.codeSession?.code || '';
+                          if (activeCode) {
+                            navigator.clipboard.writeText(activeCode);
+                            alert('Código de acesso copiado para a área de transferência!');
+                          } else {
+                            alert('Nenhum código ativo detectado.');
                           }
-                          setShowShareModal(true);
                         }}
-                        disabled={taskFiles.length === 0}
-                        className={`w-full mt-lg flex items-center justify-center gap-sm py-md px-lg rounded-lg font-bold font-label-md transition-all shadow-sm border-none ${taskFiles.length === 0
-                          ? 'bg-slate-200 text-slate-400 cursor-not-allowed opacity-70'
-                          : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
-                          }`}
-                        title={taskFiles.length === 0 ? 'Por favor, anexe a tarefa clicando na área de upload acima antes de enviar.' : 'Enviar tarefa'}
+                        className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0052cc] hover:bg-[#0043a4] text-white font-bold rounded-xl shadow-sm text-xs cursor-pointer border-none active:scale-95 transition-all"
                       >
-                        <span className="material-symbols-outlined">send</span>
-                        <span className="">Enviar Tarefa</span>
+                        <span className="material-symbols-outlined text-[16px]">content_copy</span>
+                        Copiar Código
                       </button>
                     </div>
+
+                    <p className="text-xs text-slate-500 leading-relaxed bg-[#f0fdf4]/50 border border-emerald-500/10 rounded-xl p-3.5">
+                      💡 <strong>Como enviar a tarefa?</strong> Ao clicar em <strong>"Ir para a tarefa"</strong> e soletrar as palavras no Ábaco Digital, cada progresso concluído é gravado e enviado imediatamente para o portal do professor sob o seu código alfanumérico ativo. Não é necessário fazer nenhum upload manual de arquivos!
+                    </p>
+                  </div>
 
                     {/* Code Verification Section */}
                     <div className="border-t border-outline-variant/30 pt-lg mt-lg flex flex-col gap-sm">
@@ -2860,7 +2544,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </div>
                     </div>
                   </div>
-                </div>
 
                 {/* Right Column: Metadata */}
                 <div className="lg:col-span-4 space-y-lg">
@@ -3251,11 +2934,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
                 <div className="pt-1">
                   <button
-                    onClick={handleDownloadPdf}
-                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#DC2626] hover:bg-[#B91C1C] text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
+                    onClick={handleDownloadCode}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 bg-[#0052cc] hover:bg-[#0043a4] text-white font-bold text-xs rounded-xl shadow cursor-pointer transition-all active:scale-[0.98] border-none"
                   >
-                    <span className="material-symbols-outlined text-[18px]">picture_as_pdf</span>
-                    Baixar Relatório em PDF
+                    <span className="material-symbols-outlined text-[18px]">download</span>
+                    Baixar Relatório (.txt)
                   </button>
                 </div>
 
@@ -3336,7 +3019,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 animation: spinIcon 1.5s ease-in-out;
               }
 
-              /* --- TIMING CARD 1: PDF/LINK (Janela de tempo: 1.5s a 5.5s) --- */
+              /* --- TIMING CARD 1: LINK (Janela de tempo: 1.5s a 5.5s) --- */
               
               #trigger:checked ~ .card-container #progress1 {
                 animation: fillProgress 4s linear forwards 1.5s;
@@ -3390,48 +3073,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </div>
 
               <div className="px-6 pb-6 bg-[#f8fafc] pt-5 space-y-4">
-                {processingType === 'pdf' && (
-                  <div id="card1" className="bg-white rounded-2xl px-5 pt-5 pb-4 flex flex-col border border-slate-100 shadow-3xs text-left gap-4 relative transition-all duration-300">
-                    <div className="flex items-center justify-between gap-4 h-9 relative">
-                      <div className="flex items-center gap-4">
-                        <div id="icon1" className="text-slate-400 shrink-0">
-                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" /><path d="M14 2v4a2 2 0 0 0 2 2h4" /><path d="M9 15a1 1 0 1 0 2 0 1 1 0 1 0-2 0Z" /></svg>
-                        </div>
-                        <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Processando anexo em formato PDF...</span>
-                      </div>
 
-                      <div className="relative w-28 h-full flex items-center justify-end">
-                        <button
-                          id="btnCancel1"
-                          onClick={() => setShowProcessingQueue(false)}
-                          className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                        <button
-                          id="btnActivity1"
-                          onClick={() => {
-                            setShowProcessingQueue(false);
-                            if (onGoToAbacus) {
-                              const title = activeProcessingTask?.title || 'Exercício de Numerais Multilingue';
-                              const desc = activeProcessingTask?.description || 'Atividade carregada via anexo do aluno.';
-                              onGoToAbacus(title, desc);
-                            }
-                          }}
-                          className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
-                        >
-                          Ver atividade
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="w-full px-1">
-                      <div className="w-full h-[4px] bg-[#ebf2ff] rounded-full relative overflow-hidden">
-                        <div id="progress1" className="absolute left-0 top-0 h-full bg-[#0052cc] w-0 rounded-full"></div>
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {processingType === 'link' && (
                   <div id="card1" className="bg-white rounded-2xl px-5 pt-5 pb-4 flex flex-col border border-slate-100 shadow-3xs text-left gap-4 relative transition-all duration-300">
@@ -4149,18 +3791,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </div>
                 </div>
 
-                {/* Guide 3: PDF */}
-                <div className="p-5 rounded-2xl bg-rose-50/20 border border-rose-100 flex gap-4 items-start">
-                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center shrink-0 border border-rose-100/50">
-                    <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
-                  </div>
-                  <div className="space-y-1">
-                    <h4 className="font-bold text-xs uppercase tracking-wide text-rose-800">Como acessar o PDF?</h4>
-                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                      Na <strong>Área do aluno</strong> vá até o campo <strong>Fazer upload por arquivo</strong>. Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em <strong>ver atividade</strong>.
-                    </p>
-                  </div>
-                </div>
+
 
               </div>
 

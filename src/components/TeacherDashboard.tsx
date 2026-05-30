@@ -893,8 +893,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [copiedStudentItem, setCopiedStudentItem] = useState<{ id: string; type: 'link' | 'code' } | null>(null);
 
   // Track premium copy states for the "Compartilhar atividade" modal
-  const [copiedButtons, setCopiedButtons] = useState<Record<string, Record<'code' | 'link' | 'pdf', boolean>>>({});
-  const [confirmCopyAgain, setConfirmCopyAgain] = useState<{ sid: string; type: 'code' | 'link' | 'pdf' } | null>(null);
+  const [copiedButtons, setCopiedButtons] = useState<Record<string, Record<'code' | 'link' | 'txt', boolean>>>({});
+  const [confirmCopyAgain, setConfirmCopyAgain] = useState<{ sid: string; type: 'code' | 'link' | 'txt' } | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   useEffect(() => {
@@ -980,7 +980,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     return { link: finalLink, code: finalCode };
   };
 
-  const handleShareButtonPress = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'pdf') => {
+  const handleShareButtonPress = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'txt') => {
     const isAlreadyCopied = copiedButtons[studentId]?.[type];
 
     if (isAlreadyCopied) {
@@ -991,31 +991,31 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     executeCopyAction(studentName, studentId, taskTitle, taskId, type);
   };
 
-  const executeCopyAction = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'pdf') => {
+  const executeCopyAction = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'txt') => {
     const info = resolveStudentTaskAccess(studentName, studentId, taskId, taskTitle);
 
     let textToCopy = '';
     let alertMsg = '';
 
     if (type === 'code') {
-      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nUse o seu *código da tarefa*: *${info.code}*\n\n*Como usar o Código?*\nNa *Área do aluno* vá até o campo *Fazer upload por link ou código* e cole seu código no campo abaixo, e clique em *Verificar*, assim que o *Código* for verificado é só clicar em *Acessar matéria* e ir para a atividade.`;
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nUse o seu *código da tarefa*: *${info.code}*\n\n*Como usar o Código?*\nNa *Área do aluno* vá até o campo *Inserir código de acesso* e digite ou cole seu código de 6 dígitos. Após isso, clique em *Verificar* e depois em *Fazer tarefa*.`;
       alertMsg = 'O código foi copiado';
     } else if (type === 'link') {
-      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nClique no *link da tarefa* abaixo para acessar sua tarefa:\n${info.link}\n\n*Como usar o Link?*\nNa *Área do aluno* vá até o campo *Fazer upload por link ou código* e cole seu código no campo abaixo, e clique em *Verificar*, assim que o *Link* for verificado é só clicar em *Acessar matéria* e ir para a atividade.`;
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nClique no *link da tarefa* abaixo para acessar sua tarefa:\n${info.link}\n\n*Como usar o Link?*\nNa *Área do aluno* vá até o campo *Inserir código de acesso* e digite ou cole seu código de 6 dígitos. Após isso, clique em *Verificar* e depois em *Fazer tarefa*.`;
       alertMsg = 'O Link foi copiado';
-    } else if (type === 'pdf') {
-      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nBaixe o *PDF da tarefa* abaixo e faça o upload do arquivo na *Área do aluno*\n\n*Como acessar o PDF?*\nNa *Área do aluno* vá até o campo *Fazer upload por arquivo* Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em *ver atividade*`;
-      alertMsg = 'O PDF foi copiado';
+    } else if (type === 'txt') {
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nSeu *código de acesso* alfanumérico é: *${info.code}*\nSeu *link de acesso direto* é:\n${info.link}\n\n*Como Acessar?*\nNa *Área do aluno* vá até o campo *Inserir código de acesso* e digite ou cole seu código de 6 dígitos. Após isso, clique em *Verificar* e depois em *Fazer tarefa*.`;
+      alertMsg = 'As instruções de acesso foram copiadas e a ficha foi baixada!';
       
-      // Also download actual PDF!
-      handleDownloadStudentTaskPdf(studentName, taskTitle, info.code || '', info.link || '');
+      // Also download actual TXT!
+      handleDownloadStudentTaskCode(studentName, taskTitle, info.code || '', info.link || '');
     }
 
     navigator.clipboard.writeText(textToCopy);
     setCopiedButtons(prev => ({
       ...prev,
       [studentId]: {
-        ...(prev[studentId] || { code: false, link: false, pdf: false }),
+        ...(prev[studentId] || { code: false, link: false, txt: false }),
         [type]: true
       }
     }));
@@ -1048,148 +1048,51 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     });
   };
 
-  const handleDownloadStudentTaskPdf = (studentName: string, taskTitle: string, accessCode: string, accessLink: string) => {
+  const handleDownloadStudentTaskCode = (studentName: string, taskTitle: string, accessCode: string, accessLink: string) => {
     try {
-      // Find the task description/summary
       const foundTask = tasks.find(t => t.title === taskTitle || t.id === taskTitle);
       const taskDescription = foundTask?.description || 'Realize as atividades práticas de soletração no portal Abba Digital.';
       const dateStr = new Date().toLocaleDateString('pt-BR');
 
-      // Create a beautiful off-screen container for the PDF content
-      const container = document.createElement('div');
-      container.style.position = 'absolute';
-      container.style.left = '-9999px';
-      container.style.top = '-9999px';
-      container.style.width = '700px';
-      container.style.background = '#ffffff';
-      
-      // Build the premium HTML structure
-      container.innerHTML = `
-        <div style="font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; padding: 40px; color: #1e293b; background: #ffffff;">
-          <div style="max-width: 670px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 24px; padding: 35px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-            <div style="text-align: center; margin-bottom: 25px;">
-              <img id="pdf-logo-img" style="max-width: 160px; height: auto; display: inline-block;" src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780086579/abba_digital_app_cukxh4.avif" alt="Abba Digital Logo">
-            </div>
-            
-            <div style="border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; text-align: center;">
-              <h1 style="font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 900; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.5px;">Ficha de Acesso da Atividade</h1>
-              <span style="display: inline-block; padding: 5px 12px; background: #f2f3ff; border: 1px solid #d6e3ff; color: #005bb3; border-radius: 99px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Abba Digital</span>
-            </div>
-            
-            <div style="display: grid; grid-template-cols: 1fr 1fr; gap: 15px; margin-bottom: 25px; background: #f8fafc; padding: 16px; border-radius: 16px; border: 1px solid #e2e8f0;">
-              <div style="font-size: 13px;">
-                <div style="font-weight: 700; color: #64748b; margin-bottom: 3px; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">Estudante</div>
-                <div style="font-weight: 800; color: #0f172a;">${studentName}</div>
-              </div>
-              <div style="font-size: 13px;">
-                <div style="font-weight: 700; color: #64748b; margin-bottom: 3px; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">Data de Atribuição</div>
-                <div style="font-weight: 800; color: #0f172a;">${dateStr}</div>
-              </div>
-            </div>
+      const textContent = `==================================================
+              ABBA DIGITAL - FICHA DE ACESSO
+==================================================
 
-            <div style="margin-bottom: 25px;">
-              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Matéria / Tarefa</div>
-              <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-left: 8px;">${taskTitle}</div>
-              <div style="font-size: 12px; line-height: 1.6; color: #334155; padding: 14px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 6px;">
-                ${taskDescription}
-              </div>
-            </div>
+Estudante: ${studentName}
+Tarefa: ${taskTitle}
+Data de Atribuição: ${dateStr}
 
-            <div style="margin-bottom: 25px;">
-              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Credenciais de Acesso</div>
-              <div style="display: grid; grid-template-cols: 1fr; max-width: 320px; margin: 6px auto 0 auto;">
-                <div style="padding: 15px; border-radius: 16px; border: 1px solid #fcd34d; text-align: center; background: #fffdf5;">
-                  <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Código de Acesso</div>
-                  <div style="font-family: 'Outfit', monospace; font-size: 20px; font-weight: 900; color: #b45309; background: #ffffff; padding: 6px 12px; border-radius: 8px; border: 2px dashed #f59e0b; display: inline-block; letter-spacing: 2px;">${accessCode}</div>
-                </div>
-              </div>
-            </div>
+Descrição da Tarefa:
+${taskDescription}
 
-            <div style="margin-bottom: 25px;">
-              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Como acessar e realizar a atividade?</div>
-              <div style="margin-top: 6px;">
-                <div style="padding: 12px 14px; border-radius: 12px; background: #ffffff; border: 1px solid #f1f5f9; margin-bottom: 10px; border-left: 4px solid #f59e0b;">
-                  <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">🔑 Como usar o Código?</div>
-                  <div style="font-size: 11px; line-height: 1.5; color: #475569;">
-                    Na <strong>Área do aluno</strong> vá até o campo <strong>Inserir código de acesso</strong> e cole seu código de 6 dígitos no campo, e clique em <strong>Verificar</strong>. Assim que o código for verificado, é só clicar em <strong>Acessar matéria</strong> para ir para a atividade.
-                  </div>
-                </div>
+--------------------------------------------------
+CÓDIGO DE ACESSO ALFANUMÉRICO:
+👉 ${accessCode}
+--------------------------------------------------
 
-                <div style="padding: 12px 14px; border-radius: 12px; background: #ffffff; border: 1px solid #f1f5f9; margin-bottom: 10px; border-left: 4px solid #f43f5e;">
-                  <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">📄 Como acessar o PDF?</div>
-                  <div style="font-size: 11px; line-height: 1.5; color: #475569;">
-                    Na <strong>Área do aluno</strong> vá até o campo <strong>Fazer upload por arquivo</strong>. Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em <strong>ver atividade</strong>.
-                  </div>
-                </div>
-              </div>
-            </div>
+Link de Acesso Direto:
+🔗 ${accessLink}
 
-            <div style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 500; line-height: 1.4;">
-              Ficha de atividade oficial gerada pelo Painel do Professor do Abba Digital.<br>
-              Acesse: abba-digital.vercel.app | Suporte Offline Completo Garantido
-            </div>
-          </div>
-        </div>
-      `;
+Instruções para o Aluno:
+1. Acesse o portal: abba-digital.vercel.app
+2. Na Área do Aluno, insira seu Código de Acesso Alfanumérico
+   ou clique diretamente no Link de Acesso Direto acima.
 
-      document.body.appendChild(container);
+==================================================
+Ficha de atividade oficial gerada pelo Painel do Professor.
+==================================================`;
 
-      // Define execution function
-      const runGeneration = () => {
-        const opt = {
-          margin:       [10, 10, 10, 10],
-          filename:     `${taskTitle}-${studentName}.pdf`,
-          image:        { type: 'jpeg', quality: 0.98 },
-          html2canvas:  { scale: 2, useCORS: true, logging: false },
-          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
-        };
-
-        // Call html2pdf.js save
-        const h2p = (window as any).html2pdf;
-        h2p()
-          .from(container)
-          .set(opt)
-          .save()
-          .then(() => {
-            document.body.removeChild(container);
-          })
-          .catch((err: any) => {
-            console.error('Error saving PDF:', err);
-            document.body.removeChild(container);
-          });
-      };
-
-      // Load html2pdf bundle if not present, and then run generation
-      if (!(window as any).html2pdf) {
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
-        script.onload = () => {
-          // Wait for logo to load, then run
-          const img = document.getElementById('pdf-logo-img') as HTMLImageElement;
-          if (img && !img.complete) {
-            img.onload = runGeneration;
-            img.onerror = runGeneration;
-          } else {
-            runGeneration();
-          }
-        };
-        script.onerror = () => {
-          alert('Erro ao carregar gerador de PDF. Verifique sua conexão e tente novamente.');
-          document.body.removeChild(container);
-        };
-        document.head.appendChild(script);
-      } else {
-        const img = document.getElementById('pdf-logo-img') as HTMLImageElement;
-        if (img && !img.complete) {
-          img.onload = runGeneration;
-          img.onerror = runGeneration;
-        } else {
-          runGeneration();
-        }
-      }
+      const element = document.createElement("a");
+      const file = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+      element.href = URL.createObjectURL(file);
+      element.download = `ficha-acesso-${taskTitle.toLowerCase().replace(/\s+/g, '-')}-${studentName.toLowerCase().replace(/\s+/g, '-')}.txt`;
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      setToastMessage('Ficha de acesso (.txt) baixada com sucesso!');
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+      console.error("Erro ao gerar ficha de acesso:", error);
+      alert("Houve um erro ao gerar a ficha de acesso. Tente novamente.");
     }
   };
 
@@ -1354,9 +1257,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       const isImage = file.type.startsWith('image/');
-      const isPdf = file.type === 'application/pdf';
-      if (!isImage && !isPdf) {
-        alert('Por favor, selecione apenas arquivos de imagem ou PDF.');
+      if (!isImage) {
+        alert('Por favor, selecione apenas arquivos de imagem.');
         return;
       }
       const maxSize = 5 * 1024 * 1024; // 5MB
@@ -1909,7 +1811,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   };
 
   const handleSupportFileUpload = (filesList: FileList) => {
-    const allowedExtensions = ['.pdf', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
+    const allowedExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif'];
     const maxSize = 5 * 1024 * 1024; // 5MB
 
     Array.from(filesList).forEach(file => {
@@ -1917,7 +1819,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       const isAllowed = allowedExtensions.some(ext => fileName.endsWith(ext));
 
       if (!isAllowed) {
-        alert(`O arquivo "${file.name}" não é suportado! Apenas PDF e Imagens são permitidos.`);
+        alert(`O arquivo "${file.name}" não é suportado! Apenas Imagens são permitidas.`);
         return;
       }
 
@@ -4691,11 +4593,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     {/* Attachments Section */}
                     <div className="flex flex-col gap-2 bg-[#f8fafc] border border-outline-variant/30 rounded-2xl p-4 shadow-xs">
                       <h4 className="text-xs font-extrabold text-slate-500 uppercase tracking-wide">Adicionar Anexo</h4>
-                      <p className="text-[10px] text-slate-400">Anexe materiais de apoio ou pdfs explicativos</p>
+                      <p className="text-[10px] text-slate-400">Anexe imagens de materiais de apoio explicativos</p>
                       
                       <input 
                         type="file"
-                        accept="image/*,application/pdf"
+                        accept="image/*"
                         ref={addTaskFileInputRef}
                         className="hidden"
                         onChange={handleAddTaskFileChange}
@@ -4709,7 +4611,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                           <>
                             <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mb-2">
                               <span className="material-symbols-outlined text-[24px]">
-                                {addTaskFile.type === 'application/pdf' ? 'picture_as_pdf' : 'image'}
+                                image
                               </span>
                             </div>
                             <p className="font-bold text-xs text-slate-600 truncate max-w-full px-2">{addTaskFile.name}</p>
@@ -4717,9 +4619,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             <button
                               type="button"
                               onClick={(e) => {
-                                e.stopPropagation();
-                                setAddTaskFile(null);
-                                if (addTaskFileInputRef.current) addTaskFileInputRef.current.value = '';
+                                  e.stopPropagation();
+                                  setAddTaskFile(null);
+                                  if (addTaskFileInputRef.current) addTaskFileInputRef.current.value = '';
                               }}
                               className="text-xs text-red-500 hover:text-red-700 mt-2 font-bold bg-transparent border-none cursor-pointer"
                             >
@@ -4731,7 +4633,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-2 group-hover:scale-105 transition-all">
                               <span className="material-symbols-outlined text-[24px]">upload_file</span>
                             </div>
-                            <p className="font-bold text-xs text-slate-600">Upload de Imagem ou PDF</p>
+                            <p className="font-bold text-xs text-slate-600">Upload de Imagem de Apoio</p>
                             <p className="text-[10px] text-slate-400 mt-0.5">Tamanho máximo: 5MB</p>
                           </>
                         )}
@@ -5744,15 +5646,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               {isCodeCopied ? 'Copiado!' : `Código: ${student.code}`}
                             </button>
 
-                            {/* Download PDF Button */}
+                            {/* Download TXT Button */}
                             <button
                               type="button"
-                              onClick={() => handleDownloadStudentTaskPdf(student.name, assignedModalInfo.taskTitle, student.code || '', student.link || '')}
-                              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-500 hover:text-white border border-rose-200 text-rose-700 transition-all cursor-pointer"
-                              title="Baixar PDF de Instruções de Acesso"
+                              onClick={() => handleDownloadStudentTaskCode(student.name, assignedModalInfo.taskTitle, student.code || '', student.link || '')}
+                              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-[#0052cc]/10 hover:bg-[#0052cc] hover:text-white border border-[#0052cc]/20 text-[#0052cc] transition-all cursor-pointer"
+                              title="Baixar Ficha de Instruções de Acesso (.txt)"
                             >
-                              <span className="material-symbols-outlined text-[15px]">picture_as_pdf</span>
-                              Baixar PDF
+                              <span className="material-symbols-outlined text-[15px]">download</span>
+                              Ficha de Acesso (.txt)
                             </button>
                           </div>
                         </div>
@@ -6782,7 +6684,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                           const isCodeCopied = copiedButtons[student.id]?.code;
                           const isLinkCopied = copiedButtons[student.id]?.link;
-                          const isPdfCopied = copiedButtons[student.id]?.pdf;
+                          const isTxtCopied = copiedButtons[student.id]?.txt;
 
                           return (
                             <div key={student.id} className="p-4 rounded-2xl border border-slate-200/80 bg-white hover:border-primary/20 hover:shadow-sm transition-all flex flex-col gap-3">
@@ -6824,21 +6726,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
 
 
-                                  {/* PDF button */}
+                                  {/* Ficha button */}
                                   <button
                                     type="button"
-                                    onClick={() => handleShareButtonPress(student.name, student.id, supportFilesModal.task.title, supportFilesModal.task.id, 'pdf')}
+                                    onClick={() => handleShareButtonPress(student.name, student.id, supportFilesModal.task.title, supportFilesModal.task.id, 'txt')}
                                     className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
-                                      isPdfCopied 
+                                      isTxtCopied 
                                         ? 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/60' 
                                         : 'bg-rose-50 hover:bg-rose-500 hover:text-white border-rose-200 text-rose-700'
                                     }`}
-                                    title="Copiar mensagem com PDF e baixar PDF"
+                                    title="Copiar mensagem de acesso e baixar ficha .txt"
                                   >
                                     <span className="material-symbols-outlined text-[15px]">
-                                      {isPdfCopied ? 'check' : 'picture_as_pdf'}
+                                      {isTxtCopied ? 'check' : 'download'}
                                     </span>
-                                    {isPdfCopied ? 'Copiado' : 'PDF'}
+                                    {isTxtCopied ? 'Copiado' : 'Ficha'}
                                   </button>
                                 </div>
                               </div>
@@ -6848,7 +6750,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                 <div className="mt-2 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in text-left">
                                   <p className="text-[11px] text-[#131b2e] font-bold flex items-center gap-1.5 select-none leading-normal">
                                     <span className="material-symbols-outlined text-indigo-600 text-[18px]">info</span>
-                                    Você já copiou esse {confirmCopyAgain.type === 'code' ? 'código' : 'PDF'}, deseja copiar novamente?
+                                    Você já copiou essa opção, deseja copiar novamente?
                                   </p>
                                   <div className="flex gap-2 shrink-0 select-none">
                                     <button
