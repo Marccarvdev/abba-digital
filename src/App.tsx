@@ -523,6 +523,7 @@ export default function App() {
 
     // 3. Update state
     setChatMessage(serialized);
+    setReviewCommentText(serialized);
     if (isTeacher) {
       setTeacherReply(textToSave.trim());
       setReviewTeacherReplySaved(textToSave.trim());
@@ -3583,8 +3584,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeReviewSubmission ? (
-          <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex-1 min-w-0 w-full">
+          <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
                 <span className="bg-[#0004fd] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                   Revisão de Atividade
@@ -3597,80 +3598,30 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               <h2 className="font-display font-extrabold text-xl sm:text-2xl text-gray-950 tracking-tight leading-tight mb-1">
                 {activeReviewSubmission.taskTitle || "Atividade do Ábaco"}
               </h2>
-              <p className="text-gray-600 text-sm mb-3">
+              <p className="text-gray-600 text-sm">
                 Aluno(a): <strong className="text-gray-950 font-bold">{activeReviewSubmission.studentName}</strong>
               </p>
-
-              {/* Mensagem da Matéria do Aluno e Resposta do Professor */}
-              {reviewCommentText && (
-                <div className="mt-4 pt-3 border-t border-slate-200/80 w-full max-w-full">
-                  <span className="block font-bold text-slate-800 text-xs mb-2 flex items-center gap-1 select-none">
-                    <span className="material-symbols-outlined text-[14px]">message</span>
-                    Histórico da conversa da matéria:
-                  </span>
-                  
-                  {/* Chat bubbles container */}
-                  <div className="flex flex-col gap-2.5 max-h-[220px] overflow-y-auto bg-slate-100/50 p-3 sm:p-4 rounded-2xl border border-slate-200/60 w-full mb-3 select-text">
-                    {(() => {
-                      const messages = getConversationMessages(reviewCommentText, reviewTeacherReplySaved);
-                      if (messages.length === 0) {
-                        return (
-                          <div className="text-[11px] text-slate-400 italic">
-                            Nenhuma mensagem ainda.
-                          </div>
-                        );
-                      }
-                      return messages.map((msg, idx) => {
-                        const isTeacher = msg.role === 'teacher';
-                        return (
-                          <div 
-                            key={idx} 
-                            className={`flex flex-col max-w-[85%] ${isTeacher ? 'self-end items-end' : 'self-start items-start'}`}
-                          >
-                            <span className="text-[9px] font-bold text-slate-400 mb-0.5 capitalize px-1">
-                              {msg.senderName || (isTeacher ? "Professor" : "Aluno")}
-                            </span>
-                            <div 
-                              className={`p-2.5 rounded-2xl text-[11px] font-semibold leading-relaxed break-words ${
-                                isTeacher 
-                                  ? 'bg-[#0075e0] text-white rounded-tr-xs border border-blue-600/20 shadow-3xs' 
-                                  : 'bg-white text-slate-700 rounded-tl-xs border border-slate-200/60 shadow-3xs'
-                              }`}
-                            >
-                              {msg.text}
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
-                  </div>
-
-                  {/* Campo de Resposta */}
-                  <div className="mt-3 flex items-center gap-2 w-full max-w-xl">
-                    <input
-                      type="text"
-                      value={reviewTeacherReplyInput}
-                      onChange={(e) => setReviewTeacherReplyInput(e.target.value)}
-                      placeholder={reviewTeacherReplySaved ? "Responder comentário..." : "Responder comentário do aluno..."}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs outline-none text-slate-700 font-semibold placeholder-slate-400"
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          handleSaveTeacherReply();
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={handleSaveTeacherReply}
-                      className="bg-[#0004fd] hover:bg-[#0003c7] text-white px-3.5 py-1.5 rounded-xl font-bold text-xs cursor-pointer border-none shadow-sm transition-all active:scale-95 whitespace-nowrap shrink-0"
-                    >
-                      {reviewTeacherReplySaved ? "Responder" : "Enviar Resposta"}
-                    </button>
-                  </div>
-                </div>
-              )}
             </div>
             
-            <div className="flex items-center gap-2.5 flex-wrap self-start md:self-center">
+            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center shrink-0">
+              {/* Message / Chat button that opens the WhatsApp style chat modal */}
+              <button
+                type="button"
+                title="Mensagens da Matéria"
+                onClick={() => {
+                  setChatSubject(activeReviewSubmission.taskTitle || "Exercício de Numerais Multilingue");
+                  setChatMessage(reviewCommentText);
+                  setTeacherReply(reviewTeacherReplySaved);
+                  setShowChatModal(true);
+                }}
+                className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-all active:scale-95 cursor-pointer relative shrink-0"
+              >
+                <span className="material-symbols-outlined text-[20px]">message</span>
+                {reviewCommentText && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                )}
+              </button>
+
               <button
                 onClick={handleSaveReviewSubmission}
                 className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-pulse"
