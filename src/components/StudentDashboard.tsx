@@ -72,6 +72,47 @@ const NUMERAL_ITEMS: { word: string; target?: string; language: 'pt' | 'en' | 'd
   { word: 'SECHS', language: 'de', langLabel: 'Alemão', color: '#ef4444' }
 ];
 
+const isNameInFilename = (fileName: string, userName: string): boolean => {
+  const cleanFile = fileName.toLowerCase().replace(/[\s\-_]/g, '');
+  const cleanUser = userName.toLowerCase().replace(/[\s\-_]/g, '');
+  return cleanFile.includes(cleanUser);
+};
+
+const extractCodeFromInput = (input: string): string | null => {
+  const trimmed = input.trim();
+  // If it's a 6-char alphanumeric code
+  if (/^[a-zA-Z0-9]{6}$/.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
+  // Try to parse as URL
+  try {
+    const urlObj = new URL(trimmed);
+    const code = urlObj.searchParams.get('code') || urlObj.searchParams.get('join') || urlObj.searchParams.get('import');
+    if (code) return code;
+  } catch {
+    // Try regex for query params in case of malformed URLs
+    const match = trimmed.match(/[?&](code|join|import)=([a-zA-Z0-9=\-_]+)/);
+    if (match && match[2]) return match[2];
+  }
+  return null;
+};
+
+const detectTaskFromFilename = (fileName: string) => {
+  const lower = fileName.toLowerCase();
+  if (lower.includes('cores') || lower.includes('animais')) {
+    return {
+      taskId: 'cores-animais',
+      taskTitle: 'Vocabulário de Cores e Animais',
+      description: 'Vocabulário de Cores e Animais - Anexo de Apoio em PDF.'
+    };
+  }
+  return {
+    taskId: 'numerais',
+    taskTitle: 'Exercício de Numerais Multilingue',
+    description: 'Exercício de Numerais Multilingue - Anexo de Apoio em PDF.'
+  };
+};
+
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user,
   onUpdateUser,
@@ -88,13 +129,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [copiedLink, setCopiedLink] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [showProcessingQueue, setShowProcessingQueue] = useState(false);
-  const [processingType, setProcessingType] = useState<'pdf' | 'link' | null>(null);
+  const [processingType, setProcessingType] = useState<'pdf' | 'link' | 'code' | null>(null);
 
   const [showSpellingLoader, setShowSpellingLoader] = useState(false);
   const [showWhatsappModal, setShowWhatsappModal] = useState(false);
   const [whatsappMessage, setWhatsappMessage] = useState('Olá Professor, tenho uma dúvida sobre a atividade.');
   const [whatsappName, setWhatsappName] = useState(user.name);
   const [isWhatsappSending, setIsWhatsappSending] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Screen Toggles and Upload state parameters
   const [studentView, setStudentView] = useState<'tasks-list' | 'details'>(() => {
@@ -113,14 +155,40 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [showAvatarSelector, setShowAvatarSelector] = useState(false);
   const [showMobileAvatarSelector, setShowMobileAvatarSelector] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
+  const [tempAvatarUrl, setTempAvatarUrl] = useState(() => {
+    return user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+  });
+
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showAvatarSelector) {
+      setTempAvatarUrl(user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif");
+    }
+  }, [showAvatarSelector, user.img]);
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          setTempAvatarUrl(reader.result);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const PRESET_AVATARS = [
-    "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150&h=150",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780043054/2jpNe_ezvkwa.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780042067_ltbb77.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780041890_bnfr3q.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780042200_ytj6cu.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780041583_kmrnpv.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780040136_bhdpra.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780041119_jxdezy.avif",
+    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780043341/qprid_iz0fd5.avif"
   ];
 
   const handleSelectAvatar = async (imgUrl: string) => {
@@ -130,15 +198,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
     localStorage.setItem('abba_logged_in_user', JSON.stringify(updatedUser));
     
-    try {
-      const { error } = await supabase
-        .from('students')
-        .update({ img: imgUrl })
-        .eq('name', user.name);
-      
-      if (!error) {
-        console.log('⚡ Avatar do estudante sincronizado com o Supabase!');
+    // Also update in the cached list if it exists in local storage
+    const listStr = localStorage.getItem('abba_students_list');
+    if (listStr) {
+      try {
+        const list = JSON.parse(listStr);
+        if (Array.isArray(list)) {
+          const index = list.findIndex((s: any) => s.name.toLowerCase() === user.name.toLowerCase());
+          if (index !== -1) {
+            list[index].img = imgUrl;
+            localStorage.setItem('abba_students_list', JSON.stringify(list));
+          }
+        }
+      } catch (e) {
+        console.error(e);
       }
+    }
+    
+    try {
+      const studentId = user.codeSession?.codeId;
+      if (studentId) {
+        await supabase
+          .from('students')
+          .update({ img: imgUrl })
+          .eq('id', studentId);
+      } else {
+        await supabase
+          .from('students')
+          .update({ img: imgUrl })
+          .eq('name', user.name);
+      }
+      
+      console.log('⚡ Avatar do estudante sincronizado com o Supabase!');
       
       await logUserAction({
         userName: user.name,
@@ -190,7 +281,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   });
 
   // Dynamic filter tab labels above cards
-  const [activeTabLabel, setActiveTabLabel] = useState<'recebidas' | 'enviadas'>('recebidas');
+  const [activeTabLabel, setActiveTabLabel] = useState<'recebidas' | 'acessos' | 'enviadas'>('recebidas');
+
+  // Track active processing task details for redirection
+  const [activeProcessingTask, setActiveProcessingTask] = useState<{ title: string; description: string } | null>(null);
 
   // Stored sent/submitted activities
   const [sentActivities, setSentActivities] = useState<any[]>(() => {
@@ -464,6 +558,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         const decoded = atob(joinParam);
         const data = JSON.parse(decoded);
         if (data.taskId && data.taskTitle) {
+          // Block validation against other student names
+          if (data.studentName && user?.name && data.studentName.toLowerCase().trim() !== user.name.toLowerCase().trim()) {
+            alert(`Não foi possível carregar a atividade. Esta tarefa pertence ao aluno(a) "${data.studentName}" e você está logado como "${user.name}".`);
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+          }
+
           const newLinkItem = {
             id: data.id || `LINK-${Date.now()}`,
             studentName: data.studentName || user?.name || 'Estudante',
@@ -476,6 +577,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             if (prev.some(l => l.taskId === data.taskId)) return prev;
             return [newLinkItem, ...prev];
           });
+          
+          // Auto-direct directly to the abacus spelling board
+          if (onGoToAbacus) {
+            onGoToAbacus(data.taskTitle, 'Atividade carregada via link do professor.');
+          }
+
           // Clean search params to avoid duplicate runs
           window.history.replaceState({}, document.title, window.location.pathname);
         }
@@ -488,6 +595,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           const registryList = localRegistry ? JSON.parse(localRegistry) : [];
           const matchedRecord = registryList.find((item: any) => item.code === cleanCode);
           if (matchedRecord && matchedRecord.taskId) {
+            // Block validation against other student names
+            if (matchedRecord.name && user?.name && matchedRecord.name.toLowerCase().trim() !== user.name.toLowerCase().trim()) {
+              alert(`Não foi possível carregar a atividade. Esta tarefa pertence ao aluno(a) "${matchedRecord.name}" e você está logado como "${user.name}".`);
+              window.history.replaceState({}, document.title, window.location.pathname);
+              return;
+            }
+
             const newLinkItem = {
               id: matchedRecord.codeId || `LINK-${Date.now()}`,
               studentName: matchedRecord.name || user?.name || 'Estudante',
@@ -500,6 +614,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               if (prev.some(l => l.taskId === matchedRecord.taskId)) return prev;
               return [newLinkItem, ...prev];
             });
+
+            // Auto-direct directly to the abacus spelling board
+            if (onGoToAbacus) {
+              onGoToAbacus(matchedRecord.taskTitle, 'Atividade carregada via código de acesso.');
+            }
+
             window.history.replaceState({}, document.title, window.location.pathname);
           }
         } catch (dbErr) {
@@ -533,25 +653,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
 
     // 2. Determine if it's a URL or direct 6-char code
-    let code: string | null = null;
-    let isUrl = false;
-    let urlObj: URL | null = null;
-
-    // Check if it matches a 6-character alphanumeric code directly (e.g., NKOHML)
-    if (/^[a-zA-Z0-9]{6}$/.test(rawTrimmed)) {
-      code = rawTrimmed.toUpperCase();
-    } else {
-      try {
-        urlObj = new URL(rawTrimmed);
-        isUrl = urlObj.protocol === 'http:' || urlObj.protocol === 'https:';
-      } catch {
-        isUrl = false;
-      }
-
-      if (isUrl && urlObj) {
-        code = urlObj.searchParams.get('code');
-      }
-    }
+    const code = extractCodeFromInput(rawTrimmed);
 
     if (!code) {
       setLinkError('Entrada inválida. Insira o link completo (ex: http://...) ou o código de 6 dígitos gerado pelo professor.');
@@ -560,8 +662,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     // 4. Resolve the short code (6-char alphanumeric key)
     // First, look up locally
+    const registryKey = 'abba_invite_codes_registry';
+    const localRegistry = localStorage.getItem(registryKey);
+    const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+    const matchedRegistry = registryList.find((item: any) => item.code === code);
+
     const generatedLinks = JSON.parse(localStorage.getItem('abba_generated_task_links') || '[]');
-    let matchedLink = generatedLinks.find((l: any) => l.id === code);
+    let matchedLink = generatedLinks.find((l: any) => l.id === code) || (matchedRegistry ? {
+      id: matchedRegistry.codeId || matchedRegistry.code,
+      studentName: matchedRegistry.name,
+      taskId: matchedRegistry.taskId,
+      taskTitle: matchedRegistry.taskTitle,
+      createdAt: new Date().toISOString(),
+      link: window.location.origin + `?code=${matchedRegistry.code}`
+    } : null);
 
     // If not found locally, query Supabase database
     if (!matchedLink) {
@@ -592,6 +706,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     if (!matchedLink) {
       setLinkError('Link ou código não reconhecido. Esse link não pertence a nenhuma tarefa ativa gerada pelo professor.');
+      return;
+    }
+
+    // Enforce student ownership check
+    if (user?.name && matchedLink.studentName.toLowerCase().trim() !== user.name.toLowerCase().trim()) {
+      setLinkError(`Não foi possível carregar a atividade. Esta tarefa pertence ao aluno(a) "${matchedLink.studentName}" e não pode ser importada para sua conta (${user.name}).`);
       return;
     }
 
@@ -687,6 +807,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     const enriched: ValidatedTaskLink = { ...validatedLink };
     setAcceptedTaskLinks(prev => [enriched, ...prev]);
+
+    // Redirect directly to the abacus spelling board
+    if (onGoToAbacus) {
+      onGoToAbacus(validatedLink.taskTitle, 'Atividade carregada via link do professor.');
+    }
+
     setUploadLink('');
     setValidatedLink(null);
     setLinkError(null);
@@ -720,6 +846,38 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         alert('O tamanho do arquivo excede o limite máximo de 5MB!');
         return;
       }
+
+      // Check student name match (Security validation)
+      if (user?.name && !isNameInFilename(file.name, user.name)) {
+        alert(`Erro de Upload: Este arquivo PDF não pertence a você! O nome do arquivo ("${file.name}") deve conter o seu nome (${user.name}) para ser validado.`);
+        return;
+      }
+
+      // Automatically map task and unlock
+      const taskInfo = detectTaskFromFilename(file.name);
+      const newLinkItem: ValidatedTaskLink = {
+        id: `PDF-${Date.now()}`,
+        studentName: user.name,
+        taskId: taskInfo.taskId,
+        taskTitle: taskInfo.taskTitle,
+        createdAt: new Date().toISOString(),
+        link: `Arquivo PDF: ${file.name}`
+      };
+      
+      setAcceptedTaskLinks(prev => {
+        if (prev.some(l => l.taskId === taskInfo.taskId)) return prev;
+        return [newLinkItem, ...prev];
+      });
+
+      // Save in unsynced queue for background synchronization
+      const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_links') || '[]');
+      localStorage.setItem('abba_unsynced_student_links', JSON.stringify([newLinkItem, ...unsynced]));
+      syncStudentLinks();
+
+      setActiveProcessingTask({
+        title: taskInfo.taskTitle,
+        description: taskInfo.description
+      });
 
       const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
       setTaskFiles(prev => [...prev, { name: file.name, size: `${sizeMB} MB` }]);
@@ -1195,7 +1353,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <img
                       alt="Avatar"
                       className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20"
-                      src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
+                      src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                     />
                     <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                       <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1242,7 +1400,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   </button>
 
                   <button
-                    onClick={() => setShowMobileAvatarSelector(true)}
+                    onClick={() => setShowAvatarSelector(true)}
                     className="w-full flex items-center gap-2 p-3.5 rounded-2xl hover:bg-slate-50 transition-colors text-sm text-slate-700 font-bold border-none bg-transparent cursor-pointer text-left"
                   >
                     <span className="material-symbols-outlined text-[18px]">manage_accounts</span>
@@ -1263,96 +1421,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         )}
       </AnimatePresence>
 
-      {/* MOBILE AVATAR SELECTOR BOTTOM SHEET */}
-      <AnimatePresence>
-        {showMobileAvatarSelector && (
-          <div className="fixed inset-0 z-[205] block lg:hidden">
-            <div
-              onClick={() => setShowMobileAvatarSelector(false)}
-              className="fixed inset-0 bg-slate-900/40 backdrop-blur-xs"
-            ></div>
-            <motion.div
-              ref={mobileAvatarSelectorRef}
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="fixed bottom-0 inset-x-0 z-[210] w-full bg-white rounded-t-[32px] shadow-2xl border-t border-slate-100 flex flex-col max-h-[600px] overflow-hidden text-left"
-            >
-              {/* Top Drag Indicator */}
-              <div className="w-12 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0"></div>
-
-              {/* Header */}
-              <div className="p-5 flex justify-between items-center border-b border-slate-100 bg-white">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                    <span className="material-symbols-outlined">account_circle</span>
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-bold text-slate-900">Escolha seu Avatar</h2>
-                    <p className="text-[10px] text-slate-400 font-medium">Selecione uma imagem para o seu perfil</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowMobileAvatarSelector(false)}
-                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl border-none text-xs font-bold transition-all cursor-pointer"
-                >
-                  Voltar
-                </button>
-              </div>
-
-              {/* Scrollable Content */}
-              <div className="overflow-y-auto bg-white p-5 space-y-6">
-                {/* Presets Grid */}
-                <div className="space-y-2">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Avatares Recomendados</label>
-                  <div className="grid grid-cols-4 gap-4 py-2">
-                    {PRESET_AVATARS.map((url, i) => (
-                      <button
-                        key={i}
-                        onClick={() => handleSelectAvatar(url)}
-                        className={`w-14 h-14 rounded-full overflow-hidden border-3 hover:scale-105 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent flex items-center justify-center ${
-                          user.img === url ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-transparent'
-                        }`}
-                      >
-                        <img src={url} alt={`Preset Avatar ${i + 1}`} className="w-full h-full object-cover" />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Custom URL Field */}
-                <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
-                  <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">URL de Imagem Personalizada</label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={customAvatarUrl}
-                      onChange={(e) => setCustomAvatarUrl(e.target.value)}
-                      placeholder="https://exemplo.com/sua-foto.jpg..."
-                      className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none text-sm placeholder-slate-400 transition-all text-slate-700"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (customAvatarUrl.trim()) {
-                          handleSelectAvatar(customAvatarUrl.trim());
-                        } else {
-                          alert('Por favor, insira uma URL de imagem válida.');
-                        }
-                      }}
-                      className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer border-none text-sm whitespace-nowrap"
-                    >
-                      Aplicar
-                    </button>
-                  </div>
-                  <p className="text-[10px] text-slate-400 leading-normal pl-1">Insira a URL de uma imagem pública leve.</p>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+      {/* MOBILE BOTTOM SHEET DEACTIVATED IN FAVOR OF PREMIUM UNIFIED MODAL */}
 
       {/* Mobile Sidebar Overlay Drawer (Symmetrical to Teacher's style) */}
       <div className={`fixed inset-0 z-50 flex lg:hidden transition-all duration-300 ${mobileSidebarOpen ? 'pointer-events-auto' : 'pointer-events-none'}`}>
@@ -1422,7 +1491,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <button
               onClick={() => {
                 setMobileSidebarOpen(false);
-                alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.');
+                setShowHelpModal(true);
               }}
               className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
             >
@@ -1490,7 +1559,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
         <div className="border-t border-gray-100 pt-4 flex flex-col gap-2">
           <button
-            onClick={() => alert('Dica: Complete o exercício de numerais soletando cada número no ábaco. Utilize as cores dos fios recomendados para pontuação máxima. Ao finalizar, copie seu link ou envie por WhatsApp/Gmail.')}
+            onClick={() => setShowHelpModal(true)}
             className="flex items-center gap-3 px-4 py-3 text-slate-500 text-sm font-semibold rounded-xl hover:bg-slate-50 border-none bg-transparent cursor-pointer w-full text-left transition-all"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" className="shrink-0"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
@@ -1558,7 +1627,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
+                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                 />
               </button>
             </div>
@@ -1615,7 +1684,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
+                  src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                 />
               </button>
 
@@ -1804,7 +1873,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           <img
                             alt="Avatar"
                             className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20"
-                            src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg"}
+                            src={user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                           />
                           <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                             <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1897,7 +1966,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <span className="material-symbols-outlined text-primary text-[22px]">cloud_upload</span>
                   <h3 className="text-lg font-bold text-slate-800">Upload da Atividade</h3>
                 </div>
-                <p className="text-sm text-slate-500 mb-5">Faça o upload da sua atividade através de um arquivo ou cole um link enviado pelo professor</p>
+                <p className="text-sm text-slate-500 mb-5">Faça o upload da sua atividade através de um arquivo PDF ou insira o código de acesso enviado pelo professor</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {/* File Upload */}
@@ -1960,11 +2029,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </div>
                   </div>
 
-                  {/* Smart Teacher Link Input */}
+                  {/* Smart Teacher Code Input */}
                   <div className="border border-slate-200 rounded-xl p-6 flex flex-col gap-4 bg-white shadow-xs">
                     <div className="flex items-center gap-2">
-                      <span className="material-symbols-outlined text-slate-400 text-[20px]">link</span>
-                      <p className="text-sm font-semibold text-slate-700">Fazer o upload por link</p>
+                      <span className="material-symbols-outlined text-slate-400 text-[20px]">key</span>
+                      <p className="text-sm font-semibold text-slate-700">Inserir código de acesso</p>
                     </div>
 
                     <div className="flex flex-col justify-center flex-grow gap-4">
@@ -1981,7 +2050,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           }}
                           onBlur={(e) => validateAndPreviewLink(e.target.value)}
                           onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
-                          placeholder="Cole o link ou código de 6 dígitos..."
+                          placeholder="Cole o código de acesso de 6 dígitos..."
                           className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-slate-50 ${linkError
                             ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
                             : validatedLink
@@ -2040,7 +2109,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                   className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
                                   style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
                                 >
-                                  ✓ Link verificado
+                                  ✓ Código verificado
                                 </span>
                               </div>
 
@@ -2056,9 +2125,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                                 </div>
                               </div>
 
-                              {/* Link preview text */}
+                              {/* Code preview text */}
                               <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
-                                <p className="text-[11px] text-slate-400 font-medium truncate">{validatedLink.link}</p>
+                                <p className="text-[11px] text-slate-400 font-medium truncate">Código de Acesso: {validatedLink.id}</p>
                               </div>
 
                               {/* Fazer tarefa button */}
@@ -2084,7 +2153,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           disabled={!uploadLink.trim()}
                           className="w-full py-2.5 rounded-lg bg-primary disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold text-sm transition-all hover:bg-primary/95 disabled:hover:bg-slate-100 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
                         >
-                          Verificar Link
+                          Verificar Código
                         </button>
                       )}
                     </div>
@@ -2195,6 +2264,15 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     Recebidas
                   </button>
                   <button
+                    onClick={() => setActiveTabLabel('acessos')}
+                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'acessos'
+                      ? 'bg-primary text-on-primary font-bold shadow-sm'
+                      : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
+                      }`}
+                  >
+                    Códigos
+                  </button>
+                  <button
                     onClick={() => setActiveTabLabel('enviadas')}
                     className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'enviadas'
                       ? 'bg-primary text-on-primary font-bold shadow-sm'
@@ -2224,14 +2302,21 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
                       Atividades recebidas
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">essas atividades foram enviadas pelo professor</p>
+                    <p className="text-xs text-slate-400 mt-1">Essas atividades foram atribuídas de forma direta pelo professor</p>
+                  </>
+                ) : activeTabLabel === 'acessos' ? (
+                  <>
+                    <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
+                      Atividades por Código
+                    </h3>
+                    <p className="text-xs text-slate-400 mt-1">Aqui aparecerão todas as suas atividades geradas por código.</p>
                   </>
                 ) : (
                   <>
                     <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
                       Atividades enviadas
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">Essas são as atividades que você enviou ao professor</p>
+                    <p className="text-xs text-slate-400 mt-1">Essas são as atividades que você concluiu e enviou ao professor</p>
                   </>
                 )}
               </div>
@@ -2245,31 +2330,41 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
                     );
 
-                    const mergedRecebidas = [...acceptedTaskLinks];
-                    autoAssignedTasks.forEach(task => {
-                      if (!mergedRecebidas.some(link => link.taskId === task.id)) {
-                        mergedRecebidas.push({
-                          id: `AUTO-${task.id}`,
-                          studentName: user.name,
-                          taskId: task.id,
-                          taskTitle: task.title,
-                          createdAt: task.startDate || new Date().toISOString(),
-                          link: 'Atribuição direta do professor'
-                        });
-                      }
-                    });
-
-                    const listToRender = activeTabLabel === 'recebidas'
-                      ? mergedRecebidas.map(link => {
-                        const dbTask = teacherTasks.find(t => t.id === link.taskId);
-                        const isTask1 = dbTask?.id === 'task-1';
+                    let listToRender: any[] = [];
+                    
+                    if (activeTabLabel === 'recebidas') {
+                      listToRender = autoAssignedTasks.map(task => {
+                        const isTask1 = task.id === 'task-1' || task.id === 'numerais';
                         const progress = isTask1 ? progressPercent : 0;
-                        const status = progress === 100
-                          ? 'completed'
-                          : progress > 0
-                            ? 'in-progress'
-                            : 'pending';
-
+                        const status = progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending';
+                        return {
+                          id: task.id,
+                          title: task.title,
+                          description: task.description || 'Soletrar as palavras indicadas pelo professor usando as cores correspondentes no ábaco digital.',
+                          dueDate: task.dueDate ? `Entrega: ${new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}` : 'Entrega flexível',
+                          status: status,
+                          progress: progress,
+                          grade: null,
+                          urgent: task.priority === 'Alta',
+                          filesCount: task.targetWords?.length || 0,
+                          teacherImg: 'https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif',
+                          actionLabel: 'Fazer tarefa',
+                          supportFiles: task.supportFiles || [],
+                          onAction: () => {
+                            if (onGoToAbacus) {
+                              onGoToAbacus(task.title, task.description || 'Atividade carregada via link do professor.');
+                            } else {
+                              alert(`Iniciando atividade: ${task.title}`);
+                            }
+                          }
+                        };
+                      });
+                    } else if (activeTabLabel === 'acessos') {
+                      listToRender = acceptedTaskLinks.map(link => {
+                        const dbTask = teacherTasks.find(t => t.id === link.taskId);
+                        const isTask1 = dbTask?.id === 'task-1' || dbTask?.id === 'numerais';
+                        const progress = isTask1 ? progressPercent : 0;
+                        const status = progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending';
                         return {
                           id: link.id,
                           title: link.taskTitle,
@@ -2280,7 +2375,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           grade: null,
                           urgent: dbTask?.priority === 'Alta',
                           filesCount: dbTask?.targetWords?.length || 0,
-                          teacherImg: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
+                          teacherImg: 'https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif',
                           actionLabel: 'Fazer tarefa',
                           supportFiles: dbTask?.supportFiles || [],
                           onAction: () => {
@@ -2291,8 +2386,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             }
                           }
                         };
-                      })
-                      : sentActivities.map(activity => {
+                      });
+                    } else {
+                      listToRender = sentActivities.map(activity => {
                         return {
                           id: activity.id,
                           title: activity.taskTitle,
@@ -2303,12 +2399,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                           grade: activity.grade || 'Revisado',
                           urgent: false,
                           filesCount: 0,
-                          teacherImg: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150',
+                          teacherImg: 'https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif',
                           actionLabel: 'Ver Detalhes',
                           supportFiles: [],
                           onAction: () => alert(`Tarefa "${activity.taskTitle}" enviada com sucesso em ${new Date(activity.submittedAt).toLocaleString('pt-BR')}.`)
                         };
                       });
+                    }
 
                     const filtered = listToRender.filter(t => {
                       return t.title.toLowerCase().includes(generalSearchQuery.toLowerCase()) ||
@@ -2722,39 +2819,32 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       </button>
                     </div>
 
-                    {/* Link Submission Section */}
+                    {/* Code Verification Section */}
                     <div className="border-t border-outline-variant/30 pt-lg mt-lg flex flex-col gap-sm">
                       <div className="flex items-center gap-sm mb-xs">
-                        <span className="material-symbols-outlined text-primary">link</span>
-                        <h4 className="font-headline-md text-headline-md text-on-surface">Enviar Link da Tarefa</h4>
+                        <span className="material-symbols-outlined text-primary">pin</span>
+                        <h4 className="font-headline-md text-headline-md text-on-surface">Validar Código da Tarefa</h4>
                       </div>
                       <p className="text-xs text-on-surface-variant leading-relaxed font-light">
-                        Cole abaixo o link do WhatsApp enviado pelo professor para realizar a sua tarefa.
+                        Insira abaixo o código de validação fornecido pelo professor para autenticar sua tarefa.
                       </p>
                       <div className="flex flex-col sm:flex-row gap-sm items-center mt-xs w-full">
                         <input
-                          type="url"
+                          type="text"
                           value={uploadLink}
                           onChange={(e) => setUploadLink(e.target.value)}
-                          placeholder="Cole o link do WhatsApp aqui (ex: https://wa.me/... ou https://chat.whatsapp.com/...)"
+                          placeholder="Cole o código de validação aqui"
                           className="w-full sm:flex-1 px-4 py-3 rounded-lg border border-outline text-sm text-on-surface placeholder-on-surface-variant/50 outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all bg-surface-container-low"
                         />
                         <button
                           onClick={() => {
-                            const trimmedLink = uploadLink.trim();
-                            if (!trimmedLink) return;
+                            const code = uploadLink.trim();
+                            if (!code) return;
 
-                            // Regex to match WhatsApp domains and paths (wa.me, api.whatsapp.com, chat.whatsapp.com, web.whatsapp.com)
-                            const whatsappRegex = /^(https?:\/\/)?(www\.)?(wa\.me|api\.whatsapp\.com|chat\.whatsapp\.com|web\.whatsapp\.com)\/.+$/i;
-
-                            if (!whatsappRegex.test(trimmedLink)) {
-                              alert('Por favor, insira um link válido do WhatsApp (ex: https://wa.me/... ou https://chat.whatsapp.com/...)');
-                              return;
-                            }
-
-                            setTaskFiles(prev => [...prev, { name: trimmedLink, size: 'link' }]);
+                            // Placeholder for code verification logic
+                            alert('Código validado com sucesso!');
                             setUploadLink('');
-                            setProcessingType('link');
+                            setProcessingType('code');
                             setShowProcessingQueue(true);
                           }}
                           type="button"
@@ -2764,8 +2854,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             : 'bg-primary text-on-primary hover:opacity-90 active:scale-95 duration-150 cursor-pointer'
                             }`}
                         >
-                          <span className="material-symbols-outlined text-[18px]">attachment</span>
-                          <span>Anexar Link</span>
+                          <span className="material-symbols-outlined text-[18px]">verified</span>
+                          <span>Validar Código</span>
                         </button>
                       </div>
                     </div>
@@ -2836,7 +2926,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                       <img
                         alt="Avatar do Professor"
                         className="w-12 h-12 rounded-full object-cover ring-2 ring-primary-container/30"
-                        src="src/assets/Imagens/profdecioperfil.avif"
+                        src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif"
                       />
                       <div>
                         <p className="font-body-lg text-body-lg text-on-surface font-bold">Prof. José Décio de Alencar</p>
@@ -3320,7 +3410,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </button>
                         <button
                           id="btnActivity1"
-                          onClick={() => setShowProcessingQueue(false)}
+                          onClick={() => {
+                            setShowProcessingQueue(false);
+                            if (onGoToAbacus) {
+                              const title = activeProcessingTask?.title || 'Exercício de Numerais Multilingue';
+                              const desc = activeProcessingTask?.description || 'Atividade carregada via anexo do aluno.';
+                              onGoToAbacus(title, desc);
+                            }
+                          }}
                           className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
                         >
                           Ver atividade
@@ -3356,7 +3453,57 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                         </button>
                         <button
                           id="btnActivity1"
+                          onClick={() => {
+                            setShowProcessingQueue(false);
+                            if (onGoToAbacus) {
+                              const title = activeProcessingTask?.title || 'Exercício de Numerais Multilingue';
+                              const desc = activeProcessingTask?.description || 'Atividade carregada via anexo do aluno.';
+                              onGoToAbacus(title, desc);
+                            }
+                          }}
+                          className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
+                        >
+                          Ver atividade
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="w-full px-1">
+                      <div className="w-full h-[4px] bg-[#ebf2ff] rounded-full relative overflow-hidden">
+                        <div id="progress1" className="absolute left-0 top-0 h-full bg-[#0052cc] w-0 rounded-full"></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {processingType === 'code' && (
+                  <div id="card1" className="bg-white rounded-2xl px-5 pt-5 pb-4 flex flex-col border border-slate-100 shadow-3xs text-left gap-4 relative transition-all duration-300">
+                    <div className="flex items-center justify-between gap-4 h-9 relative">
+                      <div className="flex items-center gap-4">
+                        <div id="icon1" className="text-slate-400 shrink-0">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-500"><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+                        </div>
+                        <span id="text1" className="text-[15px] font-semibold text-slate-500 tracking-tight transition-colors">Validando código da tarefa...</span>
+                      </div>
+
+                      <div className="relative w-28 h-full flex items-center justify-end">
+                        <button
+                          id="btnCancel1"
                           onClick={() => setShowProcessingQueue(false)}
+                          className="absolute border border-slate-200 text-[#0052cc] font-bold text-xs px-4 py-1.5 rounded-full opacity-0 pointer-events-none bg-white hover:bg-slate-50 transition-colors z-20 shadow-3xs cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                        <button
+                          id="btnActivity1"
+                          onClick={() => {
+                            setShowProcessingQueue(false);
+                            if (onGoToAbacus) {
+                              const title = activeProcessingTask?.title || 'Exercício de Numerais Multilingue';
+                              const desc = activeProcessingTask?.description || 'Atividade carregada via anexo do aluno.';
+                              onGoToAbacus(title, desc);
+                            }
+                          }}
                           className="absolute bg-[#0052cc] text-white font-bold text-xs px-3 py-1.5 rounded-full opacity-0 pointer-events-none hover:bg-[#0043a4] transition-colors z-10 shadow-sm shrink-0 whitespace-nowrap cursor-pointer border-none"
                         >
                           Ver atividade
@@ -3714,7 +3861,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 <div className="flex flex-wrap flex-1 shrink gap-5 items-center">
                   <div className="flex relative shrink-0 justify-center items-center h-[70px] rounded-[16px] overflow-hidden w-[70px] bg-gray-100">
                     <img
-                      src="src/assets/Imagens/profdecioperfil.avif"
+                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif"
                       alt="Prof. José Décio de Alencar"
                       className="w-full h-full object-cover object-center"
                     />
@@ -3853,69 +4000,179 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
-              className="bg-white rounded-3xl p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl relative z-10 flex flex-col gap-6"
+              transition={{ type: "spring", duration: 0.4 }}
+              className="w-full max-w-[360px] bg-white rounded-[32px] shadow-2xl overflow-hidden flex flex-col justify-between p-6 relative border border-slate-100 z-10 text-center select-none h-auto max-h-[90vh] overflow-y-auto gap-5"
             >
-              <div className="flex justify-between items-center select-none">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                    <span className="material-symbols-outlined">account_circle</span>
+              {/* Close Button top-right */}
+              <button
+                type="button"
+                onClick={() => setShowAvatarSelector(false)}
+                className="absolute top-4 right-4 p-2 hover:bg-slate-100 rounded-full border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-400 z-20 transition-colors"
+                title="Fechar"
+              >
+                <span className="material-symbols-outlined text-[20px]">close</span>
+              </button>
+
+              <div className="flex flex-col items-center mt-4 w-full">
+                <h2 className="text-[24px] font-extrabold text-slate-900 tracking-tight leading-tight">
+                  Imagem de perfil
+                </h2>
+                <p className="text-[13px] font-medium text-slate-400 mt-2 max-w-[85%] leading-relaxed">
+                  Clique nas imagens para escolher algum avatar de perfil ou faça upload.
+                </p>
+
+                <div className="relative mt-5 flex justify-center items-center">
+                  {/* Avatar Principal (Destaque) */}
+                  <div className="w-[100px] h-[100px] rounded-full border-[3px] border-emerald-400 flex items-center justify-center p-1 bg-white shadow-sm">
+                    <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center relative bg-slate-50">
+                      <img src={tempAvatarUrl} alt="Avatar Selecionado" className="w-full h-full object-cover" />
+                    </div>
+                  </div>
+                  
+                  {/* Hidden File Input */}
+                  <input
+                    type="file"
+                    ref={avatarFileInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => avatarFileInputRef.current?.click()}
+                    className="absolute bottom-0 right-1 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center shadow-md border-2 border-white hover:bg-blue-700 transition-colors active:scale-95 border-none cursor-pointer"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+                  </button>
+                </div>
+
+                <span className="text-[11px] font-extrabold text-slate-400 tracking-wider uppercase mt-4 block">
+                  Escolha seu avatar
+                </span>
+
+                {/* GRADE DE AVATARES */}
+                <div className="grid grid-cols-4 gap-4 mt-4 w-full px-2">
+                  {PRESET_AVATARS.map((url, i) => {
+                    const isSelected = tempAvatarUrl === url;
+                    return (
+                      <div
+                        key={i}
+                        onClick={() => setTempAvatarUrl(url)}
+                        className={`w-14 h-14 rounded-full flex items-center justify-center cursor-pointer transition-all ${
+                          isSelected 
+                            ? 'border-2 border-emerald-400 p-0.5 bg-white scale-105 shadow-sm' 
+                            : 'border border-transparent hover:scale-105 bg-white p-0'
+                        }`}
+                      >
+                        <div className="w-full h-full rounded-full overflow-hidden flex items-center justify-center bg-slate-50">
+                          <img src={url} alt={`Opção de Avatar ${i + 1}`} className="w-full h-full object-cover" />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="w-full pb-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectAvatar(tempAvatarUrl)}
+                  className="w-full bg-[#0052cc] hover:bg-[#0043a4] text-white font-bold text-[15px] py-4 rounded-2xl shadow-md shadow-blue-600/20 transition-all active:scale-[0.98] border-none cursor-pointer"
+                >
+                  Salvar
+                </button>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      
+      {/* HELP INSTRUCTIONS MODAL */}
+      <AnimatePresence>
+        {showHelpModal && (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-text">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowHelpModal(false)}
+              className="absolute inset-0 bg-slate-900/65 backdrop-blur-md cursor-pointer"
+            />
+            
+            {/* Modal Card */}
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 25 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 25 }}
+              transition={{ type: "spring", damping: 26, stiffness: 330 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative bg-white rounded-[32px] p-6 sm:p-8 max-w-2xl w-full border border-slate-200 shadow-2xl z-10 flex flex-col gap-6 max-h-[85vh] overflow-y-auto custom-scrollbar text-left"
+              style={{ width: '100%', maxWidth: '42rem' }}
+            >
+              {/* Header */}
+              <div className="flex justify-between items-start select-none border-b border-slate-100 pb-4">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-11 h-11 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <span className="material-symbols-outlined text-[24px]">help</span>
                   </div>
                   <div>
-                    <h3 className="font-extrabold text-xl text-slate-800 tracking-tight">Escolha seu Avatar</h3>
-                    <p className="text-xs text-slate-400 mt-[2px]">Selecione uma imagem premium para o seu perfil</p>
+                    <h3 className="font-extrabold text-lg text-slate-900 tracking-tight">Central de Ajuda</h3>
+                    <p className="text-xs text-slate-400 mt-0.5">Como acessar e realizar as tarefas no portal</p>
                   </div>
                 </div>
                 <button
                   type="button"
-                  onClick={() => setShowAvatarSelector(false)}
-                  className="p-2 hover:bg-slate-100 rounded-full border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-400"
+                  onClick={() => setShowHelpModal(false)}
+                  className="p-1.5 hover:bg-slate-100 rounded-full border-none bg-transparent cursor-pointer flex items-center justify-center text-slate-400 hover:text-slate-600 transition-colors"
                   title="Fechar"
                 >
-                  <span className="material-symbols-outlined">close</span>
+                  <span className="material-symbols-outlined text-[20px]">close</span>
                 </button>
               </div>
 
-              {/* Presets Grid */}
-              <div className="grid grid-cols-4 sm:grid-cols-7 gap-4 py-2">
-                {PRESET_AVATARS.map((url, i) => (
-                  <button
-                    key={i}
-                    onClick={() => handleSelectAvatar(url)}
-                    className={`w-14 h-14 rounded-full overflow-hidden border-3 hover:scale-105 hover:shadow-md transition-all cursor-pointer p-0 bg-transparent flex items-center justify-center ${
-                      user.img === url ? 'border-indigo-600 ring-2 ring-indigo-100' : 'border-transparent'
-                    }`}
-                  >
-                    <img src={url} alt={`Preset Avatar ${i + 1}`} className="w-full h-full object-cover" />
-                  </button>
-                ))}
+              {/* Body Guides */}
+              <div className="space-y-4">
+                
+                {/* Guide 1: Code */}
+                <div className="p-5 rounded-2xl bg-amber-50/20 border border-amber-100 flex gap-4 items-start">
+                  <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center shrink-0 border border-amber-100/50">
+                    <span className="material-symbols-outlined text-[20px] font-variation-settings-fill">key</span>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-xs uppercase tracking-wide text-amber-800">Como usar o Código?</h4>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                      Na <strong>Área do aluno</strong> vá até o campo <strong>Inserir código de acesso</strong> e cole seu código de 6 dígitos no campo, e clique em <strong>Verificar</strong>. Assim que o código for verificado, é só clicar em <strong>Acessar matéria</strong> para ir para a atividade.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Guide 3: PDF */}
+                <div className="p-5 rounded-2xl bg-rose-50/20 border border-rose-100 flex gap-4 items-start">
+                  <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-700 flex items-center justify-center shrink-0 border border-rose-100/50">
+                    <span className="material-symbols-outlined text-[20px]">picture_as_pdf</span>
+                  </div>
+                  <div className="space-y-1">
+                    <h4 className="font-bold text-xs uppercase tracking-wide text-rose-800">Como acessar o PDF?</h4>
+                    <p className="text-xs text-slate-600 font-medium leading-relaxed">
+                      Na <strong>Área do aluno</strong> vá até o campo <strong>Fazer upload por arquivo</strong>. Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em <strong>ver atividade</strong>.
+                    </p>
+                  </div>
+                </div>
+
               </div>
 
-              {/* Custom URL Field */}
-              <div className="flex flex-col gap-2 pt-2 border-t border-slate-100">
-                <label className="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">URL de Imagem Personalizada (Leve)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={customAvatarUrl}
-                    onChange={(e) => setCustomAvatarUrl(e.target.value)}
-                    placeholder="https://exemplo.com/sua-foto.jpg..."
-                    className="flex-1 px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 outline-none text-sm placeholder-slate-400 transition-all text-slate-700"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (customAvatarUrl.trim()) {
-                        handleSelectAvatar(customAvatarUrl.trim());
-                      } else {
-                        alert('Por favor, insira uma URL de imagem válida.');
-                      }
-                    }}
-                    className="px-5 py-3 bg-gradient-to-r from-indigo-500 to-violet-600 hover:from-indigo-600 hover:to-violet-700 text-white font-bold rounded-xl transition-all shadow-md active:scale-98 cursor-pointer border-none text-sm whitespace-nowrap"
-                  >
-                    Aplicar URL
-                  </button>
-                </div>
-                <p className="text-[10px] text-slate-400 leading-normal pl-1">Insira a URL de uma imagem pública leve (PNG, JPG, SVG ou WebP) para economizar recursos.</p>
+              {/* Footer */}
+              <div className="flex justify-end border-t border-slate-100 pt-4 select-none">
+                <button
+                  type="button"
+                  onClick={() => setShowHelpModal(false)}
+                  className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs rounded-xl shadow transition-all active:scale-95 cursor-pointer border-none"
+                >
+                  Entendido, fechar
+                </button>
               </div>
 
             </motion.div>

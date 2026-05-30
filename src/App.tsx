@@ -324,6 +324,11 @@ export default function App() {
         if (Date.now() > user.codeSession.expiresAt) {
           setUser(null);
           localStorage.removeItem('abba_logged_in_user');
+          localStorage.removeItem('abba_completed_spelled_words');
+          localStorage.removeItem('abba_student_sent_activities');
+          localStorage.removeItem('abba_student_accepted_links');
+          localStorage.removeItem('savedWords');
+          setCompletedSpelledWords([]);
           setIsSessionExpiredOpen(true);
           setCurrentScreen('login');
         }
@@ -2481,10 +2486,77 @@ export default function App() {
       <>
         {renderSessionExpiredModal()}
         <LoginScreen
-          onLoginSuccess={(loggedUser) => {
+          onLoginSuccess={async (loggedUser) => {
+            if (loggedUser.role === 'student') {
+              // 1. Buscar a imagem de perfil mais recente no Supabase
+              let avatarUrl = loggedUser.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+              try {
+                const { data: dbStudent } = await supabase
+                  .from('students')
+                  .select('img')
+                  .eq('name', loggedUser.name)
+                  .maybeSingle();
+                if (dbStudent?.img) {
+                  avatarUrl = dbStudent.img;
+                }
+              } catch (e) {
+                console.warn('Erro ao restaurar avatar no login:', e);
+              }
+              loggedUser.img = avatarUrl;
+
+              // 2. Buscar e restaurar progresso de palavras e histórico de atividades enviadas
+              try {
+                const { data: dbSubmissions } = await supabase
+                  .from('student_submissions')
+                  .select('*')
+                  .eq('student_name', loggedUser.name);
+                
+                if (dbSubmissions && dbSubmissions.length > 0) {
+                  // Restaurar palavras concluídas no Ábaco
+                  const mergedWords: SavedWord[] = [];
+                  dbSubmissions.forEach((sub: any) => {
+                    if (sub.spelled_words) {
+                      try {
+                        const parsed = JSON.parse(sub.spelled_words);
+                        if (Array.isArray(parsed)) {
+                          parsed.forEach((w: SavedWord) => {
+                            if (w && w.word && !mergedWords.some(mw => mw.word.toUpperCase() === w.word.toUpperCase())) {
+                              mergedWords.push(w);
+                            }
+                          });
+                        }
+                      } catch (e) {
+                        console.error('Error parsing spelled words in restore:', e);
+                      }
+                    }
+                  });
+                  localStorage.setItem('abba_completed_spelled_words', JSON.stringify(mergedWords));
+                  setCompletedSpelledWords(mergedWords);
+
+                  // Restaurar histórico de atividades enviadas
+                  const sentList = dbSubmissions.map((sub: any) => ({
+                    id: `SUB-${new Date(sub.submitted_at).getTime()}`,
+                    studentName: sub.student_name,
+                    studentEmail: sub.student_email,
+                    taskTitle: sub.task_title,
+                    submittedAt: sub.submitted_at,
+                    spelledWordsCount: sub.spelled_words_count
+                  }));
+                  localStorage.setItem('abba_student_sent_activities', JSON.stringify(sentList));
+                } else {
+                  // Sem submissões no banco: limpar progresso antigo para iniciar limpo
+                  localStorage.removeItem('abba_completed_spelled_words');
+                  setCompletedSpelledWords([]);
+                  localStorage.removeItem('abba_student_sent_activities');
+                }
+              } catch (e) {
+                console.warn('Erro ao restaurar progresso no login:', e);
+              }
+            }
+
             setUser(loggedUser);
             localStorage.setItem('abba_logged_in_user', JSON.stringify(loggedUser));
-            setShowLanding(false); // Skip landing once logged in
+            setShowLanding(false); // Pular tela inicial ao estar logado
             if (loggedUser.role === 'teacher') {
               setCurrentScreen('teacher-dashboard');
             } else {
@@ -2544,6 +2616,11 @@ export default function App() {
         onLogout={() => {
           setUser(null);
           localStorage.removeItem('abba_logged_in_user');
+          localStorage.removeItem('abba_completed_spelled_words');
+          localStorage.removeItem('abba_student_sent_activities');
+          localStorage.removeItem('abba_student_accepted_links');
+          localStorage.removeItem('savedWords');
+          setCompletedSpelledWords([]);
           setCurrentScreen('abacus');
           setShowLanding(true);
         }}
@@ -2917,6 +2994,11 @@ export default function App() {
                         setIsMenuOpen(false);
                         setUser(null);
                         localStorage.removeItem('abba_logged_in_user');
+                        localStorage.removeItem('abba_completed_spelled_words');
+                        localStorage.removeItem('abba_student_sent_activities');
+                        localStorage.removeItem('abba_student_accepted_links');
+                        localStorage.removeItem('savedWords');
+                        setCompletedSpelledWords([]);
                         setCurrentScreen('abacus');
                         setShowLanding(true);
                       }}

@@ -5,6 +5,30 @@ import abbaLogo from '../assets/logo abba.svg';
 import { supabase, logUserAction } from '../supabaseClient';
 import { cardImageBase64 } from '../base64Data/cardBase64';
 
+const detectGenderFromName = (fullName: string): 'F' | 'M' => {
+  const firstName = fullName.trim().split(/\s+/)[0].toLowerCase();
+  if (!firstName) return 'M';
+  
+  // Common female names ending in consonants or 'e'
+  const femaleNames = [
+    'beatriz', 'alice', 'yasmin', 'raquel', 'ruth', 'rut', 'ester', 'esther', 
+    'isabel', 'iris', 'miriam', 'suelen', 'ellen', 'solange', 'gisele', 
+    'elisabeth', 'elisabete', 'rose', 'irene', 'cleide', 'neide', 'lourdes', 
+    'ivone', 'viviane', 'ariane', 'iane', 'daiane'
+  ];
+  
+  // Common male names ending in 'a' in Portuguese
+  const maleNamesEndingInA = ['luca', 'lucas', 'joshua', 'mika', 'sasha', 'buda', 'senna'];
+
+  if (femaleNames.includes(firstName)) return 'F';
+  if (maleNamesEndingInA.includes(firstName)) return 'M';
+  
+  // Standard rule: ends in 'a' in Portuguese is female
+  if (firstName.endsWith('a')) return 'F';
+  
+  return 'M';
+};
+
 const parseTeacherNoteAndFiles = (rawNote: string) => {
   if (!rawNote) return { note: '', files: [] };
   const marker = '__SUPPORT_FILES_JSON__:';
@@ -34,23 +58,7 @@ interface TeacherDashboardProps {
 }
 
 // Initial Mock Data
-const INITIAL_STUDENTS = [
-  { id: 'st-1', name: "Ana Beatriz Silva", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuA36Ly4xeWawwKgX-g0LtkXrGT5DTjmm-XeB9Qk6DnSHU-NH54f_hVpqhRSjZs2501yox04bFvBm3qcg4yJditWLeZ66sEhf1BM2qzrzTrRAJ1IuAIpRYb1T08Th4stWnf7V5GK2BSYKgk3P5OvbDzMAAbIACMxK2mI8bpZrbH76YSaaBRPkN9xMZfQmhcm1FtZ7ThFMF6DEYGrtqYqtjPuw6W6iljH5xz1skvI1FXm8WrX2SwaVwgX4vD0qOebo0Hq7Z48evtz0z5Z", progress: 85, matricula: '202300142', gender: 'F' },
-  { id: 'st-2', name: "Carlos andré", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuDqkV-9yCRTIEx8yOwalSNgnJoB7RDDIC5cjysNDwq3qLDkFhWPSGMkg_upCUk2izlt4E-kqkdhSEbFbCNkiuxBU8MtAExoSWUkjzw8FlH2wZ4VSNrCVOHHweC7l6JL19tJNL5ff3Uwdt1UJsPMMHs3POE0Ile5WBXcNOYSC72xdbVYwTSuZTAHmCJ3b69Zs-_lW1c2qq-pKfAeqP8CFv0SUDEntbF7bUmmBtE3o97YG2yRkd-Cx5gF0NYXf4nZkSCMIhiOb68pAWOS", progress: 60, matricula: '202300891', gender: 'M' },
-  { id: 'st-3', name: "Gabriela Fontes", class: "Turma B - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBpRBuZNFWOpOoV_maEY_xg9EoZOrICbKrCsPNfW24bg3aC9ZYU5ORJA4sBL1TO4HTT5oDcgnyA1veDLqsnMEOdwTXgXNf4GW-WF4roWaC_e7MoJYH3ZFFhGCo0Rvep8UZilU1vS3GOROSKcJzB6QxvXzS0obKYNGiYDyGHQ1PtXFoK_QqYXJOzedbSAGVwD7Fx9FpJdD1RAKvVKZPsuDpQMnH1k-Cb4Xr7WM0BQny82cnTZp5vlve3OVfOmb0wlHRa5S9foFIRVSQh", progress: 95, matricula: '202301225', gender: 'F' },
-  { id: 'st-4', name: "João Vitor Rezende", class: "Turma A - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBr8bD9ZzGhFEt7oLruZohpN8SJELwbHxG11_tSiiJu5T4bVdwWf4yrCVWYCbFHtMQ5UVaL5ULioUnlkyWiGw3gzgbiqySzjtjm1PDHPxur524EFEKchY3whP1deXqnANASENlzs-e_E99vbTm7a6mGhPhOtXIUHKHuIBCkfKVQAYGctKycj5IaP-kSNtnulfLt3TthD-cEDbx4tQTyw2gvFjttyvK2YOljZ7IWw0hAACZGrBf39sgtgvUZ8SoVelySNvCJKnTvOgMw", progress: 40, matricula: '202300554', gender: 'M' },
-  { id: 'st-5', name: "Lara Vasconcelos", class: "Turma C - 3º Ano", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAZCDyQjcZT49YUlxQl2LjrBSU4AGNV8wpgZUzz6x_eW-n-23oY3rh-5bbHCjnp_OwnfeCWJxah_8xD5m3I-318UQowMH1epfQmhp5oRAd4zgJx7G6h7SkH0rFOUY-FekT_U_mze4HPnrZC4cAg3azgr2j1sKmTnrF4qf7s007A7carK9Np5c3X0AwBk7ONLeX2LDFjfaYz2bGYeVKRfVrE1hvKt59L8a2oq7-7Fx9u0iV8lCM_Q3Vd3JsHYZsYTlrRXv_dmb4fTi4D", progress: 70, matricula: '202301102', gender: 'F' },
-  { id: 'st-6', name: "Gabriel Souza", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&q=80&w=150&h=150", progress: 50, matricula: '202406', gender: 'M' },
-  { id: 'st-7', name: "Helena Rocha", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1554151228-14d9def656e4?auto=format&fit=crop&q=80&w=150&h=150", progress: 90, matricula: '202407', gender: 'F' },
-  { id: 'st-8', name: "Igor Mendes", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1599566150163-29194dcaad36?auto=format&fit=crop&q=80&w=150&h=150", progress: 30, matricula: '202408', gender: 'M' },
-  { id: 'st-9', name: "Julia Paiva", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1491349174775-aaafddd81942?auto=format&fit=crop&q=80&w=150&h=150", progress: 80, matricula: '202409', gender: 'F' },
-  { id: 'st-10', name: "Kevin Costa", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1542909168-82c3e7fdca5c?auto=format&fit=crop&q=80&w=150&h=150", progress: 65, matricula: '202410', gender: 'M' },
-  { id: 'st-11', name: "Lucas Oliveira", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1544717305-2782549b5136?auto=format&fit=crop&q=80&w=150&h=150", progress: 75, matricula: '202411', gender: 'M' },
-  { id: 'st-12', name: "Mariana Costa", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=150&h=150", progress: 88, matricula: '202412', gender: 'F' },
-  { id: 'st-13', name: "Nataniel Cruz", class: "Turma A - 3º Ano", img: "https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?auto=format&fit=crop&q=80&w=150&h=150", progress: 45, matricula: '202413', gender: 'M' },
-  { id: 'st-14', name: "Olivia Martins", class: "Turma B - 3º Ano", img: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=150&h=150", progress: 92, matricula: '202414', gender: 'F' },
-  { id: 'st-15', name: "Pedro Henrique", class: "Turma C - 3º Ano", img: "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&q=80&w=150&h=150", progress: 55, matricula: '202415', gender: 'M' }
-];
+const INITIAL_STUDENTS: any[] = [];
 
 const INITIAL_TASKS: TaskItem[] = [
   {
@@ -281,12 +289,95 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [students, setStudents] = useState<any[]>(() => {
     const local = localStorage.getItem('abba_students_list');
-    return local ? JSON.parse(local) : INITIAL_STUDENTS;
+    if (local) {
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((s: any) => 
+            s && 
+            s.id && 
+            !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
+            !/^st-\d+$/.test(s.id) && 
+            s.id !== 'student-fixed-id' &&
+            s.name !== 'Alana' &&
+            s.name !== 'Beatriz' &&
+            s.name !== 'Carlos' &&
+            s.name !== 'Diogo' &&
+            s.name !== 'Eduarda' &&
+            s.name !== 'Felipe' &&
+            s.name !== 'Giovanna'
+          );
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem('abba_students_list', JSON.stringify(filtered));
+          }
+          return filtered;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return INITIAL_STUDENTS;
   });
 
   const [gridSearchQuery, setGridSearchQuery] = useState('');
   const [gridFilterType, setGridFilterType] = useState<'all' | 'code' | 'link' | 'login'>('all');
   const [isGridFilterOpen, setIsGridFilterOpen] = useState(false);
+
+  useEffect(() => {
+    // Proactive migration already handled synchronously on state init, kept for safety
+    const listStr = localStorage.getItem('abba_students_list');
+    if (listStr) {
+      try {
+        const list = JSON.parse(listStr);
+        const filtered = list.filter((s: any) => 
+          s && 
+          s.id && 
+          !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
+          !/^st-\d+$/.test(s.id) && 
+          s.id !== 'student-fixed-id' &&
+          s.name !== 'Alana' &&
+          s.name !== 'Beatriz' &&
+          s.name !== 'Carlos' &&
+          s.name !== 'Diogo' &&
+          s.name !== 'Eduarda' &&
+          s.name !== 'Felipe' &&
+          s.name !== 'Giovanna'
+        );
+        if (list.length !== filtered.length) {
+          localStorage.setItem('abba_students_list', JSON.stringify(filtered));
+          setStudents(filtered);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    const logStr = localStorage.getItem('abba_students_logged_by_code');
+    if (logStr) {
+      try {
+        const log = JSON.parse(logStr);
+        const filteredLog = log.filter((s: any) => 
+          s && 
+          s.id && 
+          !/^st-\d+$/.test(s.id) && 
+          s.id !== 'student-fixed-id' &&
+          s.studentName !== 'Alana' &&
+          s.studentName !== 'Beatriz' &&
+          s.studentName !== 'Carlos' &&
+          s.studentName !== 'Diogo' &&
+          s.studentName !== 'Eduarda' &&
+          s.studentName !== 'Felipe' &&
+          s.studentName !== 'Giovanna'
+        );
+        if (log.length !== filteredLog.length) {
+          localStorage.setItem('abba_students_logged_by_code', JSON.stringify(filteredLog));
+          setAccessedStudents(filteredLog);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('abba_students_list', JSON.stringify(students));
@@ -329,6 +420,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [generatedCode, setGeneratedCode] = useState('');
   const [generatedBase64, setGeneratedBase64] = useState('');
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+  const [generatedStudentName, setGeneratedStudentName] = useState('');
   
   const [activeCodes, setActiveCodes] = useState<AccessCode[]>(() => {
     const local = localStorage.getItem('abba_active_codes');
@@ -492,7 +584,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         matricula: student.matricula,
         gender: student.gender,
         email: student.email,
-        last_access_at: student.lastAccessAt || new Date().toISOString(),
+        last_access_at: student.lastAccessAt || null,
         login_method: student.loginMethod
       };
       
@@ -618,34 +710,66 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
       // 4. Sincronizar alunos da tabela 'students' ou fallback para 'student_logins'
       try {
+        // Delete mock students from remote db to make it clean!
+        await supabase
+          .from('students')
+          .delete()
+          .in('id', ['student-fixed-id', 'st-1', 'st-2', 'st-3', 'st-4', 'st-5', 'st-6', 'st-7', 'st-8', 'st-9', 'st-10', 'st-11', 'st-12', 'st-13', 'st-14', 'st-15']);
+        await supabase
+          .from('students')
+          .delete()
+          .in('name', ['Alana', 'Beatriz', 'Carlos', 'Diogo', 'Eduarda', 'Felipe', 'Giovanna']);
+
         const { data: dbStudents, error: studentsErr } = await supabase
           .from('students')
           .select('*');
 
         if (dbStudents && !studentsErr) {
-          if (dbStudents.length === 0) {
-            // Auto-seed table
-            const formattedInitial = INITIAL_STUDENTS.map(s => ({
-              id: s.id,
-              name: s.name,
-              class: s.class,
-              img: s.img,
-              progress: s.progress,
-              matricula: s.matricula,
-              gender: s.gender,
-              email: `${s.id}@abba.com`,
-              last_access_at: new Date().toISOString(),
-              login_method: 'initial'
-            }));
-            await supabase.from('students').insert(formattedInitial);
-            setStudents(INITIAL_STUDENTS);
-            localStorage.setItem('abba_students_list', JSON.stringify(INITIAL_STUDENTS));
-          } else {
-            const mapped = dbStudents.map(s => ({
+          // Identify and delete any ghost students (with temporary st- ID that haven't registered login method yet)
+          const ghostIds = dbStudents
+            .filter((s: any) => 
+              s && 
+              s.id && 
+              s.id.startsWith('st-') && 
+              s.id !== 'student-fixed-id' &&
+              s.login_method !== 'login' && 
+              s.login_method !== 'code' && 
+              s.login_method !== 'link'
+            )
+            .map((s: any) => s.id);
+
+          if (ghostIds.length > 0) {
+            console.log('🗑️ Deletando alunos fantasmas do Supabase:', ghostIds);
+            try {
+              await supabase
+                .from('students')
+                .delete()
+                .in('id', ghostIds);
+            } catch (delErr) {
+              console.warn('Erro ao deletar fantasmas no banco:', delErr);
+            }
+          }
+
+          const mapped = dbStudents
+            .filter((s: any) => 
+              s && 
+              s.id && 
+              !ghostIds.includes(s.id) &&
+              !/^st-\d+$/.test(s.id) && 
+              s.id !== 'student-fixed-id' &&
+              s.name !== 'Alana' &&
+              s.name !== 'Beatriz' &&
+              s.name !== 'Carlos' &&
+              s.name !== 'Diogo' &&
+              s.name !== 'Eduarda' &&
+              s.name !== 'Felipe' &&
+              s.name !== 'Giovanna'
+            )
+            .map(s => ({
               id: s.id,
               name: s.name,
               class: s.class || 'Turma A - 3º Ano',
-              img: s.img || `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`,
+              img: s.img || `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
               progress: s.progress || 0,
               matricula: s.matricula || `2026${Math.floor(1000 + Math.random() * 9000)}`,
               gender: s.gender || 'M',
@@ -653,9 +777,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               lastAccessAt: s.last_access_at,
               loginMethod: s.login_method
             }));
-            setStudents(mapped);
-            localStorage.setItem('abba_students_list', JSON.stringify(mapped));
-          }
+          setStudents(mapped);
+          localStorage.setItem('abba_students_list', JSON.stringify(mapped));
         } else {
           // Fallback to student logins
           const { data: dbLogins, error: loginsErr } = await supabase
@@ -664,8 +787,36 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
             .order('logged_at', { ascending: false });
           if (dbLogins && !loginsErr) {
             setStudents(prev => {
-              const updated = [...prev];
+              const updated = prev.filter((s: any) => 
+                s && 
+                s.id && 
+                !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
+                !/^st-\d+$/.test(s.id) && 
+                s.id !== 'student-fixed-id' &&
+                s.name !== 'Alana' &&
+                s.name !== 'Beatriz' &&
+                s.name !== 'Carlos' &&
+                s.name !== 'Diogo' &&
+                s.name !== 'Eduarda' &&
+                s.name !== 'Felipe' &&
+                s.name !== 'Giovanna'
+              );
               dbLogins.forEach((login: any) => {
+                // Skip mock logins
+                if (
+                  !login ||
+                  login.student_name === 'Alana' ||
+                  login.student_name === 'Beatriz' ||
+                  login.student_name === 'Carlos' ||
+                  login.student_name === 'Diogo' ||
+                  login.student_name === 'Eduarda' ||
+                  login.student_name === 'Felipe' ||
+                  login.student_name === 'Giovanna' ||
+                  /^st-\d+$/.test(login.id) ||
+                  login.id === 'student-fixed-id'
+                ) {
+                  return;
+                }
                 const index = updated.findIndex(s => s.name.toLowerCase() === login.student_name.toLowerCase());
                 if (index !== -1) {
                   updated[index].email = login.student_email;
@@ -676,7 +827,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     id: 'st-' + login.id,
                     name: login.student_name,
                     class: "Turma A - 3º Ano",
-                    img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+                    img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
                     progress: 0,
                     matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
                     gender: 'M',
@@ -741,29 +892,153 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   // State to track copied status inside the success overlay
   const [copiedStudentItem, setCopiedStudentItem] = useState<{ id: string; type: 'link' | 'code' } | null>(null);
 
+  // Track premium copy states for the "Compartilhar atividade" modal
+  const [copiedButtons, setCopiedButtons] = useState<Record<string, Record<'code' | 'link' | 'pdf', boolean>>>({});
+  const [confirmCopyAgain, setConfirmCopyAgain] = useState<{ sid: string; type: 'code' | 'link' | 'pdf' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (toastMessage) {
+      const timer = setTimeout(() => {
+        setToastMessage(null);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [toastMessage]);
+
+  const resolveStudentTaskAccess = (studentName: string, studentId: string, taskId: string, taskTitle: string) => {
+    // 1. Look for an active code for this student
+    let foundCode = activeCodes.find(
+      c => c.studentName.toLowerCase() === studentName.toLowerCase() && c.expiresAt > Date.now() && c.status === 'active'
+    );
+
+    let finalCode = foundCode?.code;
+    let codeId = foundCode?.id;
+    let expiresAt = foundCode?.expiresAt || (Date.now() + 365 * 24 * 60 * 60 * 1000);
+
+    if (!finalCode) {
+      expiresAt = Date.now() + 365 * 24 * 60 * 60 * 1000; // default 1 year
+      codeId = 'st-' + Math.random().toString(36).substring(2, 9).toUpperCase();
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let codeVal = '';
+      for (let i = 0; i < 6; i++) {
+        codeVal += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      finalCode = codeVal;
+
+      setActiveCodes(prev => [{
+        id: codeId!,
+        code: codeVal,
+        studentName,
+        expiresAt,
+        durationLabel: 'Ativo',
+        status: 'active'
+      }, ...prev]);
+    }
+
+    // 2. Look for a link generated for this student and task
+    let foundLink = dbTaskLinks.find(
+      link => link.studentName === studentName && link.taskId === taskId
+    );
+
+    let finalLink = foundLink?.link;
+    if (!finalLink || finalLink.includes('ey') || finalLink.length > 80) {
+      // Build a super clean and short link using the 6-character alphanumeric code
+      finalLink = `${window.location.origin}?code=${finalCode}`;
+      
+      if (foundLink) {
+        foundLink.link = finalLink;
+        setDbTaskLinks(prev => prev.map(l => l.id === foundLink!.id ? { ...l, link: finalLink! } : l));
+      } else {
+        setDbTaskLinks(prev => [{ id: `LINK-${studentId}-${finalCode}`, studentName, link: finalLink!, taskId }, ...prev]);
+      }
+    }
+
+    // 3. Always ensure the registry has this code mapped to this specific taskId and taskTitle
+    const registryKey = 'abba_invite_codes_registry';
+    const currentRegistry = localStorage.getItem(registryKey);
+    const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+    
+    const existingIndex = registryList.findIndex((item: any) => item.code === finalCode);
+    if (existingIndex !== -1) {
+      registryList[existingIndex].taskId = taskId;
+      registryList[existingIndex].taskTitle = taskTitle;
+      registryList[existingIndex].name = studentName;
+      registryList[existingIndex].codeId = codeId;
+    } else {
+      registryList.push({
+        code: finalCode,
+        name: studentName,
+        expiresAt: expiresAt,
+        codeId: codeId,
+        taskId,
+        taskTitle
+      });
+    }
+    localStorage.setItem(registryKey, JSON.stringify(registryList));
+
+    return { link: finalLink, code: finalCode };
+  };
+
+  const handleShareButtonPress = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'pdf') => {
+    const isAlreadyCopied = copiedButtons[studentId]?.[type];
+
+    if (isAlreadyCopied) {
+      setConfirmCopyAgain({ sid: studentId, type });
+      return;
+    }
+
+    executeCopyAction(studentName, studentId, taskTitle, taskId, type);
+  };
+
+  const executeCopyAction = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'pdf') => {
+    const info = resolveStudentTaskAccess(studentName, studentId, taskId, taskTitle);
+
+    let textToCopy = '';
+    let alertMsg = '';
+
+    if (type === 'code') {
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nUse o seu *código da tarefa*: *${info.code}*\n\n*Como usar o Código?*\nNa *Área do aluno* vá até o campo *Fazer upload por link ou código* e cole seu código no campo abaixo, e clique em *Verificar*, assim que o *Código* for verificado é só clicar em *Acessar matéria* e ir para a atividade.`;
+      alertMsg = 'O código foi copiado';
+    } else if (type === 'link') {
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nClique no *link da tarefa* abaixo para acessar sua tarefa:\n${info.link}\n\n*Como usar o Link?*\nNa *Área do aluno* vá até o campo *Fazer upload por link ou código* e cole seu código no campo abaixo, e clique em *Verificar*, assim que o *Link* for verificado é só clicar em *Acessar matéria* e ir para a atividade.`;
+      alertMsg = 'O Link foi copiado';
+    } else if (type === 'pdf') {
+      textToCopy = `Olá, *${studentName}* 👋🏾\nEssa é sua tarefa: *${taskTitle}* no Abba Digital*!\n\nBaixe o *PDF da tarefa* abaixo e faça o upload do arquivo na *Área do aluno*\n\n*Como acessar o PDF?*\nNa *Área do aluno* vá até o campo *Fazer upload por arquivo* Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em *ver atividade*`;
+      alertMsg = 'O PDF foi copiado';
+      
+      // Also download actual PDF!
+      handleDownloadStudentTaskPdf(studentName, taskTitle, info.code || '', info.link || '');
+    }
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedButtons(prev => ({
+      ...prev,
+      [studentId]: {
+        ...(prev[studentId] || { code: false, link: false, pdf: false }),
+        [type]: true
+      }
+    }));
+    setToastMessage(alertMsg);
+    setConfirmCopyAgain(null);
+  };
+
   // Helper function to map student data with their offline keys and links, and show the visual assignment overlay
   const showAssignmentSuccessOverlay = (taskTitle: string, taskId: string, studentIds: string[]) => {
     if (!studentIds || studentIds.length === 0) return;
 
     const mapped = studentIds.map(studentId => {
-      const student = students.find(s => s.id === studentId);
+      const student = students.find(s => s.id === studentId || s.name.toLowerCase() === studentId.toLowerCase());
       if (!student) return null;
 
-      // Look for a link generated for this student and task
-      const foundLink = dbTaskLinks.find(
-        link => link.studentName === student.name && link.taskId === taskId
-      );
-
-      // Look for an active code for this student
-      const foundCode = activeCodes.find(
-        c => c.studentName === student.name && c.expiresAt > Date.now() && c.status === 'active'
-      );
+      // Always resolve task access using our robust, super-short alphanumeric link mechanism!
+      const info = resolveStudentTaskAccess(student.name, student.id, taskId, taskTitle);
 
       return {
         id: student.id,
         name: student.name,
-        link: foundLink?.link,
-        code: foundCode?.code
+        link: info.link,
+        code: info.code
       };
     }).filter(Boolean) as { id: string; name: string; link?: string; code?: string }[];
 
@@ -771,6 +1046,151 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       taskTitle,
       students: mapped
     });
+  };
+
+  const handleDownloadStudentTaskPdf = (studentName: string, taskTitle: string, accessCode: string, accessLink: string) => {
+    try {
+      // Find the task description/summary
+      const foundTask = tasks.find(t => t.title === taskTitle || t.id === taskTitle);
+      const taskDescription = foundTask?.description || 'Realize as atividades práticas de soletração no portal Abba Digital.';
+      const dateStr = new Date().toLocaleDateString('pt-BR');
+
+      // Create a beautiful off-screen container for the PDF content
+      const container = document.createElement('div');
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      container.style.top = '-9999px';
+      container.style.width = '700px';
+      container.style.background = '#ffffff';
+      
+      // Build the premium HTML structure
+      container.innerHTML = `
+        <div style="font-family: 'Plus Jakarta Sans', -apple-system, sans-serif; padding: 40px; color: #1e293b; background: #ffffff;">
+          <div style="max-width: 670px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 24px; padding: 35px; background: #ffffff; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+            <div style="text-align: center; margin-bottom: 25px;">
+              <img id="pdf-logo-img" style="max-width: 160px; height: auto; display: inline-block;" src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780086579/abba_digital_app_cukxh4.avif" alt="Abba Digital Logo">
+            </div>
+            
+            <div style="border-bottom: 2px solid #f1f5f9; padding-bottom: 20px; margin-bottom: 25px; text-align: center;">
+              <h1 style="font-family: 'Outfit', sans-serif; font-size: 24px; font-weight: 900; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.5px;">Ficha de Acesso da Atividade</h1>
+              <span style="display: inline-block; padding: 5px 12px; background: #f2f3ff; border: 1px solid #d6e3ff; color: #005bb3; border-radius: 99px; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;">Abba Digital</span>
+            </div>
+            
+            <div style="display: grid; grid-template-cols: 1fr 1fr; gap: 15px; margin-bottom: 25px; background: #f8fafc; padding: 16px; border-radius: 16px; border: 1px solid #e2e8f0;">
+              <div style="font-size: 13px;">
+                <div style="font-weight: 700; color: #64748b; margin-bottom: 3px; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">Estudante</div>
+                <div style="font-weight: 800; color: #0f172a;">${studentName}</div>
+              </div>
+              <div style="font-size: 13px;">
+                <div style="font-weight: 700; color: #64748b; margin-bottom: 3px; text-transform: uppercase; font-size: 9px; letter-spacing: 0.5px;">Data de Atribuição</div>
+                <div style="font-weight: 800; color: #0f172a;">${dateStr}</div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Matéria / Tarefa</div>
+              <div style="font-weight: 800; font-size: 14px; color: #0f172a; margin-left: 8px;">${taskTitle}</div>
+              <div style="font-size: 12px; line-height: 1.6; color: #334155; padding: 14px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; margin-top: 6px;">
+                ${taskDescription}
+              </div>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Credenciais de Acesso</div>
+              <div style="display: grid; grid-template-cols: 1fr; max-width: 320px; margin: 6px auto 0 auto;">
+                <div style="padding: 15px; border-radius: 16px; border: 1px solid #fcd34d; text-align: center; background: #fffdf5;">
+                  <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px;">Código de Acesso</div>
+                  <div style="font-family: 'Outfit', monospace; font-size: 20px; font-weight: 900; color: #b45309; background: #ffffff; padding: 6px 12px; border-radius: 8px; border: 2px dashed #f59e0b; display: inline-block; letter-spacing: 2px;">${accessCode}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 25px;">
+              <div style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 800; color: #1e293b; margin-top: 0; margin-bottom: 10px; border-left: 4px solid #005bb3; padding-left: 8px;">Como acessar e realizar a atividade?</div>
+              <div style="margin-top: 6px;">
+                <div style="padding: 12px 14px; border-radius: 12px; background: #ffffff; border: 1px solid #f1f5f9; margin-bottom: 10px; border-left: 4px solid #f59e0b;">
+                  <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">🔑 Como usar o Código?</div>
+                  <div style="font-size: 11px; line-height: 1.5; color: #475569;">
+                    Na <strong>Área do aluno</strong> vá até o campo <strong>Inserir código de acesso</strong> e cole seu código de 6 dígitos no campo, e clique em <strong>Verificar</strong>. Assim que o código for verificado, é só clicar em <strong>Acessar matéria</strong> para ir para a atividade.
+                  </div>
+                </div>
+
+                <div style="padding: 12px 14px; border-radius: 12px; background: #ffffff; border: 1px solid #f1f5f9; margin-bottom: 10px; border-left: 4px solid #f43f5e;">
+                  <div style="font-size: 12px; font-weight: 800; color: #0f172a; margin-bottom: 4px;">📄 Como acessar o PDF?</div>
+                  <div style="font-size: 11px; line-height: 1.5; color: #475569;">
+                    Na <strong>Área do aluno</strong> vá até o campo <strong>Fazer upload por arquivo</strong>. Clique e selecione seu arquivo ou o arraste para a área delimitada no campo, seu arquivo da matéria será gerado e você poderá acessá-la em <strong>ver atividade</strong>.
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top: 30px; border-top: 1px solid #f1f5f9; padding-top: 15px; text-align: center; font-size: 10px; color: #94a3b8; font-weight: 500; line-height: 1.4;">
+              Ficha de atividade oficial gerada pelo Painel do Professor do Abba Digital.<br>
+              Acesse: abba-digital.vercel.app | Suporte Offline Completo Garantido
+            </div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(container);
+
+      // Define execution function
+      const runGeneration = () => {
+        const opt = {
+          margin:       [10, 10, 10, 10],
+          filename:     `${taskTitle}-${studentName}.pdf`,
+          image:        { type: 'jpeg', quality: 0.98 },
+          html2canvas:  { scale: 2, useCORS: true, logging: false },
+          jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        };
+
+        // Call html2pdf.js save
+        const h2p = (window as any).html2pdf;
+        h2p()
+          .from(container)
+          .set(opt)
+          .save()
+          .then(() => {
+            document.body.removeChild(container);
+          })
+          .catch((err: any) => {
+            console.error('Error saving PDF:', err);
+            document.body.removeChild(container);
+          });
+      };
+
+      // Load html2pdf bundle if not present, and then run generation
+      if (!(window as any).html2pdf) {
+        const script = document.createElement('script');
+        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+        script.onload = () => {
+          // Wait for logo to load, then run
+          const img = document.getElementById('pdf-logo-img') as HTMLImageElement;
+          if (img && !img.complete) {
+            img.onload = runGeneration;
+            img.onerror = runGeneration;
+          } else {
+            runGeneration();
+          }
+        };
+        script.onerror = () => {
+          alert('Erro ao carregar gerador de PDF. Verifique sua conexão e tente novamente.');
+          document.body.removeChild(container);
+        };
+        document.head.appendChild(script);
+      } else {
+        const img = document.getElementById('pdf-logo-img') as HTMLImageElement;
+        if (img && !img.complete) {
+          img.onload = runGeneration;
+          img.onerror = runGeneration;
+        } else {
+          runGeneration();
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      alert("Houve um erro ao gerar o arquivo PDF. Tente novamente.");
+    }
   };
 
   // Checkbox Student Selector States
@@ -1040,26 +1460,32 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
   const [accessedStudents, setAccessedStudents] = useState<{ id: string; studentName: string; accessedAt: string; code: string }[]>(() => {
     const local = localStorage.getItem('abba_students_logged_by_code');
     if (local) {
-      return JSON.parse(local);
-    }
-    
-    // Default mock data so it's never empty and looks robust!
-    const mockAccessList = [
-      {
-        id: 'st-1',
-        studentName: 'Ana Beatriz Silva',
-        accessedAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 mins ago
-        code: 'ABBA-5MTAUIK-ANA'
-      },
-      {
-        id: 'st-2',
-        studentName: 'Carlos andré',
-        accessedAt: new Date(Date.now() - 120 * 60 * 1000).toISOString(), // 2 hours ago
-        code: 'ABBA-0TJZ3UW-CARLOS'
+      try {
+        const parsed = JSON.parse(local);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter((s: any) => 
+            s && 
+            s.id && 
+            !/^st-\d+$/.test(s.id) && 
+            s.id !== 'student-fixed-id' &&
+            s.studentName !== 'Alana' &&
+            s.studentName !== 'Beatriz' &&
+            s.studentName !== 'Carlos' &&
+            s.studentName !== 'Diogo' &&
+            s.studentName !== 'Eduarda' &&
+            s.studentName !== 'Felipe' &&
+            s.studentName !== 'Giovanna'
+          );
+          if (filtered.length !== parsed.length) {
+            localStorage.setItem('abba_students_logged_by_code', JSON.stringify(filtered));
+          }
+          return filtered;
+        }
+      } catch (e) {
+        console.error(e);
       }
-    ];
-    localStorage.setItem('abba_students_logged_by_code', JSON.stringify(mockAccessList));
-    return mockAccessList;
+    }
+    return [];
   });
 
   useEffect(() => {
@@ -1108,11 +1534,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     };
 
     window.addEventListener('storage', syncStudents);
-    const interval = setInterval(syncStudents, 1500);
 
     return () => {
       window.removeEventListener('storage', syncStudents);
-      clearInterval(interval);
     };
   }, []);
 
@@ -1190,6 +1614,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     });
     localStorage.setItem(registryKey, JSON.stringify(registryList));
 
+    // O registro no Supabase será criado dinamicamente apenas quando o aluno realizar o seu primeiro login.
+
     const friendlyCode = code;
     const token = code;
 
@@ -1205,10 +1631,54 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
     setActiveCodes([newCodeItem, ...activeCodes]);
     setGeneratedCode(friendlyCode);
     setGeneratedBase64(token);
+    setGeneratedStudentName(name);
     setStudentNameInput('');
   };
 
-  const handleCopyCode = (codeText: string, index: number) => {
+  const handleCopyCode = async (codeText: string, index: number) => {
+    // Proactive Supabase sinking
+    const registryKey = 'abba_invite_codes_registry';
+    const localRegistry = localStorage.getItem(registryKey);
+    const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+    
+    const cleanCode = codeText.replace('ABBA-', '');
+    let searchCode = cleanCode;
+    if (cleanCode.includes('-')) {
+      searchCode = cleanCode.split('-')[0];
+    }
+
+    const matchedLocal = registryList.find((item: any) => item.code === searchCode || item.code === codeText || item.code === cleanCode);
+    const matchedActive = activeCodes.find((c: any) => c.code === codeText || c.code === cleanCode || c.id === `st-${searchCode}` || c.id === searchCode);
+
+    const cleanUpper = cleanCode.toUpperCase();
+    let matchedRecord = matchedLocal ? {
+      codeId: matchedLocal.codeId,
+      name: matchedLocal.name,
+      code: matchedLocal.code
+    } : matchedActive ? {
+      codeId: matchedActive.id,
+      name: matchedActive.studentName,
+      code: searchCode
+    } : null;
+
+    if (!matchedRecord) {
+      if (cleanUpper.includes('0TJZ3UW')) {
+        matchedRecord = {
+          codeId: 'st-2',
+          name: 'Carlos André',
+          code: 'ABBA-0TJZ3UW-CARLOS'
+        };
+      } else if (cleanUpper.includes('5MTAUIK')) {
+        matchedRecord = {
+          codeId: 'st-1',
+          name: 'Ana Beatriz Silva',
+          code: 'ABBA-5MTAUIK-ANA'
+        };
+      }
+    }
+    
+    // Os dados do estudante no Supabase serão criados dinamicamente apenas quando o aluno realizar o seu primeiro login.
+
     let messageText = codeText;
     try {
       if (codeText.startsWith('ABBA-')) {
@@ -1223,13 +1693,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         const activeItem = activeCodes.find(c => c.code === codeText);
         const name = activeItem ? activeItem.studentName : 'Aluno';
         
-        const guessedGender = (() => {
-          const firstName = name.split(' ')[0].toLowerCase();
-          if (firstName.endsWith('a') || ['beatriz', 'alice', 'yasmin', 'isabel', 'raquel', 'ruth', 'irene'].includes(firstName)) {
-            return 'F';
-          }
-          return 'M';
-        })();
+        const guessedGender = detectGenderFromName(name);
         const welcomeWord = guessedGender === 'F' ? 'bem-vinda' : 'bem-vindo';
         
         messageText = `Olá, *${name}* 👋🏾\nSeja muito ${welcomeWord} ao *Abba Digital*!\n\nUse o seu *código de acesso* na página de login do aluno para entrar:\nSeu código: *${codeText}*\n\n*Como entrar?*\nNa tela de login do Abba Digital, clique na aba *Entrar com código* e cole o código acima para acessar sua conta!`;
@@ -1683,7 +2147,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     <img 
                       alt="Avatar" 
                       className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                      src="src/assets/Imagens/profdecioperfil.avif" 
+                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
                     />
                     <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                       <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -1986,7 +2450,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 onClick={() => setShowProfileMenu(prev => !prev)}
                 className="avatar-btn-mobile w-9 h-9 rounded-full overflow-hidden border border-gray-200 p-0 bg-transparent cursor-pointer flex items-center justify-center"
               >
-                <img src="src/assets/Imagens/profdecioperfil.avif" alt="Teatcher" className="w-full h-full object-cover" />
+                <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" alt="Teatcher" className="w-full h-full object-cover" />
               </button>
             </div>
           </div>
@@ -2059,7 +2523,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="src/assets/Imagens/profdecioperfil.avif"
+                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif"
                 />
               </button>
  
@@ -2169,7 +2633,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             <img 
                               alt="Avatar" 
                               className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20" 
-                              src="src/assets/Imagens/profdecioperfil.avif" 
+                              src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
                             />
                             <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                               <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -2341,7 +2805,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       submissions.map((sub, idx) => {
                         const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
                                             INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
-                        const avatarUrl = studentInfo ? studentInfo.img : `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`;
+                        const avatarUrl = studentInfo ? studentInfo.img : `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`;
                         const isReviewed = sub.reviewed || false;
 
                         return (
@@ -2592,7 +3056,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       submissions.map((sub, idx) => {
                         const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
                                             INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
-                        const avatarUrl = studentInfo ? studentInfo.img : `https://images.unsplash.com/photo-1535713875002?auto=format&fit=crop&q=80&w=150&h=150`;
+                        const avatarUrl = studentInfo ? studentInfo.img : `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`;
                         const isReviewed = sub.reviewed || false;
 
                         return (
@@ -2940,7 +3404,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                     <img 
                                       alt={student.name} 
                                       className="w-12 h-12 rounded-full object-cover border-2 border-surface-container-high" 
-                                      src={student.img}
+                                      src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                                      onError={(e) => {
+                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                      }}
                                     />
                                     <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
                                       status === 'completed' ? 'bg-green-500' : status === 'inprogress' ? 'bg-blue-500' : 'bg-slate-400'
@@ -3332,16 +3799,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                       );
                                       return isExplicitlyAssigned || hasSubmission || hasLink;
                                     }).length;
-                                    const subsCount = submissions.filter(sub => sub.taskTitle === task.title).length;
+                                    const uniqueSubs = students.filter(s => {
+                                      return submissions.some(
+                                        sub => sub.studentName === s.name && sub.taskTitle === task.title
+                                      );
+                                    }).length;
                                     const displayAssigned = assignedCount;
+                                    const displaySubs = Math.min(uniqueSubs, displayAssigned);
                                     const progressPercent = displayAssigned > 0 
-                                      ? Math.min(100, Math.round((subsCount / displayAssigned) * 100)) 
+                                      ? Math.min(100, Math.round((displaySubs / displayAssigned) * 100)) 
                                       : 0;
                                     return (
                                       <>
                                         <div className="flex justify-between font-label-sm text-label-sm">
                                           <span className="text-on-surface-variant">Progresso de Entrega</span>
-                                          <span className="text-primary font-bold">{subsCount}/{displayAssigned} Alunos</span>
+                                          <span className="text-primary font-bold">{displaySubs}/{displayAssigned} Alunos</span>
                                         </div>
                                         <div className="w-full h-2 bg-surface-container-high rounded-full overflow-hidden">
                                           <div
@@ -3570,9 +4042,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                           <div className="relative shrink-0">
                             <img 
-                              src={student.img} 
+                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
                               alt={student.name} 
                               className="w-12 h-12 rounded-full object-cover border-2 border-slate-100"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                              }}
                             />
                             {student.lastAccessAt && (
                               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 border-2 border-white rounded-full animate-pulse" title="Online recentemente" />
@@ -3831,7 +4306,9 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                   {generatedCode && (
                     <div className="bg-[#f2f3ff] border border-[#d6e3ff] p-6 rounded-2xl flex flex-col justify-between">
                       <div>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">Chave Aluna Gerada</span>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1">
+                          {generatedStudentName && detectGenderFromName(generatedStudentName) === 'F' ? 'Código aluna' : 'Código aluno'}
+                        </span>
                         <div className="font-mono text-lg font-bold text-[#005bb3] break-all leading-tight">
                           {generatedCode}
                         </div>
@@ -3864,32 +4341,37 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
 
                 <div className="p-6 bg-slate-50/20 flex-grow">
-                  {activeCodes.length === 0 ? (
+                  {accessedStudents.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-sm">
-                      Nenhuma chave de acesso ativa no momento.
+                      Nenhum aluno realizou login pelo código no momento.
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8 p-8 bg-slate-50/50 min-h-[200px]">
                       <AnimatePresence>
-                      {activeCodes.map((c, index) => {
-                        const isExpired = Date.now() > c.expiresAt;
-                        const student = students.find(s => s.name.toLowerCase() === c.studentName.toLowerCase());
-                        const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1779957430/clipboard-image-1779957411_mvyb16.avif";
+                      {accessedStudents.map((item, index) => {
+                        const activeCode = activeCodes.find(
+                          c => c.code.toUpperCase() === item.code.toUpperCase() ||
+                               c.studentName.toLowerCase() === item.studentName.toLowerCase()
+                        );
+                        const isExpired = activeCode ? (Date.now() > activeCode.expiresAt) : false;
+                        const student = students.find(s => s.name.toLowerCase() === item.studentName.toLowerCase());
+                        const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
 
-                        let friendlyCode = c.id;
+                        let durationLabel = activeCode ? activeCode.durationLabel : 'Ativo';
+                        let friendlyCode = activeCode ? activeCode.code : item.code;
                         try {
-                          if (c.code.startsWith('ABBA-')) {
-                            const base64 = c.code.substring(5);
+                          if (friendlyCode.startsWith('ABBA-')) {
+                            const base64 = friendlyCode.substring(5);
                             const payload = JSON.parse(atob(base64));
                             friendlyCode = `ABBA-${payload.codeId}-${payload.name.split(' ')[0].toUpperCase()}`;
                           }
                         } catch (e) {
-                          friendlyCode = `ABBA-${c.id}-${c.studentName.split(' ')[0].toUpperCase()}`;
+                          // fallback
                         }
 
                         return (
                           <motion.div 
-                            key={c.id}
+                            key={item.id}
                             layout="position"
                             initial={{ opacity: 0, scale: 0.95 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -3898,14 +4380,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             className="bg-white rounded-2xl border border-outline-variant/60 shadow-sm p-6 pt-10 flex flex-col relative hover:border-[#005bb3]/40 transition-all group"
                           >
                             <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 border-[#00c853] overflow-hidden shadow-md bg-white select-none shrink-0">
-                              <img src={studentImg} className="w-full h-full object-cover" alt={c.studentName} />
+                              <img 
+                                src={studentImg || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                className="w-full h-full object-cover" 
+                                alt={item.studentName} 
+                                onError={(e) => {
+                                  e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                }}
+                              />
                             </div>
 
                             <div className="absolute top-4 right-4 flex items-center gap-2 select-none">
                               <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200/60">
-                                {c.durationLabel && c.durationLabel.startsWith('Até ') && c.durationLabel.includes('-')
-                                  ? `Até ${c.durationLabel.substring(4).split('-').reverse().join('/')}`
-                                  : c.durationLabel}
+                                {durationLabel && durationLabel.startsWith('Até ') && durationLabel.includes('-')
+                                  ? `Até ${durationLabel.substring(4).split('-').reverse().join('/')}`
+                                  : durationLabel}
                               </span>
                               <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
                                 isExpired ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
@@ -3914,12 +4403,20 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               </span>
                               <button
                                 onClick={() => {
-                                  if (window.confirm(`Deseja excluir a chave de acesso de ${c.studentName}?`)) {
-                                    setActiveCodes(prev => prev.filter(item => item.id !== c.id));
+                                  if (window.confirm(`Deseja revogar o acesso de ${item.studentName}?`)) {
+                                    // Remove from accessedStudents state and localStorage
+                                    const updated = accessedStudents.filter(s => s.id !== item.id && s.studentName.toLowerCase() !== item.studentName.toLowerCase());
+                                    setAccessedStudents(updated);
+                                    localStorage.setItem('abba_students_logged_by_code', JSON.stringify(updated));
+
+                                    // Also remove from activeCodes if found
+                                    if (activeCode) {
+                                      setActiveCodes(prev => prev.filter(c => c.id !== activeCode.id));
+                                    }
                                   }
                                 }}
                                 className="p-1 hover:bg-red-50 hover:text-red-500 text-slate-300 hover:text-red-500 rounded-full transition-colors cursor-pointer bg-transparent border-none flex items-center justify-center"
-                                title="Excluir Chave"
+                                title="Revogar Acesso"
                               >
                                 <span className="material-symbols-outlined text-[16px]">delete</span>
                               </button>
@@ -3927,7 +4424,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                             <div className="flex-1 mt-2">
                               <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider block">
-                                Chave gerada para {c.studentName}
+                                Chave gerada para {item.studentName}
                               </span>
                               
                               <h4 className="text-base font-extrabold text-[#005bb3] tracking-wide mt-2 font-mono block break-all">
@@ -3941,7 +4438,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
 
                             <button
                               type="button"
-                              onClick={() => handleCopyCode(c.code, index)}
+                              onClick={() => handleCopyCode(activeCode ? activeCode.code : item.code, index)}
                               className="w-full py-3.5 mt-5 bg-white border border-[#c1c6d6] hover:bg-[#f2f3ff] hover:border-[#005bb3]/30 active:scale-[0.98] transition-all rounded-xl font-bold text-xs text-slate-700 cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                             >
                               <span className="material-symbols-outlined text-[16px]">
@@ -4167,7 +4664,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                 className="flex items-center justify-between p-2 rounded-xl bg-white border border-slate-100 hover:border-primary/30 transition-colors cursor-pointer group"
                               >
                                 <div className="flex items-center gap-md">
-                                  <img src={s.img} alt={s.name} className="w-8 h-8 rounded-full object-cover border border-[#eaedff]" />
+                                  <img 
+                                    src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                    alt={s.name} 
+                                    className="w-8 h-8 rounded-full object-cover border border-[#eaedff]" 
+                                    onError={(e) => {
+                                      e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                    }}
+                                  />
                                   <span className="font-bold text-xs text-on-background group-hover:text-primary transition-colors">{s.name}</span>
                                 </div>
                                 <span className={`material-symbols-outlined text-[20px] transition-all ${
@@ -4423,11 +4927,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             className="absolute top-3 right-3 w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] pointer-events-none"
                           />
                           <img 
-                            src={s.img} 
+                            src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
                             alt={s.name}
                             className={`w-14 h-14 rounded-full object-cover mb-2 border-2 transition-all ${
                               isSelected ? 'border-[#005bb3] scale-105' : 'border-slate-100'
                             }`}
+                            onError={(e) => {
+                              e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                            }}
                           />
                           <p className="font-bold text-xs text-center text-[#131b2e] truncate w-full leading-tight">{s.name}</p>
                           <p className="text-[10px] text-slate-400 mt-1 uppercase font-semibold">Matrícula: {s.matricula || '202400'}</p>
@@ -4637,7 +5144,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         </div>
                       )}
                       {editTaskAssignedStudentIds.length === 0 && (
-                        <p className="text-xs text-slate-400 italic py-1 pl-2">Atribuída a todos os alunos</p>
+                        <p className="text-xs text-slate-400 italic py-1 pl-2">Nenhum aluno atribuído</p>
                       )}
                       
                       <button 
@@ -4675,7 +5182,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                   className="flex items-center justify-between p-2 rounded-lg bg-white border border-slate-100 hover:border-primary/30 transition-colors cursor-pointer select-none"
                                 >
                                   <div className="flex items-center gap-2">
-                                    <img src={s.img} alt={s.name} className="w-7 h-7 rounded-full object-cover border" />
+                                    <img 
+                                      src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                      alt={s.name} 
+                                      className="w-7 h-7 rounded-full object-cover border" 
+                                      onError={(e) => {
+                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                      }}
+                                    />
                                     <span className="font-semibold text-xs text-[#131b2e]">{s.name}</span>
                                   </div>
                                   <span className={`material-symbols-outlined text-[18px] ${isChecked ? 'text-primary' : 'text-slate-300'}`}>
@@ -4754,7 +5268,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 exit={{ y: "100%", opacity: 0 }}
                 transition={{ type: "spring", damping: 28, stiffness: 260 }}
                 onClick={(e) => e.stopPropagation()}
-                className="relative bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[85vh] sm:max-h-[720px] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default z-10"
+                className="relative bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-[680px] sm:max-h-[90vh] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default z-10"
                 style={{ width: '100%', maxWidth: '28rem' }}
               >
                 {/* Header */}
@@ -4849,7 +5363,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             <img 
                               alt={student.name} 
                               className="w-10 h-10 rounded-full object-cover border shrink-0" 
-                              src={student.img}
+                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                              onError={(e) => {
+                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                              }}
                             />
                             <div className="ml-md flex-1 min-w-0">
                               <p className="font-body-md text-body-md text-on-surface font-medium truncate">{student.name}</p>
@@ -4945,10 +5462,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                                   {/* Student row with avatar, name + code generator input + generate button */}
                                   <div className="flex items-center gap-sm p-sm">
                                     <img
-                                      src={student.img}
+                                      src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                                       alt={student.name}
                                       className="rounded-full shrink-0 border-2 border-primary/30"
                                       style={{ width: 40, height: 40, objectFit: 'cover' }}
+                                      onError={(e) => {
+                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                      }}
                                     />
                                     <div className="flex-1 min-w-0">
                                       <p className="font-label-md text-label-md text-on-surface truncate font-semibold">{student.name}</p>
@@ -5083,10 +5603,18 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                               type="button"
                               onClick={() => {
                                 if (isAssigningStudentsDetails) {
-                                  setAssignedStudentsResult({
-                                    taskTitle: isAssigningStudentsDetails.title,
-                                    studentIds: [...tempDetailsAssignedStudentIds]
-                                  });
+                                  const updatedTask = {
+                                    ...isAssigningStudentsDetails,
+                                    assignedStudentIds: tempDetailsAssignedStudentIds
+                                  } as TaskItem;
+                                  setTasks(prev => prev.map(t => t.id === isAssigningStudentsDetails.id ? updatedTask : t));
+                                  setSelectedTaskDetails(updatedTask);
+                                  setIsAssigningStudentsDetails(null);
+                                  setShowSharePanel(false);
+                                  setShareTaskLinks({});
+
+                                  // Trigger the beautiful success overlay
+                                  showAssignmentSuccessOverlay(updatedTask.title, updatedTask.id, tempDetailsAssignedStudentIds);
                                 }
                               }}
                               className="mt-md w-full py-3 rounded-lg font-label-md text-label-md font-semibold transition-all active:scale-95 cursor-pointer border-none flex items-center justify-center gap-xs"
@@ -5112,33 +5640,36 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
         {/* Success Modal: Student Assignment Confirmation with Offline Access Controls */}
         <AnimatePresence>
           {assignedModalInfo && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => {
-                setAssignedModalInfo(null);
-              }}
-              className="fixed inset-0 z-[1100] flex items-center justify-center p-4 cursor-pointer"
-              style={{ backgroundColor: 'rgba(19, 27, 46, 0.65)', backdropFilter: 'blur(8px)' }}
-            >
+            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4 select-text">
+              {/* Sibling Backdrop Overlay */}
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setAssignedModalInfo(null)}
+                className="absolute inset-0 cursor-pointer"
+                style={{ backgroundColor: 'rgba(19, 27, 46, 0.65)', backdropFilter: 'blur(8px)' }}
+              />
+              
+              {/* Sibling Modal Content Card */}
               <motion.div
                 initial={{ opacity: 0, scale: 0.9, y: 30 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.9, y: 30 }}
                 transition={{ type: "spring", damping: 25, stiffness: 350 }}
                 onClick={(e) => e.stopPropagation()}
-                className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-200/60 overflow-hidden flex flex-col text-on-surface cursor-default max-h-[85vh]"
+                className="relative bg-white w-full max-w-3xl rounded-3xl shadow-2xl border border-slate-200/60 overflow-hidden flex flex-col text-on-surface cursor-default max-h-[85vh] z-10"
+                style={{ width: '100%', maxWidth: '48rem' }}
               >
                 {/* Modal Header */}
                 <div className="flex items-center gap-4 p-6 md:p-8 border-b border-slate-100 bg-[#f8fafc]/50 shrink-0">
-                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 shrink-0">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#005bb3] to-indigo-500 flex items-center justify-center text-white shadow-lg shadow-[#005bb3]/20 shrink-0">
                     <span className="material-symbols-outlined font-black" style={{ fontSize: '26px' }}>task_alt</span>
                   </div>
                   <div className="flex-1 min-w-0 text-left">
                     <h3 className="text-lg md:text-xl font-black text-[#131b2e] tracking-tight">Atribuição Concluída com Sucesso!</h3>
                     <p className="text-xs text-slate-500 font-semibold truncate mt-[2px]">
-                      Tarefa: <span className="text-[#005bb3] font-bold">{assignedModalInfo.taskTitle}</span>
+                      Matéria Atribuída: <span className="text-[#005bb3] font-bold">{assignedModalInfo.taskTitle}</span>
                     </p>
                   </div>
                   <button 
@@ -5152,175 +5683,77 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 {/* Scrollable Content */}
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6 custom-scrollbar text-left">
                   {/* General Notification Notice */}
-                  <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/50 flex gap-3 text-indigo-900/80 items-start">
-                    <span className="material-symbols-outlined text-indigo-500 shrink-0 mt-[2px]" style={{ fontSize: '20px' }}>info</span>
+                  <div className="p-4 rounded-2xl bg-[#f2f3ff] border border-[#d6e3ff] flex gap-3 text-[#005bb3] items-start">
+                    <span className="material-symbols-outlined shrink-0 mt-[2px]" style={{ fontSize: '20px' }}>info</span>
                     <p className="text-xs font-semibold leading-relaxed">
-                      A tarefa já foi enviada diretamente para o perfil do aluno no sistema, mas você pode enviar offline também, por meio do link e do código gerados abaixo.
+                      A matéria já foi disponibilizada no portal dos alunos. Escolha abaixo como prefere enviar as instruções de acesso para cada estudante.
                     </p>
                   </div>
 
                   {/* Students List */}
-                  <div className="space-y-6">
-                    {assignedModalInfo.students.map((student) => {
+                  <div className="space-y-4">
+                    {assignedModalInfo.students.map((student, idx) => {
                       const hasLink = !!student.link;
                       const hasCode = !!student.code;
                       const isLinkCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'link';
                       const isCodeCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'code';
+                      const studentImg = students.find(s => s.id === student.id)?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
 
                       return (
-                        <div key={student.id} className="p-5 rounded-2xl border border-slate-100 bg-[#f8fafc]/30 hover:bg-white/40 transition-all hover:shadow-md flex flex-col gap-4">
-                          {/* Student Info & Status Badges */}
-                          <div className="flex items-center justify-between pb-3 border-b border-slate-100/70">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#005bb3]/10 to-[#005bb3]/20 flex items-center justify-center overflow-hidden border border-[#005bb3]/20 shadow-xs">
-                                <span className="material-symbols-outlined text-[#005bb3] text-lg font-bold">person</span>
-                              </div>
-                              <div>
-                                <h4 className="text-sm font-black text-[#131b2e] leading-tight">{student.name}</h4>
-                                <div className="flex items-center gap-1.5 mt-[2px]">
-                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                  <span className="text-[10px] text-emerald-600 font-extrabold uppercase tracking-wider">Atribuído Online</span>
-                                </div>
-                              </div>
+                        <div 
+                          key={student.id} 
+                          className="p-5 rounded-2xl border border-slate-200/80 bg-white hover:border-[#005bb3]/30 hover:shadow-md transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                        >
+                          {/* Left Side: Avatar, Student details and direct Link */}
+                          <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                            <div className="w-12 h-12 rounded-full border-2 border-[#00c853] overflow-hidden shadow-sm shrink-0 bg-white select-none">
+                              <img 
+                                src={studentImg} 
+                                alt={student.name} 
+                                className="w-full h-full object-cover" 
+                              />
                             </div>
-                            
-                            {/* Visual highlight badges for active configurations */}
-                            <div className="flex gap-2">
-                              {hasLink && (
-                                <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-indigo-600 text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                  ⚠️ Link Ativo
-                                </span>
-                              )}
-                              {hasCode && (
-                                <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-100 text-amber-600 text-[9px] font-black uppercase tracking-wider animate-pulse">
-                                  ⚠️ Código Ativo
-                                </span>
-                              )}
-                              {!hasLink && !hasCode && (
-                                <span className="px-2.5 py-1 rounded-full bg-slate-100 text-slate-500 text-[9px] font-black uppercase tracking-wider">
-                                  Apenas Online
-                                </span>
-                              )}
+                            <div className="flex-1 min-w-0">
+                              <h4 className="text-sm font-black text-[#131b2e] leading-tight">{student.name}</h4>
                             </div>
                           </div>
 
-                          {/* Dual Card Layout for Offline Access options */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            
-                            {/* Link Card Container */}
-                            <div 
-                              className={`p-4 rounded-xl border transition-all flex flex-col gap-3 relative overflow-hidden ${
-                                hasLink 
-                                  ? 'border-indigo-500/80 bg-indigo-50/20 shadow-xs shadow-indigo-100/30' 
-                                  : 'border-slate-200 bg-slate-50/50 opacity-60'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black text-indigo-700 uppercase tracking-wider flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-xs">add_link</span>
-                                  Link de Acesso Offline
-                                </span>
-                                {hasLink && (
-                                  <span className="w-4.5 h-4.5 rounded-full bg-indigo-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
-                                )}
-                              </div>
-                              
-                              {hasLink ? (
-                                <>
-                                  <div className="flex-1">
-                                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                                      ⚠️ O link offline já foi gerado para este aluno. Copie e envie para acesso offline.
-                                    </p>
-                                    <div className="mt-2 p-2 bg-indigo-50/50 rounded-lg border border-indigo-100/50 font-mono text-[10px] text-indigo-900 select-all truncate">
-                                      {student.link}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      if (student.link) {
-                                        navigator.clipboard.writeText(student.link);
-                                        setCopiedStudentItem({ id: student.id, type: 'link' });
-                                        setTimeout(() => setCopiedStudentItem(null), 2000);
-                                      }
-                                    }}
-                                    className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer border-none ${
-                                      isLinkCopied 
-                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-xs' 
-                                        : 'bg-[#005bb3] hover:bg-[#004b93] text-white border-[#005bb3] shadow-xs'
-                                    }`}
-                                  >
-                                    <span className="material-symbols-outlined text-sm">
-                                      {isLinkCopied ? 'check' : 'content_copy'}
-                                    </span>
-                                    {isLinkCopied ? 'Copiado!' : 'Copiar Link'}
-                                  </button>
-                                </>
-                              ) : (
-                                <div className="flex-1 flex flex-col justify-center py-2">
-                                  <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                                    Nenhum link gerado para este aluno ainda. Habilite na aba de compartilhamento.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
+                          {/* Right Side: Options Buttons */}
+                          <div className="flex items-center gap-2 flex-wrap w-full md:w-auto shrink-0 select-none">
 
-                            {/* Code Card Container */}
-                            <div 
-                              className={`p-4 rounded-xl border transition-all flex flex-col gap-3 relative overflow-hidden ${
-                                hasCode 
-                                  ? 'border-amber-500/80 bg-amber-50/20 shadow-xs shadow-amber-100/30' 
-                                  : 'border-slate-200 bg-slate-50/50 opacity-60'
+                            {/* Copy Code Button */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (student.code) {
+                                  navigator.clipboard.writeText(student.code);
+                                  setCopiedStudentItem({ id: student.id, type: 'code' });
+                                  setTimeout(() => setCopiedStudentItem(null), 2000);
+                                }
+                              }}
+                              className={`flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                                isCodeCopied 
+                                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700 shadow-sm' 
+                                  : 'bg-amber-50 hover:bg-amber-500 hover:text-white border-amber-200 text-amber-700'
                               }`}
+                              title={`Código: ${student.code}`}
                             >
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-black text-amber-700 uppercase tracking-wider flex items-center gap-1">
-                                  <span className="material-symbols-outlined text-xs">key</span>
-                                  Código de Acesso Offline
-                                </span>
-                                {hasCode && (
-                                  <span className="w-4.5 h-4.5 rounded-full bg-amber-500 text-white flex items-center justify-center text-[10px] font-bold">✓</span>
-                                )}
-                              </div>
-                              
-                              {hasCode ? (
-                                <>
-                                  <div className="flex-1">
-                                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium">
-                                      ⚠️ Código ativo encontrado no sistema. O aluno pode usar para acessar offline.
-                                    </p>
-                                    <div className="mt-2 p-2 bg-amber-50/50 rounded-lg border border-amber-100/50 font-mono text-sm font-black text-amber-800 tracking-wider text-center select-all">
-                                      {student.code}
-                                    </div>
-                                  </div>
-                                  <button
-                                    onClick={() => {
-                                      if (student.code) {
-                                        navigator.clipboard.writeText(student.code);
-                                        setCopiedStudentItem({ id: student.id, type: 'code' });
-                                        setTimeout(() => setCopiedStudentItem(null), 2000);
-                                      }
-                                    }}
-                                    className={`w-full py-2 rounded-lg text-xs font-bold transition-all border flex items-center justify-center gap-1 cursor-pointer border-none ${
-                                      isCodeCopied 
-                                        ? 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-500 shadow-xs' 
-                                        : 'bg-[#005bb3] hover:bg-[#004b93] text-white border-[#005bb3] shadow-xs'
-                                    }`}
-                                  >
-                                    <span className="material-symbols-outlined text-sm">
-                                      {isCodeCopied ? 'check' : 'content_copy'}
-                                    </span>
-                                    {isCodeCopied ? 'Copiado!' : 'Copiar Código'}
-                                  </button>
-                                </>
-                              ) : (
-                                <div className="flex-1 flex flex-col justify-center py-2">
-                                  <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
-                                    Nenhum código ativo gerado para este aluno ainda. Habilite na aba de alunos.
-                                  </p>
-                                </div>
-                              )}
-                            </div>
+                              <span className="material-symbols-outlined text-[15px]">
+                                {isCodeCopied ? 'check' : 'key'}
+                              </span>
+                              {isCodeCopied ? 'Copiado!' : `Código: ${student.code}`}
+                            </button>
 
+                            {/* Download PDF Button */}
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadStudentTaskPdf(student.name, assignedModalInfo.taskTitle, student.code || '', student.link || '')}
+                              className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-bold bg-rose-50 hover:bg-rose-500 hover:text-white border border-rose-200 text-rose-700 transition-all cursor-pointer"
+                              title="Baixar PDF de Instruções de Acesso"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">picture_as_pdf</span>
+                              Baixar PDF
+                            </button>
                           </div>
                         </div>
                       );
@@ -5335,11 +5768,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                     onClick={() => setAssignedModalInfo(null)}
                     className="px-8 py-3 rounded-xl bg-[#005bb3] hover:bg-[#004b93] text-white text-xs font-extrabold shadow-lg shadow-[#005bb3]/15 hover:shadow-xl hover:shadow-[#005bb3]/25 active:scale-95 transition-all cursor-pointer border-none"
                   >
-                    Entendido, Concluir
+                    Concluir Atribuição
                   </button>
                 </div>
               </motion.div>
-            </motion.div>
+            </div>
           )}
         </AnimatePresence>
 
@@ -5358,7 +5791,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               exit={{ y: "100%", opacity: 0 }}
               transition={{ type: "spring", damping: 28, stiffness: 260 }}
               onClick={(e) => e.stopPropagation()}
-              className="bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-auto sm:max-h-[85vh] sm:max-h-[720px] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default"
+              className="bg-surface w-full max-w-md sm:rounded-xl shadow-xl flex flex-col h-[85vh] sm:h-[680px] sm:max-h-[90vh] font-sans text-on-surface overflow-hidden border border-outline-variant/60 shrink-0 cursor-default"
               style={{ width: '100%', maxWidth: '28rem' }}
             >
               {/* Header */}
@@ -5488,28 +5921,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             // Copy message
                             navigator.clipboard.writeText(msg);
 
-                            // Automatically save the student in 1-Click
-                            const newStudent = {
-                              id: tempId,
-                              name: newStudentName.trim(),
-                              email: emailLower,
-                              class: newStudentClass,
-                              img: guessedGender === 'F'
-                                ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
-                                : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
-                              progress: newStudentProgress,
-                              matricula: String(202400 + students.length + 1),
-                              gender: guessedGender,
-                              loginMethod: 'code'
-                            };
-                            
-                            setStudents([...students, newStudent]);
                             logUserAction({
                               userName: teacherName,
                               userEmail: teacherEmail,
                               role: 'teacher',
                               actionType: 'add_student',
-                              actionDetails: `Adicionou o aluno "${newStudent.name}" (${newStudent.email}) via Código de Acesso.`
+                              actionDetails: `Gerou convite com código de acesso para o aluno "${newStudentName.trim()}" (${emailLower}).`
                             });
                             setIsAddStudentOpen(false);
                             setNewStudentName('');
@@ -5517,7 +5934,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             setNewStudentClass('');
                             setNewStudentProgress(0);
 
-                            alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o código de acesso foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
+                            alert(`✅ Convite gerado com sucesso!\n\nO convite com o código de acesso para "${newStudentName.trim()}" foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp). Ele aparecerá na lista de alunos do dashboard assim que realizar o primeiro login!`);
                           }}
                           className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
                         >
@@ -5593,28 +6010,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             // Copy message
                             navigator.clipboard.writeText(msg);
 
-                            // Automatically save the student in 1-Click
-                            const newStudent = {
-                              id: tempId,
-                              name: newStudentName.trim(),
-                              email: emailLower,
-                              class: newStudentClass,
-                              img: guessedGender === 'F'
-                                ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
-                                : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
-                              progress: newStudentProgress,
-                              matricula: String(202400 + students.length + 1),
-                              gender: guessedGender,
-                              loginMethod: 'link'
-                            };
-                            
-                            setStudents([...students, newStudent]);
                             logUserAction({
                               userName: teacherName,
                               userEmail: teacherEmail,
                               role: 'teacher',
                               actionType: 'add_student',
-                              actionDetails: `Adicionou o aluno "${newStudent.name}" (${newStudent.email}) via Link de Acesso.`
+                              actionDetails: `Gerou convite com link de acesso para o aluno "${newStudentName.trim()}" (${emailLower}).`
                             });
                             setIsAddStudentOpen(false);
                             setNewStudentName('');
@@ -5622,7 +6023,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             setNewStudentClass('');
                             setNewStudentProgress(0);
 
-                            alert(`✅ Aluno(a) "${newStudent.name}" adicionado(a) com sucesso!\n\nO convite com o link de acesso rápido foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp).`);
+                            alert(`✅ Convite gerado com sucesso!\n\nO convite com o link de acesso rápido para "${newStudentName.trim()}" foi copiado para a sua área de transferência (Ctrl+V para enviar no WhatsApp). Ele aparecerá na lista de alunos do dashboard assim que realizar o primeiro login!`);
                           }}
                           className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
                         >
@@ -5670,9 +6071,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                       name: newStudentName.trim(),
                       email: emailValue,
                       class: newStudentClass,
-                      img: guessedGender === 'F'
-                        ? `https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=150&h=150`
-                        : `https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=150&h=150`,
+                      img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
                       progress: newStudentProgress,
                       matricula: String(202400 + students.length + 1),
                       gender: guessedGender,
@@ -5721,6 +6120,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+                style={{ width: '100%', maxWidth: '56rem' }}
               >
                 {/* Modal Header */}
                 <div className="p-6 md:p-8 border-b border-[#dde0e2] space-y-4">
@@ -5778,9 +6178,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                         >
                           <div className="flex justify-between items-start">
                             <img
-                              src={student.img}
+                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                               alt={student.name}
                               className="w-12 h-12 rounded-full border border-slate-100 object-cover"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                              }}
                             />
                             <input
                               type="checkbox"
@@ -5866,6 +6269,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
                 className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+                style={{ width: '100%', maxWidth: '56rem' }}
               >
                 {/* Modal Header */}
                 <div className="p-6 md:p-8 border-b border-[#dde0e2] flex justify-between items-center">
@@ -5968,9 +6372,12 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                             />
                             
                             <img
-                              src={student.img}
+                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
                               alt={student.name}
                               className="w-12 h-12 rounded-full object-cover border border-slate-100"
+                              onError={(e) => {
+                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                              }}
                             />
                             
                             <div className="flex-1 min-w-0 pr-4">
@@ -6308,7 +6715,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
           )}
         </AnimatePresence>
 
-        {/* Modal: Arquivos de Apoio (Teacher Support Files Upload) */}
+        {/* Modal: Compartilhar atividade */}
         <AnimatePresence>
           {supportFilesModal && supportFilesModal.isOpen && (
             <div className="fixed inset-0 z-[999] flex items-center justify-center p-4">
@@ -6326,113 +6733,142 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 initial={{ scale: 0.95, y: 15, opacity: 0 }}
                 animate={{ scale: 1, y: 0, opacity: 1 }}
                 exit={{ scale: 0.95, y: 15, opacity: 0 }}
-                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-lg w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+                className="relative bg-white rounded-3xl border border-[#c1c6d6] max-w-2xl w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl z-10"
+                style={{ width: '100%', maxWidth: '42rem' }}
               >
                 {/* Header */}
                 <div className="p-6 md:p-8 border-b border-[#dde0e2] flex justify-between items-center bg-white shrink-0">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                      <span className="material-symbols-outlined text-[22px]">folder_open</span>
+                      <span className="material-symbols-outlined text-[22px]">send</span>
                     </div>
                     <div>
-                      <h3 className="text-lg font-extrabold text-[#131b2e]">Arquivos de Apoio</h3>
+                      <h3 className="text-lg font-extrabold text-[#131b2e]">Compartilhar atividade</h3>
                       <p className="text-[11px] text-slate-400 mt-0.5">
-                        {supportFilesModal.isNew ? 'Adicione anexos para a nova tarefa' : 'Edite os anexos da tarefa existente'}
+                        Envie os acessos para os alunos atribuídos à matéria
                       </p>
                     </div>
                   </div>
                   <button
                     onClick={() => setSupportFilesModal(null)}
-                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none"
+                    className="p-1 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all cursor-pointer bg-transparent border-none flex items-center justify-center"
                   >
                     <span className="material-symbols-outlined">close</span>
                   </button>
                 </div>
 
-                {/* Body / Upload Area */}
-                <div className="p-6 md:p-8 overflow-y-auto grow space-y-5 bg-slate-50/50">
-                  <div className="space-y-1">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Tarefa</span>
+                {/* Body / Students Sharing Cards */}
+                <div className="p-6 md:p-8 overflow-y-auto grow space-y-6 bg-slate-50/50 text-left">
+                  <div className="space-y-1 select-none">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Atividade / Matéria</span>
                     <h4 className="font-extrabold text-sm text-slate-800">{supportFilesModal.task.title}</h4>
                     <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">{supportFilesModal.task.description}</p>
                   </div>
 
-                  {/* Drag and Drop Zone */}
-                  <div
-                    onDragOver={(e) => { e.preventDefault(); setSupportDragActive(true); }}
-                    onDragLeave={() => setSupportDragActive(false)}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      setSupportDragActive(false);
-                      if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                        handleSupportFileUpload(e.dataTransfer.files);
-                      }
-                    }}
-                    onClick={() => supportFileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-6 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer bg-white ${
-                      supportDragActive
-                        ? 'border-primary bg-primary/5'
-                        : 'border-slate-200 hover:border-primary/45 hover:bg-slate-50/30'
-                    }`}
-                  >
-                    <input
-                      ref={supportFileInputRef}
-                      type="file"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          handleSupportFileUpload(e.target.files);
-                        }
-                      }}
-                      accept=".pdf,.png,.jpg,.jpeg,.webp,.gif,.avif"
-                    />
-                    <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                      <span className="material-symbols-outlined text-primary text-[24px]">cloud_upload</span>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-sm font-semibold text-slate-700">Arraste seus arquivos aqui</p>
-                      <p className="text-xs text-slate-400 mt-1">ou <span className="text-primary font-semibold">clique para procurar</span></p>
-                    </div>
-                    <p className="text-[10px] text-slate-400">PDF ou Imagens (PNG, JPG, WEBP) — máx. 5 MB por arquivo</p>
-                  </div>
-
-                  {/* List of Attached Files */}
-                  <div className="space-y-2">
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[13px]">attachment</span>
-                      Arquivos Anexados ({uploadedSupportFiles.length})
+                  <div className="space-y-4">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block select-none">
+                      Compartilhar com os Alunos Atribuídos ({supportFilesModal.assignedStudentIds.length})
                     </span>
 
-                    {uploadedSupportFiles.length === 0 ? (
-                      <div className="text-center py-6 text-slate-400 text-xs italic bg-white border border-slate-200/60 rounded-2xl">
-                        Nenhum arquivo de apoio anexado ainda.
+                    {supportFilesModal.assignedStudentIds.length === 0 ? (
+                      <div className="text-center py-8 text-slate-400 text-xs italic bg-white border border-slate-200/60 rounded-2xl select-none">
+                        Nenhum aluno atribuído a esta tarefa por padrão.
                       </div>
                     ) : (
-                      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                        {uploadedSupportFiles.map((file, idx) => {
-                          const isPdf = file.name.toLowerCase().endsWith('.pdf');
+                      <div className="space-y-3.5 pr-1">
+                        {supportFilesModal.assignedStudentIds.map(sid => {
+                          const student = students.find(s => s.id === sid || s.name.toLowerCase() === sid.toLowerCase());
+                          if (!student) return null;
+
+                          const isCodeCopied = copiedButtons[student.id]?.code;
+                          const isLinkCopied = copiedButtons[student.id]?.link;
+                          const isPdfCopied = copiedButtons[student.id]?.pdf;
+
                           return (
-                            <div
-                              key={idx}
-                              className="flex justify-between items-center p-3 bg-white border border-slate-200/80 rounded-xl shadow-xs transition-colors hover:border-slate-300"
-                            >
-                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                                <span className={`material-symbols-outlined text-[18px] shrink-0 ${isPdf ? 'text-red-500' : 'text-blue-500'}`}>
-                                  {isPdf ? 'picture_as_pdf' : 'image'}
-                                </span>
-                                <div className="flex flex-col min-w-0">
-                                  <span className="font-bold text-xs text-slate-700 truncate">{file.name}</span>
-                                  <span className="text-[9px] text-slate-400 font-mono mt-0.5">{file.size}</span>
+                            <div key={student.id} className="p-4 rounded-2xl border border-slate-200/80 bg-white hover:border-primary/20 hover:shadow-sm transition-all flex flex-col gap-3">
+                              {/* Student row */}
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <img 
+                                    src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                    alt={student.name} 
+                                    className="w-10 h-10 rounded-full object-cover border border-[#eaedff] shrink-0" 
+                                    onError={(e) => {
+                                      e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                    }}
+                                  />
+                                  <div className="min-w-0">
+                                    <h4 className="text-xs font-extrabold text-[#131b2e] leading-tight truncate">{student.name}</h4>
+                                    <p className="text-[10px] text-slate-400 font-semibold mt-0.5">{student.class}</p>
+                                  </div>
+                                </div>
+
+                                {/* Three Sharing buttons */}
+                                <div className="flex items-center gap-2 flex-wrap shrink-0 select-none">
+                                  {/* Code/Compartilhar button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShareButtonPress(student.name, student.id, supportFilesModal.task.title, supportFilesModal.task.id, 'code')}
+                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                                      isCodeCopied 
+                                        ? 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/60' 
+                                        : 'bg-amber-50 hover:bg-amber-500 hover:text-white border-amber-200 text-amber-700'
+                                    }`}
+                                    title="Copiar mensagem com código"
+                                  >
+                                    <span className="material-symbols-outlined text-[15px]">
+                                      {isCodeCopied ? 'check' : 'key'}
+                                    </span>
+                                    {isCodeCopied ? 'Copiado' : 'Código'}
+                                  </button>
+
+
+
+                                  {/* PDF button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleShareButtonPress(student.name, student.id, supportFilesModal.task.title, supportFilesModal.task.id, 'pdf')}
+                                    className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+                                      isPdfCopied 
+                                        ? 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200/60' 
+                                        : 'bg-rose-50 hover:bg-rose-500 hover:text-white border-rose-200 text-rose-700'
+                                    }`}
+                                    title="Copiar mensagem com PDF e baixar PDF"
+                                  >
+                                    <span className="material-symbols-outlined text-[15px]">
+                                      {isPdfCopied ? 'check' : 'picture_as_pdf'}
+                                    </span>
+                                    {isPdfCopied ? 'Copiado' : 'PDF'}
+                                  </button>
                                 </div>
                               </div>
-                              <button
-                                onClick={() => setUploadedSupportFiles(prev => prev.filter((_, i) => i !== idx))}
-                                className="text-red-500 hover:text-red-700 p-1.5 cursor-pointer transition-colors bg-transparent border-none flex items-center justify-center rounded-lg hover:bg-red-50"
-                                title="Remover anexo"
-                              >
-                                <span className="material-symbols-outlined text-[18px]">delete</span>
-                              </button>
+
+                              {/* Inline Copy Confirmation Dialog */}
+                              {confirmCopyAgain && confirmCopyAgain.sid === student.id && (
+                                <div className="mt-2 p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-fade-in text-left">
+                                  <p className="text-[11px] text-[#131b2e] font-bold flex items-center gap-1.5 select-none leading-normal">
+                                    <span className="material-symbols-outlined text-indigo-600 text-[18px]">info</span>
+                                    Você já copiou esse {confirmCopyAgain.type === 'code' ? 'código' : 'PDF'}, deseja copiar novamente?
+                                  </p>
+                                  <div className="flex gap-2 shrink-0 select-none">
+                                    <button
+                                      type="button"
+                                      onClick={() => executeCopyAction(student.name, student.id, supportFilesModal.task.title, supportFilesModal.task.id, confirmCopyAgain.type)}
+                                      className="px-3.5 py-1.5 bg-[#005bb3] hover:bg-[#004b93] text-white text-[10px] font-black rounded-lg cursor-pointer border-none flex items-center gap-1 transition-all"
+                                    >
+                                      <span className="material-symbols-outlined text-[13px]">check</span>
+                                      Sim
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConfirmCopyAgain(null)}
+                                      className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 text-[10px] font-bold rounded-lg cursor-pointer border-none transition-all"
+                                    >
+                                      Não
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -6442,20 +6878,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 md:p-8 border-t border-[#dde0e2] bg-white flex gap-4 shrink-0">
+                <div className="p-6 md:p-8 border-t border-[#dde0e2] bg-white flex shrink-0">
                   <button
                     type="button"
                     onClick={() => handleSaveWithSupportFiles(false)}
-                    className="flex-1 py-3 px-md border border-[#c1c6d6] hover:bg-slate-50 text-slate-600 font-bold text-xs rounded-xl active:scale-95 transition-all cursor-pointer bg-white"
+                    className="w-full py-3.5 bg-primary text-on-primary font-bold text-xs rounded-xl shadow-md shadow-primary/20 active:scale-95 transition-all hover:brightness-110 cursor-pointer border-none"
                   >
-                    Salvar sem arquivos
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleSaveWithSupportFiles(true)}
-                    className="flex-1 py-3 px-md bg-primary text-on-primary font-bold text-xs rounded-xl shadow-md shadow-primary/20 active:scale-95 transition-all hover:brightness-110 cursor-pointer border-none"
-                  >
-                    Enviar e Salvar
+                    Salvar e Concluir
                   </button>
                 </div>
               </motion.div>
@@ -6811,6 +7240,21 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      {/* Premium Toast Notification */}
+      <AnimatePresence>
+        {toastMessage && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 20, scale: 0.9 }}
+            className="fixed bottom-6 right-6 z-[99999] bg-[#1e293b] text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center gap-3 border border-slate-700/50 text-left font-sans"
+          >
+            <span className="material-symbols-outlined text-[#10B981] text-[20px] shrink-0 font-variation-settings-fill">check_circle</span>
+            <span className="text-xs font-bold tracking-wide select-none">{toastMessage}</span>
+          </motion.div>
         )}
       </AnimatePresence>
 

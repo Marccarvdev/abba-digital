@@ -65,10 +65,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       }
 
       if (matchedRecord) {
-        setAccessCode(matchedRecord.code);
+        setAccessCode(`ABBA-${matchedRecord.code}`);
         setActiveTab('code');
       } else {
-        setAccessCode(joinParam);
+        const finalCode = joinParam.toUpperCase().startsWith('ABBA-') ? joinParam : `ABBA-${joinParam}`;
+        setAccessCode(finalCode.toUpperCase());
         setActiveTab('code');
       }
     }
@@ -185,9 +186,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       return;
     }
 
-    // 2. First, check if this matches our 6-char alphanumeric registry!
+    // 2. First, check if this matches our 6-char alphanumeric registry in Supabase!
     const registryKey = 'abba_invite_codes_registry';
     let matchedRecord = null;
+    let isFromDb = false;
+
     if (cleanCode === 'ALUNO123') {
       matchedRecord = {
         code: 'ALUNO123',
@@ -196,12 +199,91 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000
       };
     } else {
-      try {
-        const localRegistry = localStorage.getItem(registryKey);
-        const registryList = localRegistry ? JSON.parse(localRegistry) : [];
-        matchedRecord = registryList.find((item: any) => item.code === cleanCode);
-      } catch (err) {
-        console.error('Error looking up registry code:', err);
+      // Flexible code parsing: check if cleanCode contains a hyphen (e.g. 0TJZ3UW-CARLOS)
+      let searchId = cleanCode;
+      let searchMatricula = cleanCode;
+      if (cleanCode.includes('-')) {
+        const parts = cleanCode.split('-');
+        if (parts.length >= 2) {
+          searchId = parts[0];
+          searchMatricula = parts[0];
+        }
+      }
+
+      // Proactively handle preloaded mock students (Carlos André & Ana Beatriz Silva)
+      const cleanUpper = cleanCode.toUpperCase();
+      const searchIdUpper = searchId.toUpperCase();
+      const searchMatriculaUpper = searchMatricula.toUpperCase();
+
+      if (
+        searchIdUpper === '0TJZ3UW' || 
+        searchMatriculaUpper === '0TJZ3UW' || 
+        (cleanUpper.includes('0TJZ3UW') && cleanUpper.includes('CARLOS'))
+      ) {
+        matchedRecord = {
+          code: 'ABBA-0TJZ3UW-CARLOS',
+          name: 'Carlos André',
+          codeId: 'st-2',
+          expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000
+        };
+      } else if (
+        searchIdUpper === '5MTAUIK' || 
+        searchMatriculaUpper === '5MTAUIK' || 
+        (cleanUpper.includes('5MTAUIK') && cleanUpper.includes('ANA'))
+      ) {
+        matchedRecord = {
+          code: 'ABBA-5MTAUIK-ANA',
+          name: 'Ana Beatriz Silva',
+          codeId: 'st-1',
+          expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000
+        };
+      }
+
+      if (!matchedRecord) {
+        // Query students table in Supabase by ID, st-ID, or matricula
+        try {
+          const { data: dbStudent, error: dbErr } = await supabase
+            .from('students')
+            .select('*')
+            .or(`id.eq.${searchId},id.eq.st-${searchId},matricula.eq.${searchMatricula},matricula.eq.${cleanCode},matricula.eq.ABBA-${cleanCode}`)
+            .maybeSingle();
+
+          if (dbStudent && !dbErr) {
+            matchedRecord = {
+              code: dbStudent.matricula,
+              name: dbStudent.name,
+              codeId: dbStudent.id,
+              expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000 // default active expiration fallback
+            };
+            isFromDb = true;
+          }
+        } catch (err) {
+          console.warn('Erro ao buscar estudante pelo código no Supabase:', err);
+        }
+      }
+
+      // Fallback locally if not found on DB
+      if (!matchedRecord) {
+        try {
+          const localRegistry = localStorage.getItem(registryKey);
+          const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+          const matchedLocal = registryList.find((item: any) => 
+            item.code === cleanCode || 
+            item.codeId === searchId || 
+            item.codeId === `st-${searchId}` ||
+            item.code === searchMatricula
+          );
+          if (matchedLocal) {
+            matchedRecord = {
+              code: matchedLocal.code,
+              name: matchedLocal.name,
+              codeId: matchedLocal.codeId,
+              expiresAt: matchedLocal.expiresAt
+            };
+          }
+        } catch (err) {
+          console.error('Error looking up local registry code:', err);
+        }
       }
     }
 
@@ -209,6 +291,100 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       if (Date.now() > matchedRecord.expiresAt) {
         setErrorMsg('Este código de acesso expirou. Solicite um novo ao Teatcher.');
         return;
+      }
+
+      // Strict Gmail/Outlook Validation: Make sure this email is not already in use by another student
+      try {
+        const { data: existingEmailUsers, error: emailErr } = await supabase
+          .from('students')
+          .select('*')
+          .eq('email', emailLower);
+
+        if (emailErr) {
+          setErrorMsg('Erro de conexão ao validar o e-mail. Por favor, verifique sua conexão e tente novamente.');
+          return;
+        }
+
+        if (existingEmailUsers && existingEmailUsers.length > 0) {
+          // Check if there is any student with this email that has a different ID
+          const otherUser = existingEmailUsers.find((u: any) => u.id !== matchedRecord.codeId);
+          if (otherUser) {
+            // Strict match: if the name is not exactly matching (case-insensitive), block them immediately
+            if (otherUser.name.trim().toLowerCase() !== matchedRecord.name.trim().toLowerCase()) {
+              setErrorMsg('Este e-mail já está sendo utilizado por outro aluno no sistema. Por favor, insira o seu próprio e-mail.');
+              return;
+            } else {
+              console.log('⚡ Aluno existente fazendo login com novo código. Mesclando registros...');
+              
+              // 1. Update the existing student record with the new matricula
+              const { error: updateErr } = await supabase
+                .from('students')
+                .update({
+                  matricula: matchedRecord.code,
+                  last_access_at: new Date().toISOString(),
+                  login_method: 'code'
+                })
+                .eq('id', otherUser.id);
+
+              if (updateErr) {
+                setErrorMsg('Erro ao atualizar os dados do estudante. Por favor, tente novamente.');
+                return;
+              }
+              
+              // 2. Delete the temporary student record that was created by the teacher
+              if (matchedRecord.codeId !== otherUser.id) {
+                await supabase
+                  .from('students')
+                  .delete()
+                  .eq('id', matchedRecord.codeId);
+              }
+              
+              // 3. Update matchedRecord to use the existing student's ID
+              matchedRecord.codeId = otherUser.id;
+            }
+          }
+        }
+      } catch (err) {
+        setErrorMsg('Erro inesperado ao validar o e-mail de acesso. Tente novamente.');
+        return;
+      }
+
+      // Supabase database update: save the actual email entered by the student!
+      try {
+        const { data: existingStudent } = await supabase
+          .from('students')
+          .select('id')
+          .eq('id', matchedRecord.codeId)
+          .maybeSingle();
+
+        if (existingStudent) {
+          await supabase
+            .from('students')
+            .update({
+              email: emailLower,
+              last_access_at: new Date().toISOString(),
+              login_method: 'code'
+            })
+            .eq('id', matchedRecord.codeId);
+        } else {
+          await supabase
+            .from('students')
+            .insert([
+              {
+                id: matchedRecord.codeId || `st-${Date.now()}`,
+                name: matchedRecord.name,
+                class: "Turma A - 3º Ano",
+                img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+                progress: 0,
+                matricula: matchedRecord.code,
+                email: emailLower,
+                last_access_at: new Date().toISOString(),
+                login_method: 'code'
+              }
+            ]);
+        }
+      } catch (dbErr) {
+        console.warn('Erro ao atualizar/salvar estudante no Supabase:', dbErr);
       }
 
       // Update or add student record in abba_students_list
@@ -226,9 +402,9 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             id: matchedRecord.codeId || `st-${Date.now()}`,
             name: matchedRecord.name,
             class: "Turma A - 3º Ano",
-            img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+            img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
             progress: 0,
-            matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
+            matricula: matchedRecord.code,
             gender: 'M',
             email: emailLower,
             lastAccessAt: new Date().toISOString(),
@@ -241,10 +417,26 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         console.error('Error updating student list in login:', err);
       }
 
+      // Buscar imagem de perfil salva no Supabase ou usar o padrão premium
+      let avatarUrl = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+      try {
+        const { data: dbDetails } = await supabase
+          .from('students')
+          .select('img')
+          .eq('id', matchedRecord.codeId)
+          .maybeSingle();
+        if (dbDetails?.img) {
+          avatarUrl = dbDetails.img;
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar imagem de perfil do estudante no login:', err);
+      }
+
       const studentUser: User = {
         name: matchedRecord.name,
         email: emailLower,
         role: 'student',
+        img: avatarUrl,
         codeSession: {
           code: matchedRecord.code,
           expiresAt: matchedRecord.expiresAt,
@@ -334,7 +526,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             id: sessionData.codeId,
             name: sessionData.name,
             class: "Turma A - 3º Ano",
-            img: `https://images.unsplash.com/photo-${1535713875002 + Math.floor(Math.random() * 100)}?auto=format&fit=crop&q=80&w=150&h=150`,
+            img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
             progress: 0,
             matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
             gender: 'M',
@@ -349,11 +541,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         console.error('Error updating student list in login:', err);
       }
 
+      // Buscar imagem de perfil salva no Supabase ou usar o padrão premium
+      let avatarUrl = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+      try {
+        const { data: dbDetails } = await supabase
+          .from('students')
+          .select('img')
+          .eq('id', sessionData.codeId)
+          .maybeSingle();
+        if (dbDetails?.img) {
+          avatarUrl = dbDetails.img;
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar imagem de perfil do estudante no login por link:', err);
+      }
+
       // Active session successful
       const studentUser: User = {
         name: sessionData.name,
         email: `student-${sessionData.codeId}@abba.com`,
         role: 'student',
+        img: avatarUrl,
         codeSession: {
           code: trimmedCode,
           expiresAt: sessionData.expiresAt,
