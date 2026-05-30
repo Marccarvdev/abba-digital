@@ -412,6 +412,25 @@ export default function App() {
     alert("Resposta enviada com sucesso! 🚀");
   };
 
+  const getConversationMessages = (chatMessageVal: string | null, teacherReplyVal: string | null) => {
+    if (!chatMessageVal) return [];
+    try {
+      const parsed = JSON.parse(chatMessageVal);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch (e) {
+      // Ignore and fallback to legacy parsing
+    }
+    
+    // Legacy fallback: return as student message, followed by teacher message if present
+    const list = [{ role: 'student', text: chatMessageVal, senderName: 'Estudante' }];
+    if (teacherReplyVal) {
+      list.push({ role: 'teacher', text: teacherReplyVal, senderName: 'Professor' });
+    }
+    return list;
+  };
+
   // Load comment for a subject
   const loadCommentForSubject = async (subject: string) => {
     if (!subject) return;
@@ -423,7 +442,7 @@ export default function App() {
       if (subjectData) {
         setChatMessage(subjectData.comment || null);
         setTeacherReply(subjectData.reply || null);
-        setChatInput(subjectData.comment || "");
+        setChatInput(""); // Always empty on load!
       } else {
         setChatMessage(null);
         setTeacherReply(null);
@@ -442,9 +461,7 @@ export default function App() {
       if (!error && data) {
         setChatMessage(data.comment_text || null);
         setTeacherReply(data.teacher_reply || null);
-        if (data.comment_text) {
-          setChatInput(data.comment_text);
-        }
+        setChatInput(""); // Always empty on load!
         
         // Keep localStorage updated
         const updatedComments = {
@@ -462,7 +479,7 @@ export default function App() {
   };
 
   // Save comment for a subject
-  const handleSaveComment = async (textToSave: string) => {
+  const handleSaveComment = async (textToSave: string, shouldClose = true) => {
     if (!chatSubject) return;
     if (!textToSave.trim()) {
       alert("Por favor, digite uma mensagem antes de salvar.");
@@ -474,28 +491,44 @@ export default function App() {
 
     const isTeacher = user?.role === 'teacher';
 
+    // 1. Get current list of messages
+    const currentMessages = getConversationMessages(chatMessage, teacherReply);
+
+    // 2. Append new message
+    const newMsg = {
+      role: isTeacher ? 'teacher' : 'student',
+      text: textToSave.trim(),
+      senderName: isTeacher ? (user?.name || "Professor") : studentName,
+      timestamp: new Date().toISOString()
+    };
+    const updatedMessages = [...currentMessages, newMsg];
+    const serialized = JSON.stringify(updatedMessages);
+
+    // 3. Update state
+    setChatMessage(serialized);
     if (isTeacher) {
-      setTeacherReply(textToSave);
-      setReviewTeacherReplySaved(textToSave);
-      setReviewTeacherReplyInput(textToSave);
-    } else {
-      setChatMessage(textToSave);
+      setTeacherReply(textToSave.trim());
+      setReviewTeacherReplySaved(textToSave.trim());
+      setReviewTeacherReplyInput("");
     }
 
-    // Save to localStorage
+    // Always clear text input after saving/sending!
+    setChatInput("");
+
+    // 4. Save to localStorage
     try {
       const allCommentsRaw = localStorage.getItem('abba_subject_comments');
       const allComments = allCommentsRaw ? JSON.parse(allCommentsRaw) : {};
       allComments[chatSubject] = {
-        comment: isTeacher ? chatMessage : textToSave,
-        reply: isTeacher ? textToSave : teacherReply
+        comment: serialized,
+        reply: isTeacher ? textToSave.trim() : (teacherReply || "")
       };
       localStorage.setItem('abba_subject_comments', JSON.stringify(allComments));
     } catch (e) {
       console.error(e);
     }
 
-    // Try to save to Supabase
+    // 5. Try to save to Supabase
     try {
       const { error } = await supabase
         .from('subject_comments')
@@ -503,8 +536,8 @@ export default function App() {
           student_name: studentName,
           student_email: studentEmail,
           subject: chatSubject,
-          comment_text: isTeacher ? chatMessage : textToSave,
-          teacher_reply: isTeacher ? textToSave : teacherReply,
+          comment_text: serialized,
+          teacher_reply: isTeacher ? textToSave.trim() : (teacherReply || ""),
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'student_email,subject'
@@ -517,19 +550,23 @@ export default function App() {
       console.warn("Erro ao enviar comentário para o Supabase (silencioso):", err);
     }
 
-    // Log User Action
+    // 6. Log User Action
     await logUserAction({
       userName: user?.name || studentName,
       userEmail: user?.email || studentEmail,
       role: isTeacher ? 'teacher' : 'student',
       actionType: isTeacher ? 'teacher_comment_saved' : 'subject_comment_saved',
       actionDetails: isTeacher 
-        ? `Respondeu ao comentário do aluno ${studentName} na matéria "${chatSubject}": "${textToSave}"`
-        : `Comentou na matéria "${chatSubject}": "${textToSave}"`
+        ? `Respondeu ao comentário do aluno ${studentName} na matéria "${chatSubject}": "${textToSave.trim()}"`
+        : `Comentou na matéria "${chatSubject}": "${textToSave.trim()}"`
     });
 
-    alert(isTeacher ? "Resposta salva e enviada com sucesso! 🚀" : "Mensagem salva e enviada com sucesso! 🚀");
-    setShowChatModal(false);
+    if (shouldClose) {
+      alert(isTeacher ? "Resposta salva e enviada com sucesso! 🚀" : "Mensagem salva e enviada com sucesso! 🚀");
+      setShowChatModal(false);
+    } else {
+      console.log("Mensagem adicionada com sucesso no histórico!");
+    }
   };
 
   // Delete comment permanently
@@ -5564,47 +5601,61 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </div>
 
                 <div className="flex-1 overflow-y-auto max-h-[300px] lg:max-h-[400px] w-full my-1 pr-1 py-1">
-                  {/* Speech bubbles: Render dynamically only if comment exists */}
-                  {chatMessage ? (
-                    <div className="flex flex-col gap-3 w-full">
-                      {/* Student bubble */}
-                      <div className="flex items-start gap-3 max-w-[90%]">
-                        <div className="w-7 h-7 bg-slate-200 rounded-full overflow-hidden shrink-0 mt-2 flex items-center justify-center text-[10px] text-slate-500 font-bold">
-                          <img 
-                            src="/padrao/foto-do-perfil.avif" 
-                            className="w-full h-full object-cover" 
-                            alt="User"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
-                            }}
-                          />
+                  {(() => {
+                    const messages = getConversationMessages(chatMessage, teacherReply);
+                    if (messages.length === 0) {
+                      return (
+                        <div className="text-center py-6 text-slate-400 font-medium text-[12px]">
+                          Nenhuma mensagem enviada para esta matéria ainda. Digite abaixo para iniciar!
                         </div>
-                        
-                        <div className="flex flex-col gap-1.5 flex-1">
-                          <h3 className="text-[13px] font-bold text-slate-900 tracking-wide ml-0.5 capitalize">
-                            {user?.role === 'teacher' && activeReviewSubmission ? activeReviewSubmission.studentName : (user?.name || "Nome do Aluno")}
-                          </h3>
-                          
-                          <div className="bg-[#f4f6f8] text-[#475569] text-[12px] font-medium p-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-3xs leading-relaxed break-words whitespace-pre-wrap">
-                            {chatMessage}
-                          </div>
-                        </div>
+                      );
+                    }
+                    
+                    return (
+                      <div className="flex flex-col gap-3 w-full">
+                        {messages.map((msg: any, i: number) => {
+                          const isTeacherMsg = msg.role === 'teacher';
+                          if (isTeacherMsg) {
+                            return (
+                              <div key={i} className="flex justify-end w-full pl-10 animate-fade-in">
+                                <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
+                                  {msg.text}
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            const displayName = user?.role === 'teacher' && activeReviewSubmission 
+                              ? activeReviewSubmission.studentName 
+                              : (msg.senderName || user?.name || "Nome do Aluno");
+                            return (
+                              <div key={i} className="flex items-start gap-3 max-w-[90%] animate-fade-in">
+                                <div className="w-7 h-7 bg-slate-200 rounded-full overflow-hidden shrink-0 mt-2 flex items-center justify-center text-[10px] text-slate-500 font-bold">
+                                  <img 
+                                    src="/padrao/foto-do-perfil.avif" 
+                                    className="w-full h-full object-cover" 
+                                    alt="User"
+                                    onError={(e) => {
+                                      (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                                    }}
+                                  />
+                                </div>
+                                
+                                <div className="flex flex-col gap-1.5 flex-1">
+                                  <h3 className="text-[13px] font-bold text-slate-900 tracking-wide ml-0.5 capitalize">
+                                    {displayName}
+                                  </h3>
+                                  
+                                  <div className="bg-[#f4f6f8] text-[#475569] text-[12px] font-medium p-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-3xs leading-relaxed break-words whitespace-pre-wrap">
+                                    {msg.text}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }
+                        })}
                       </div>
-
-                      {/* Teacher reply bubble - Rendered only if the teacher actually replied */}
-                      {teacherReply && (
-                        <div className="flex justify-end w-full pl-10">
-                          <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
-                            {teacherReply}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-center py-6 text-slate-400 font-medium text-[12px]">
-                      Nenhuma mensagem enviada para esta matéria ainda. Digite abaixo para iniciar!
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
 
                 {/* Input box and buttons */}
@@ -5626,7 +5677,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           if (chatInput.trim()) {
-                            handleSaveComment(chatInput);
+                            handleSaveComment(chatInput, false);
                           }
                         }
                       }}
@@ -5634,18 +5685,18 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   </div>
                   
                   <div className="flex items-center shrink-0 gap-2">
-                    {/* Salvar Button (next to Send arrow) */}
+                    {/* Salvar Button (Saves and closes modal) */}
                     <button
-                      onClick={() => handleSaveComment(chatInput)}
+                      onClick={() => handleSaveComment(chatInput, true)}
                       disabled={!chatInput.trim()}
                       className="px-3 py-1 bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full text-[11px] font-bold shadow hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer"
                     >
                       Salvar
                     </button>
                     
-                    {/* Enviar Button */}
+                    {/* Enviar Button (Sends message and keeps modal open, WhatsApp style) */}
                     <button 
-                      onClick={() => handleSaveComment(chatInput)}
+                      onClick={() => handleSaveComment(chatInput, false)}
                       disabled={!chatInput.trim()}
                       className="w-8 h-8 bg-[#0B1121] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center shadow-md hover:bg-slate-800 transition-all active:scale-95 border-none cursor-pointer"
                     >
