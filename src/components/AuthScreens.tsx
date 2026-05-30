@@ -295,6 +295,30 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
           console.error('Error looking up local registry code:', err);
         }
       }
+
+      // Cross-device offline fallback: parse student name directly from the code if in XXXXXX-NAME format
+      if (!matchedRecord && cleanCode.includes('-')) {
+        try {
+          const parts = cleanCode.split('-');
+          if (parts.length >= 2) {
+            const rawName = parts.slice(1).join(' ');
+            const decodedName = decodeURIComponent(rawName)
+              .replace(/_/g, ' ')
+              .split(' ')
+              .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+              .join(' ');
+            
+            matchedRecord = {
+              code: cleanCode,
+              name: decodedName,
+              codeId: 'st-' + parts[0].toLowerCase(),
+              expiresAt: Date.now() + 30 * 24 * 60 * 60 * 1000 // 30 days expiry fallback
+            };
+          }
+        } catch (err) {
+          console.error('Error parsing name from offline code:', err);
+        }
+      }
     }
 
     if (matchedRecord) {
@@ -431,19 +455,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         console.error('Error updating student list in login:', err);
       }
 
-      // Buscar imagem de perfil salva no Supabase ou usar o padrão premium
+      // Buscar imagem de perfil salva no Supabase ou usar o padrão premium (apenas se online)
       let avatarUrl = "/padrao/foto-do-perfil.avif";
-      try {
-        const { data: dbDetails } = await supabase
-          .from('students')
-          .select('img')
-          .eq('id', matchedRecord.codeId)
-          .maybeSingle();
-        if (dbDetails?.img) {
-          avatarUrl = dbDetails.img;
+      if (isOnline) {
+        try {
+          const { data: dbDetails } = await supabase
+            .from('students')
+            .select('img')
+            .eq('id', matchedRecord.codeId)
+            .maybeSingle();
+          if (dbDetails?.img) {
+            avatarUrl = dbDetails.img;
+          }
+        } catch (err) {
+          console.warn('Erro ao carregar imagem de perfil do estudante no login:', err);
         }
-      } catch (err) {
-        console.warn('Erro ao carregar imagem de perfil do estudante no login:', err);
       }
 
       const studentUser: User = {

@@ -862,7 +862,29 @@ export default function App() {
   const handleSaveAndSubmitActivity = async () => {
     if (!activeTaskInfo) return;
     
-    const newWords = [...savedWordsList];
+    // Build newWords directly from the current live board state spelledRows!
+    const newWords: SavedWord[] = [];
+    spelledRows.forEach((row, idx) => {
+      const wordstr = row.map(l => l.letter).join("").trim();
+      if (wordstr.length > 0) {
+        const colorKey = rowColors[idx];
+        let wireColor = '#0004FD'; // fallback
+        if (colorKey === 'black') wireColor = '#000000';
+        else if (colorKey === 'blue') wireColor = '#0004FD';
+        else if (colorKey === 'red') wireColor = '#FF0000';
+        else if (colorKey === 'green') wireColor = '#009246';
+
+        newWords.push({
+          word: wordstr,
+          letters: row.filter(l => l && l.letter),
+          themeColor: wireColor
+        });
+      }
+    });
+
+    setSavedWordsList(newWords);
+    localStorage.setItem('savedWords', JSON.stringify(newWords));
+
     setCompletedSpelledWords(prev => {
       const merged = [...prev];
       newWords.forEach(nw => {
@@ -1326,23 +1348,30 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     }
   });
 
-  // Synchronize savedWordsList with spelledRows to ensure only actual board words can exist in saved list
+  // Synchronize savedWordsList with spelledRows in real-time to keep detailed letters and positions in perfect sync
   useEffect(() => {
-    // Collect all valid words currently on the board
-    const activeWordsOnBoard = spelledRows
-      .map(row => row.map(l => l.letter).join("").trim())
-      .filter(w => w.length > 0);
+    const list: SavedWord[] = [];
+    spelledRows.forEach((row, idx) => {
+      const wordstr = row.map(l => l.letter).join("").trim();
+      if (wordstr.length > 0) {
+        const colorKey = rowColors[idx];
+        let wireColor = '#0004FD'; // fallback
+        if (colorKey === 'black') wireColor = '#000000';
+        else if (colorKey === 'blue') wireColor = '#0004FD';
+        else if (colorKey === 'red') wireColor = '#FF0000';
+        else if (colorKey === 'green') wireColor = '#009246';
 
-    setSavedWordsList(prev => {
-      // Filter out any word that doesn't match a word currently on the board
-      const filtered = prev.filter(item => activeWordsOnBoard.includes(item.word));
-      if (filtered.length !== prev.length) {
-        localStorage.setItem('savedWords', JSON.stringify(filtered));
-        return filtered;
+        list.push({
+          word: wordstr,
+          letters: row.filter(l => l && l.letter),
+          themeColor: wireColor
+        });
       }
-      return prev;
     });
-  }, [spelledRows]);
+
+    setSavedWordsList(list);
+    localStorage.setItem('savedWords', JSON.stringify(list));
+  }, [spelledRows, rowColors]);
 
   // Save abacus board progress automatically in real-time when the student is working on a task/subject
   useEffect(() => {
@@ -5112,9 +5141,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                             <button
                               type="button"
                               onClick={() => {
+                                const wordToDelete = savedWordObj.word;
                                 const updated = savedWordsList.filter((_, i) => i !== wIdx);
                                 setSavedWordsList(updated);
                                 localStorage.setItem('savedWords', JSON.stringify(updated));
+                                
+                                // Also clear the corresponding row in spelledRows so they stay perfectly in sync!
+                                setSpelledRows(prev => {
+                                  const next = prev.map(row => {
+                                    const wordstr = row.map(l => l.letter).join("").trim();
+                                    if (wordstr === wordToDelete) {
+                                      return [];
+                                    }
+                                    return row;
+                                  });
+                                  return next;
+                                });
                               }}
                               className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all active:scale-90 shrink-0 ml-3 cursor-pointer"
                               title="Remover"
