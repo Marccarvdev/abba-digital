@@ -169,6 +169,11 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
     const trimmedCode = accessCode.trim().toUpperCase();
     const cleanCode = trimmedCode.replace('ABBA-', '');
 
+    if (cleanCode.startsWith('ATV-')) {
+      setErrorMsg('Este é um código de atividade. Por favor, faça login com seu código de acesso de 6 dígitos primeiro.');
+      return;
+    }
+
     if (cleanCode === 'PROF123' || cleanCode === 'ABC123DEF') {
       setErrorMsg('Código inválido para login de aluno. Teatchers devem entrar pela Área do Teatcher.');
       return;

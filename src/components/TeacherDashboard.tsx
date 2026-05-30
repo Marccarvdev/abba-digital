@@ -941,43 +941,67 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({ user, onLogo
       link => link.studentName === studentName && link.taskId === taskId
     );
 
-    let finalLink = foundLink?.link;
-    if (!finalLink || finalLink.includes('ey') || finalLink.length > 80) {
-      // Build a super clean and short link using the 6-character alphanumeric code
-      finalLink = `${window.location.origin}?code=${finalCode}`;
-      
-      if (foundLink) {
-        foundLink.link = finalLink;
-        setDbTaskLinks(prev => prev.map(l => l.id === foundLink!.id ? { ...l, link: finalLink! } : l));
-      } else {
-        setDbTaskLinks(prev => [{ id: `LINK-${studentId}-${finalCode}`, studentName, link: finalLink!, taskId }, ...prev]);
+    let finalActivityCode = '';
+    if (foundLink) {
+      try {
+        const urlObj = new URL(foundLink.link);
+        const codeParam = urlObj.searchParams.get('code');
+        if (codeParam && codeParam.startsWith('ATV-')) {
+          finalActivityCode = codeParam;
+        }
+      } catch {
+        if (foundLink.id.startsWith('LINK-') && foundLink.id.includes('ATV-')) {
+          const parts = foundLink.id.split('-');
+          const atvPart = parts.find(p => p.startsWith('ATV-'));
+          if (atvPart) {
+            finalActivityCode = atvPart;
+          }
+        }
       }
     }
 
-    // 3. Always ensure the registry has this code mapped to this specific taskId and taskTitle
+    if (!finalActivityCode) {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let codeVal = '';
+      for (let i = 0; i < 6; i++) {
+        codeVal += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      finalActivityCode = `ATV-${codeVal}`;
+    }
+
+    let finalLink = `${window.location.origin}?code=${finalActivityCode}`;
+
+    if (foundLink) {
+      foundLink.link = finalLink;
+      setDbTaskLinks(prev => prev.map(l => l.id === foundLink!.id ? { ...l, link: finalLink, id: `LINK-${studentId}-${finalActivityCode}` } : l));
+    } else {
+      setDbTaskLinks(prev => [{ id: `LINK-${studentId}-${finalActivityCode}`, studentName, link: finalLink, taskId }, ...prev]);
+    }
+
+    // 3. Always ensure the registry has this activity code mapped to this specific taskId and taskTitle
     const registryKey = 'abba_invite_codes_registry';
     const currentRegistry = localStorage.getItem(registryKey);
     const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
     
-    const existingIndex = registryList.findIndex((item: any) => item.code === finalCode);
+    const existingIndex = registryList.findIndex((item: any) => item.code === finalActivityCode);
     if (existingIndex !== -1) {
       registryList[existingIndex].taskId = taskId;
       registryList[existingIndex].taskTitle = taskTitle;
       registryList[existingIndex].name = studentName;
-      registryList[existingIndex].codeId = codeId;
+      registryList[existingIndex].codeId = `st-${studentId}`;
     } else {
       registryList.push({
-        code: finalCode,
+        code: finalActivityCode,
         name: studentName,
         expiresAt: expiresAt,
-        codeId: codeId,
+        codeId: `st-${studentId}`,
         taskId,
         taskTitle
       });
     }
     localStorage.setItem(registryKey, JSON.stringify(registryList));
 
-    return { link: finalLink, code: finalCode };
+    return { link: finalLink, code: finalActivityCode };
   };
 
   const handleShareButtonPress = (studentName: string, studentId: string, taskTitle: string, taskId: string, type: 'code' | 'link' | 'txt') => {
@@ -5391,7 +5415,12 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                         title="Gerar link da tarefa"
                                         onClick={() => {
                                           if (!isAssigningStudentsDetails) return;
-                                          const shortCode = Math.random().toString(36).substring(2, 8).toUpperCase(); // 6 chars code, e.g. A3B9XF
+                                          const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                                          let codeVal = '';
+                                          for (let i = 0; i < 6; i++) {
+                                            codeVal += chars.charAt(Math.floor(Math.random() * chars.length));
+                                          }
+                                          const shortCode = `ATV-${codeVal}`;
                                           const link = `${window.location.origin}?code=${shortCode}`;
                                           setShareTaskLinks(prev => ({ ...prev, [sid]: link }));
                                           
@@ -5404,6 +5433,29 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                             createdAt: new Date().toISOString() 
                                           };
                                           setDbTaskLinks(prev => [newLinkItem, ...prev]);
+
+                                          // Save to local registry so it can be verified offline
+                                          const registryKey = 'abba_invite_codes_registry';
+                                          const currentRegistry = localStorage.getItem(registryKey);
+                                          const registryList = currentRegistry ? JSON.parse(currentRegistry) : [];
+                                          
+                                          const existingIndex = registryList.findIndex((item: any) => item.code === shortCode);
+                                          if (existingIndex !== -1) {
+                                            registryList[existingIndex].taskId = isAssigningStudentsDetails.id;
+                                            registryList[existingIndex].taskTitle = isAssigningStudentsDetails.title;
+                                            registryList[existingIndex].name = student.name;
+                                            registryList[existingIndex].codeId = `st-${student.id}`;
+                                          } else {
+                                            registryList.push({
+                                              code: shortCode,
+                                              name: student.name,
+                                              expiresAt: Date.now() + 365 * 24 * 60 * 60 * 1000,
+                                              codeId: `st-${student.id}`,
+                                              taskId: isAssigningStudentsDetails.id,
+                                              taskTitle: isAssigningStudentsDetails.title
+                                            });
+                                          }
+                                          localStorage.setItem(registryKey, JSON.stringify(registryList));
  
                                           // Add to unsynced queue for offline storage
                                           const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_teacher_links') || '[]');

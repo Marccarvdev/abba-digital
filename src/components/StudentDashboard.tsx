@@ -80,6 +80,10 @@ const isNameInFilename = (fileName: string, userName: string): boolean => {
 
 const extractCodeFromInput = (input: string): string | null => {
   const trimmed = input.trim();
+  // Support ATV-XXXXXX format (10 chars, where the first 4 are "ATV-")
+  if (/^ATV-[a-zA-Z0-9]{6}$/i.test(trimmed)) {
+    return trimmed.toUpperCase();
+  }
   // If it's a 6-char alphanumeric code
   if (/^[a-zA-Z0-9]{6}$/.test(trimmed)) {
     return trimmed.toUpperCase();
@@ -88,11 +92,11 @@ const extractCodeFromInput = (input: string): string | null => {
   try {
     const urlObj = new URL(trimmed);
     const code = urlObj.searchParams.get('code') || urlObj.searchParams.get('join') || urlObj.searchParams.get('import');
-    if (code) return code;
+    if (code) return code.toUpperCase();
   } catch {
     // Try regex for query params in case of malformed URLs
-    const match = trimmed.match(/[?&](code|join|import)=([a-zA-Z0-9=\-_]+)/);
-    if (match && match[2]) return match[2];
+    const match = trimmed.match(/[?&](code|join|import)=([a-zA-Z0-9=\-_]+)/i);
+    if (match && match[2]) return match[2].toUpperCase();
   }
   return null;
 };
@@ -657,6 +661,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
     if (!code) {
       setLinkError('Entrada inválida. Insira o link completo (ex: http://...) ou o código de 6 dígitos gerado pelo professor.');
+      return;
+    }
+
+    // Intercept if they accidentally pasted their access/login code (which doesn't have ATV- prefix)
+    if (!code.startsWith('ATV-')) {
+      setLinkError('Este é o seu código de acesso (login). Para carregar uma tarefa, use o código de atividade enviado pelo seu professor (ex: ATV-XXXXXX).');
       return;
     }
 
