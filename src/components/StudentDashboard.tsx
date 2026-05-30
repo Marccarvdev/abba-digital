@@ -3592,18 +3592,20 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* ALREADY ASSIGNED DUPLICATION MODAL */}
       <AnimatePresence>
         {showAlreadyAssignedModal && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-text">
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowAlreadyAssignedModal(false)}
-              className="fixed inset-0 bg-slate-900/60"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md cursor-pointer"
             />
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              onClick={(e) => e.stopPropagation()}
               className="bg-white rounded-3xl p-8 max-w-md w-full border border-slate-200 shadow-2xl relative z-10 flex flex-col items-center text-center gap-6"
             >
               <div className="w-16 h-16 rounded-full bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
@@ -3630,19 +3632,21 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* AVATAR SELECTOR MODAL */}
       <AnimatePresence>
         {showAvatarSelector && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-md z-[9999] flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 select-text">
+            {/* Backdrop */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowAvatarSelector(false)}
-              className="fixed inset-0 bg-slate-900/60"
+              className="absolute inset-0 bg-slate-900/60 backdrop-blur-md cursor-pointer"
             />
             <motion.div
               initial={{ scale: 0.95, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 20 }}
               transition={{ type: "spring", duration: 0.4 }}
+              onClick={(e) => e.stopPropagation()}
               className="w-full max-w-[360px] bg-white rounded-[32px] shadow-2xl overflow-hidden flex flex-col justify-between p-6 relative border border-slate-100 z-10 text-center select-none h-auto max-h-[90vh] overflow-y-auto gap-5"
             >
               {/* Close Button top-right */}
