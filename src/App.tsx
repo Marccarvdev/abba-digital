@@ -955,100 +955,26 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   const renderFlag = () => {
     switch (activeFlag) {
       case 'brazil':
-        return (
-          <svg width="24" height="17" viewBox="0 0 40 28" className="rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0">
-            <rect width="40" height="28" fill="#009739" />
-            <polygon points="20,3 36,14 20,25 4,14" fill="#FEDD00" />
-            <circle cx="20" cy="14" r="5.5" fill="#012169" />
-          </svg>
-        );
+        return <img src="/icones/BRAZIL FLAG.svg" alt="Brasil" className="w-6 h-[17px] rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0 object-cover" />;
       case 'germany':
-        return (
-          <svg width="24" height="17" viewBox="0 0 40 28" className="rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0">
-            <rect width="40" height="9.33" fill="#000000" />
-            <rect y="9.33" width="40" height="9.33" fill="#DD0000" />
-            <rect y="18.66" width="40" height="9.34" fill="#FFCC00" />
-          </svg>
-        );
+        return <img src="/icones/GERMANY FLAG.svg" alt="Alemanha" className="w-6 h-[17px] rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0 object-cover" />;
       case 'italy':
-        return (
-          <svg width="24" height="17" viewBox="0 0 40 28" className="rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0">
-            <rect width="13.33" height="28" fill="#009246" />
-            <rect x="13.33" width="13.34" height="28" fill="#FFFFFF" />
-            <rect x="26.67" width="13.33" height="28" fill="#CE2B37" />
-          </svg>
-        );
+        return <img src="/icones/ITALY FLAG.svg" alt="Itália" className="w-6 h-[17px] rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0 object-cover" />;
       case 'usa':
-        return (
-          <svg width="24" height="17" viewBox="0 0 40 28" className="rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0">
-            <rect width="40" height="28" fill="#FFFFFF" />
-            <rect y="0" width="40" height="2.15" fill="#B22234" />
-            <rect y="4.3" width="40" height="2.15" fill="#B22234" />
-            <rect y="8.6" width="40" height="2.15" fill="#B22234" />
-            <rect y="12.9" width="40" height="2.15" fill="#B22234" />
-            <rect y="17.2" width="40" height="2.15" fill="#B22234" />
-            <rect y="21.5" width="40" height="2.15" fill="#B22234" />
-            <rect y="25.8" width="40" height="2.15" fill="#B22234" />
-            <rect width="18" height="15" fill="#3C3B6E" />
-            <circle cx="3.5" cy="3" r="0.65" fill="#FFFFFF" />
-            <circle cx="7.5" cy="3" r="0.65" fill="#FFFFFF" />
-            <circle cx="11.5" cy="3" r="0.65" fill="#FFFFFF" />
-            <circle cx="15.5" cy="3" r="0.65" fill="#FFFFFF" />
-            <circle cx="5.5" cy="6.5" r="0.65" fill="#FFFFFF" />
-            <circle cx="9.5" cy="6.5" r="0.65" fill="#FFFFFF" />
-            <circle cx="13.5" cy="6.5" r="0.65" fill="#FFFFFF" />
-            <circle cx="3.5" cy="10" r="0.65" fill="#FFFFFF" />
-            <circle cx="7.5" cy="10" r="0.65" fill="#FFFFFF" />
-            <circle cx="11.5" cy="10" r="0.65" fill="#FFFFFF" />
-            <circle cx="15.5" cy="10" r="0.65" fill="#FFFFFF" />
-            <circle cx="5.5" cy="13" r="0.65" fill="#FFFFFF" />
-            <circle cx="9.5" cy="13" r="0.65" fill="#FFFFFF" />
-            <circle cx="13.5" cy="13" r="0.65" fill="#FFFFFF" />
-          </svg>
-        );
+        return <img src="/icones/EUA FLAG.svg" alt="EUA" className="w-6 h-[17px] rounded-[3px] shadow-[0_1px_3px_rgba(0,0,0,0.15)] border border-gray-150 shrink-0 object-cover" />;
     }
   };
 
   const renderSpecificFlag = (flag: string) => {
     switch (flag) {
       case 'brazil':
-        return (
-          <svg width="100%" height="100%" viewBox="0 0 40 28" preserveAspectRatio="none">
-            <rect width="40" height="28" fill="#009739" />
-            <polygon points="20,3 36,14 20,25 4,14" fill="#FEDD00" />
-            <circle cx="20" cy="14" r="5.5" fill="#012169" />
-          </svg>
-        );
+        return <img src="/icones/BRAZIL FLAG.svg" alt="Brasil" className="w-full h-full object-cover" />;
       case 'germany':
-        return (
-          <svg width="100%" height="100%" viewBox="0 0 40 28" preserveAspectRatio="none">
-            <rect width="40" height="9.33" fill="#000000" />
-            <rect y="9.33" width="40" height="9.33" fill="#DD0000" />
-            <rect y="18.66" width="40" height="9.34" fill="#FFCC00" />
-          </svg>
-        );
+        return <img src="/icones/GERMANY FLAG.svg" alt="Alemanha" className="w-full h-full object-cover" />;
       case 'italy':
-        return (
-          <svg width="100%" height="100%" viewBox="0 0 40 28" preserveAspectRatio="none">
-            <rect width="13.33" height="28" fill="#009246" />
-            <rect x="13.33" width="13.34" height="28" fill="#FFFFFF" />
-            <rect x="26.67" width="13.33" height="28" fill="#CE2B37" />
-          </svg>
-        );
+        return <img src="/icones/ITALY FLAG.svg" alt="Itália" className="w-full h-full object-cover" />;
       case 'usa':
-        return (
-          <svg width="100%" height="100%" viewBox="0 0 40 28" preserveAspectRatio="none">
-            <rect width="40" height="28" fill="#FFFFFF" />
-            <rect y="0" width="40" height="2.15" fill="#B22234" />
-            <rect y="4.3" width="40" height="2.15" fill="#B22234" />
-            <rect y="8.6" width="40" height="2.15" fill="#B22234" />
-            <rect y="12.9" width="40" height="2.15" fill="#B22234" />
-            <rect y="17.2" width="40" height="2.15" fill="#B22234" />
-            <rect y="21.5" width="40" height="2.15" fill="#B22234" />
-            <rect y="25.8" width="40" height="2.15" fill="#B22234" />
-            <rect width="18" height="15" fill="#3C3B6E" />
-          </svg>
-        );
+        return <img src="/icones/EUA FLAG.svg" alt="EUA" className="w-full h-full object-cover" />;
       default: return null;
     }
   };

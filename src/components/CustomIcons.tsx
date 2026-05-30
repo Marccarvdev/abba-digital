@@ -59,7 +59,7 @@ export const SafeAvatar: React.FC<{ src?: string; name?: string; className?: str
   const initials = (name || "U").substring(0, 2).toUpperCase();
 
   // Se a imagem falhar, não for uma URL válida, ou se estivermos offline sem cache
-  if (failed || !src || typeof src !== 'string' || !src.startsWith('http')) {
+  if (failed || !src || typeof src !== 'string' || (!src.startsWith('http') && !src.startsWith('/'))) {
     return (
       <div 
         className={`${className} rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center font-bold text-white select-none shadow-sm shrink-0`} 

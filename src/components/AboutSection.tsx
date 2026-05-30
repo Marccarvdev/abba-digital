@@ -807,9 +807,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
           }`}
           title="Ver imagem em tamanho máximo"
         >
-          <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8V3m0 0h5M3 3l7 7m4-7h5v5m0-5l-7 7m7 4v5m0 0h-5m5 0l-7-7M8 21H3v-5m0 5l7-7" />
-          </svg>
+          <img src="/icones/TELA CHEIA.svg" alt="Tela Cheia" className="w-5 h-5 object-contain" style={{ filter: theme === 'dark' ? 'invert(1)' : 'none' }} />
         </button>
       </div>
     );

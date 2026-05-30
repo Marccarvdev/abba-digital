@@ -2396,7 +2396,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 onClick={() => setShowNotificationsDropdown(prev => !prev)}
                 className="bell-btn-mobile p-0 border-none bg-transparent cursor-pointer flex items-center justify-center"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"></path><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"></path></svg>
+                <img src="/icones/notificações.svg" alt="Notificações" className="w-[20px] h-[20px] object-contain" />
               </button>
               
               <button
@@ -2449,7 +2449,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 className="w-10 h-10 flex items-center justify-center rounded-xl hover:bg-slate-50 text-slate-600 transition-all active:scale-95 cursor-pointer border-none bg-transparent relative"
                 title="Notificações"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" className="text-slate-600"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+                <img src="/icones/notificações.svg" alt="Notificações" className="w-[20px] h-[20px] object-contain" />
                 <span className="absolute top-2.5 right-2.5 w-2 h-2 bg-[#10B981] rounded-full animate-pulse"></span>
               </button>
             </div>
@@ -3526,7 +3526,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       title="Excluir todas as tarefas visíveis nesta aba"
                       style={{ border: '1px solid #fca5a5', background: '#ffffff' }}
                     >
-                      <span className="material-symbols-outlined text-[18px] text-red-500">delete</span>
+                      <img src="/icones/lixeira.svg" alt="Excluir" className="w-[18px] h-[18px] object-contain inline-block shrink-0" />
                       Excluir Tudo
                     </button>
 
@@ -4400,7 +4400,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                 className="p-1 hover:bg-red-50 hover:text-red-500 text-slate-300 hover:text-red-500 rounded-full transition-colors cursor-pointer bg-transparent border-none flex items-center justify-center"
                                 title="Revogar Acesso"
                               >
-                                <span className="material-symbols-outlined text-[16px]">delete</span>
+                                <img src="/icones/lixeira.svg" alt="Excluir" className="w-[16px] h-[16px] object-contain inline-block" />
                               </button>
                             </div>
 
@@ -4789,7 +4789,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                               onClick={() => handleRemoveWordFromNewTask(idx)}
                               className="text-red-500 hover:text-red-700 transition-colors p-1.5 shrink-0 cursor-pointer border-none bg-transparent"
                             >
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
+                              <img src="/icones/lixeira.svg" alt="Excluir" className="w-[18px] h-[18px] object-contain inline-block" />
                             </button>
                           )}
                         </div>
@@ -5068,7 +5068,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors active:scale-90 group cursor-pointer bg-transparent border-none"
                       title="Excluir Tarefa"
                     >
-                      <span className="material-symbols-outlined text-red-500" style={{ color: '#d32f2f' }}>delete</span>
+                      <img src="/icones/lixeira.svg" alt="Excluir" className="w-[20px] h-[20px] object-contain inline-block" />
                     </button>
                     {/* Close button from mockup */}
                     <button 
@@ -6404,7 +6404,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       className="bg-red-100 hover:bg-red-200 text-red-600 w-9 h-9 rounded-full font-bold flex items-center justify-center cursor-pointer transition-all border-none active:scale-90"
                       title="Excluir selecionados em lote"
                     >
-                      <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>delete</span>
+                      <img src="/icones/lixeira.svg" alt="Excluir" className="w-[20px] h-[20px] object-contain inline-block" />
                     </button>
                   </div>
                 </div>
