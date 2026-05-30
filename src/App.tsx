@@ -258,6 +258,7 @@ export default function App() {
   const [savingProgressText, setSavingProgressText] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[]; code?: string } | null>(null);
+  const [isEditingTask, setIsEditingTask] = useState(false);
   const [teacherDraftingTask, setTeacherDraftingTask] = useState<TaskItem | null>(null);
 
   // States for Chat WhatsApp integration
@@ -3005,14 +3006,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         }}
         onDraftCreated={(task) => {
           setTeacherDraftingTask(task);
-          // Limpa o ábaco para começar com as prateleiras limpas
           setSpelledRows([[], [], [], [], [], []]);
           setRowColors({});
           setSavedWordsList([]);
-          
           setCurrentScreen('abacus');
-          setShowLanding(false);
-          setActiveTab('app');
         }}
       />
     );
@@ -3045,8 +3042,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           setActiveSpellingTarget(null);
           
           if (wordsToEdit && wordsToEdit.length > 0) {
-            const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
-            const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+            const newSpelledRows = [[], [], [], [], [], []];
+            const newRowColors = {};
             
             wordsToEdit.forEach((wordObj, idx) => {
               if (idx < 6) {
@@ -3066,7 +3063,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             setRowColors(newRowColors);
             setSavedWordsList(wordsToEdit);
 
-            // Persist reconstructed board state immediately in localStorage!
             try {
               const boardStateObj = {
                 spelledRows: newSpelledRows,
@@ -3076,13 +3072,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 savedWordsList: wordsToEdit
               };
               if (title) {
-                localStorage.setItem(`abba_board_state_${title}`, JSON.stringify(boardStateObj));
+                localStorage.setItem('abba_board_state_' + title, JSON.stringify(boardStateObj));
               }
             } catch (err) {
               console.warn("Erro ao salvar estado do tabuleiro reconstruído:", err);
             }
           } else {
-            const savedTaskBoardState = title ? localStorage.getItem(`abba_board_state_${title}`) : null;
+            const savedTaskBoardState = title ? localStorage.getItem('abba_board_state_' + title) : null;
             if (savedTaskBoardState) {
               try {
                 const parsed = JSON.parse(savedTaskBoardState);
@@ -3100,9 +3096,11 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               setSavedWordsList([]);
             }
           }
-          
+          setIsEditingTask(false);
           setLastSavedTask(null);
           setCurrentScreen('abacus');
+          setShowLanding(false);
+          setActiveTab('app');
         }}
         onRemoveCompletedWord={(idx) => {
           setCompletedSpelledWords(prev => prev.filter((_, i) => i !== idx));
