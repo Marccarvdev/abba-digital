@@ -546,18 +546,11 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         }));
 
         setTeacherTasks(prev => {
-          const merged = [...prev];
-          // Filtrar tarefas mock temporárias para consistência com o painel do professor
-          const cleanMappedTasks = mappedTasks.filter(t => !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id));
-          
-          cleanMappedTasks.forEach(mt => {
-            const index = merged.findIndex(x => x.id === mt.id);
-            if (index !== -1) {
-              merged[index] = { ...merged[index], ...mt };
-            } else {
-              merged.push(mt);
-            }
-          });
+          const mockTasks = prev.filter(t => ['numerais', 'cores-animais'].includes(t.id));
+          const cleanMappedTasks = mappedTasks.filter(t => 
+            !['task-1', 'task-2', 'task-3', 'task-4', 'task-5', 'numerais', 'cores-animais'].includes(t.id)
+          );
+          const merged = [...mockTasks, ...cleanMappedTasks];
           localStorage.setItem('abba_teacher_tasks', JSON.stringify(merged));
           return merged;
         });

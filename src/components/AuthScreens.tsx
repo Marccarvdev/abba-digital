@@ -179,16 +179,21 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       return;
     }
 
-    // 1. Validate student email input (must be Gmail or Outlook format)
-    if (!studentEmailInput.trim()) {
-      setErrorMsg('Por favor, informe seu e-mail (Gmail ou Outlook) para acessar.');
-      return;
-    }
-    const emailLower = studentEmailInput.trim().toLowerCase();
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@(?:gmail|outlook)\.com$/;
-    if (!emailRegex.test(emailLower)) {
-      setErrorMsg('E-mail inválido. O e-mail deve ser do formato @gmail.com ou @outlook.com.');
-      return;
+    // 1. Validate student email input (must be Gmail or Outlook format) if online
+    let emailLower = "";
+    if (isOnline) {
+      if (!studentEmailInput.trim()) {
+        setErrorMsg('Por favor, informe seu e-mail (Gmail ou Outlook) para acessar.');
+        return;
+      }
+      emailLower = studentEmailInput.trim().toLowerCase();
+      const emailRegex = /^[a-zA-Z0-9._%+-]+@(?:gmail|outlook)\.com$/;
+      if (!emailRegex.test(emailLower)) {
+        setErrorMsg('E-mail inválido. O e-mail deve ser do formato @gmail.com ou @outlook.com.');
+        return;
+      }
+    } else {
+      emailLower = "offline@abba.com";
     }
 
     // 2. First, check if this matches our 6-char alphanumeric registry in Supabase!
@@ -298,98 +303,102 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
         return;
       }
 
-      // Strict Gmail/Outlook Validation: Make sure this email is not already in use by another student
-      try {
-        const { data: existingEmailUsers, error: emailErr } = await supabase
-          .from('students')
-          .select('*')
-          .eq('email', emailLower);
+      // Strict Gmail/Outlook Validation: Make sure this email is not already in use by another student (only if online)
+      if (isOnline) {
+        try {
+          const { data: existingEmailUsers, error: emailErr } = await supabase
+            .from('students')
+            .select('*')
+            .eq('email', emailLower);
 
-        if (emailErr) {
-          setErrorMsg('Erro de conexão ao validar o e-mail. Por favor, verifique sua conexão e tente novamente.');
-          return;
-        }
+          if (emailErr) {
+            setErrorMsg('Erro de conexão ao validar o e-mail. Por favor, verifique sua conexão e tente novamente.');
+            return;
+          }
 
-        if (existingEmailUsers && existingEmailUsers.length > 0) {
-          // Check if there is any student with this email that has a different ID
-          const otherUser = existingEmailUsers.find((u: any) => u.id !== matchedRecord.codeId);
-          if (otherUser) {
-            // Strict match: if the name is not exactly matching (case-insensitive), block them immediately
-            if (otherUser.name.trim().toLowerCase() !== matchedRecord.name.trim().toLowerCase()) {
-              setErrorMsg('Este e-mail já está sendo utilizado por outro aluno no sistema. Por favor, insira o seu próprio e-mail.');
-              return;
-            } else {
-              console.log('⚡ Aluno existente fazendo login com novo código. Mesclando registros...');
-              
-              // 1. Update the existing student record with the new matricula
-              const { error: updateErr } = await supabase
-                .from('students')
-                .update({
-                  matricula: matchedRecord.code,
-                  last_access_at: new Date().toISOString(),
-                  login_method: 'code'
-                })
-                .eq('id', otherUser.id);
-
-              if (updateErr) {
-                setErrorMsg('Erro ao atualizar os dados do estudante. Por favor, tente novamente.');
+          if (existingEmailUsers && existingEmailUsers.length > 0) {
+            // Check if there is any student with this email that has a different ID
+            const otherUser = existingEmailUsers.find((u: any) => u.id !== matchedRecord.codeId);
+            if (otherUser) {
+              // Strict match: if the name is not exactly matching (case-insensitive), block them immediately
+              if (otherUser.name.trim().toLowerCase() !== matchedRecord.name.trim().toLowerCase()) {
+                setErrorMsg('Este e-mail já está sendo utilizado por outro aluno no sistema. Por favor, insira o seu próprio e-mail.');
                 return;
-              }
-              
-              // 2. Delete the temporary student record that was created by the teacher
-              if (matchedRecord.codeId !== otherUser.id) {
-                await supabase
+              } else {
+                console.log('⚡ Aluno existente fazendo login com novo código. Mesclando registros...');
+                
+                // 1. Update the existing student record with the new matricula
+                const { error: updateErr } = await supabase
                   .from('students')
-                  .delete()
-                  .eq('id', matchedRecord.codeId);
+                  .update({
+                    matricula: matchedRecord.code,
+                    last_access_at: new Date().toISOString(),
+                    login_method: 'code'
+                  })
+                  .eq('id', otherUser.id);
+
+                if (updateErr) {
+                  setErrorMsg('Erro ao atualizar os dados do estudante. Por favor, tente novamente.');
+                  return;
+                }
+                
+                // 2. Delete the temporary student record that was created by the teacher
+                if (matchedRecord.codeId !== otherUser.id) {
+                  await supabase
+                    .from('students')
+                    .delete()
+                    .eq('id', matchedRecord.codeId);
+                }
+                
+                // 3. Update matchedRecord to use the existing student's ID
+                matchedRecord.codeId = otherUser.id;
               }
-              
-              // 3. Update matchedRecord to use the existing student's ID
-              matchedRecord.codeId = otherUser.id;
             }
           }
+        } catch (err) {
+          setErrorMsg('Erro inesperado ao validar o e-mail de acesso. Tente novamente.');
+          return;
         }
-      } catch (err) {
-        setErrorMsg('Erro inesperado ao validar o e-mail de acesso. Tente novamente.');
-        return;
       }
 
-      // Supabase database update: save the actual email entered by the student!
-      try {
-        const { data: existingStudent } = await supabase
-          .from('students')
-          .select('id')
-          .eq('id', matchedRecord.codeId)
-          .maybeSingle();
+      // Supabase database update: save the actual email entered by the student (only if online)
+      if (isOnline) {
+        try {
+          const { data: existingStudent } = await supabase
+            .from('students')
+            .select('id')
+            .eq('id', matchedRecord.codeId)
+            .maybeSingle();
 
-        if (existingStudent) {
-          await supabase
-            .from('students')
-            .update({
-              email: emailLower,
-              last_access_at: new Date().toISOString(),
-              login_method: 'code'
-            })
-            .eq('id', matchedRecord.codeId);
-        } else {
-          await supabase
-            .from('students')
-            .insert([
-              {
-                id: matchedRecord.codeId || `st-${Date.now()}`,
-                name: matchedRecord.name,
-                class: "Turma A - 3º Ano",
-                img: `/padrao/foto-do-perfil.avif`,
-                progress: 0,
-                matricula: matchedRecord.code,
+          if (existingStudent) {
+            await supabase
+              .from('students')
+              .update({
                 email: emailLower,
                 last_access_at: new Date().toISOString(),
                 login_method: 'code'
-              }
-            ]);
+              })
+              .eq('id', matchedRecord.codeId);
+          } else {
+            await supabase
+              .from('students')
+              .insert([
+                {
+                  id: matchedRecord.codeId || `st-${Date.now()}`,
+                  name: matchedRecord.name,
+                  class: "Turma A - 3º Ano",
+                  img: `/padrao/foto-do-perfil.avif`,
+                  progress: 0,
+                  matricula: matchedRecord.code,
+                  email: emailLower,
+                  last_access_at: new Date().toISOString(),
+                  login_method: 'code'
+                }
+              ]);
+          }
+        } catch (dbErr) {
+          console.warn('Erro ao atualizar/salvar estudante no Supabase:', dbErr);
         }
-      } catch (dbErr) {
-        console.warn('Erro ao atualizar/salvar estudante no Supabase:', dbErr);
       }
 
       // Update or add student record in abba_students_list
@@ -466,25 +475,27 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       }
 
       // Supabase database capture integration
-      try {
-        await supabase.from('student_logins').insert([
-          {
-            student_name: matchedRecord.name,
-            student_email: emailLower,
-            access_code: matchedRecord.code,
-            logged_at: new Date().toISOString(),
-            login_method: 'code'
-          }
-        ]);
-        await logUserAction({
-          userName: matchedRecord.name,
-          userEmail: emailLower,
-          role: 'student',
-          actionType: 'login_code',
-          actionDetails: `Acessou com o código: ${matchedRecord.code}`
-        });
-      } catch (dbErr) {
-        console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
+      if (isOnline) {
+        try {
+          await supabase.from('student_logins').insert([
+            {
+              student_name: matchedRecord.name,
+              student_email: emailLower,
+              access_code: matchedRecord.code,
+              logged_at: new Date().toISOString(),
+              login_method: 'code'
+            }
+          ]);
+          await logUserAction({
+            userName: matchedRecord.name,
+            userEmail: emailLower,
+            role: 'student',
+            actionType: 'login_code',
+            actionDetails: `Acessou com o código: ${matchedRecord.code}`
+          });
+        } catch (dbErr) {
+          console.warn('Erro ao registrar login do estudante no Supabase:', dbErr);
+        }
       }
 
       setSuccessMsg(`Bem-vindo, ${matchedRecord.name}! Carregando atividades...`);
@@ -816,27 +827,32 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                     </div>
                   </div>
 
-                  <div className="space-y-1">
-                    <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="student-email">
-                      E-mail de Acesso (Gmail ou Outlook)
-                    </label>
-                    <div className="relative group">
-                      <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
-                        mail
-                      </span>
-                      <input 
-                        className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
-                        id="student-email" 
-                        placeholder="Ex: seu.nome@gmail.com" 
-                        type="email"
-                        value={studentEmailInput}
-                        onChange={(e) => setStudentEmailInput(e.target.value)}
-                      />
+                  {isOnline && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-semibold text-[#414754] ml-1" htmlFor="student-email">
+                        E-mail de Acesso (Gmail ou Outlook)
+                      </label>
+                      <div className="relative group">
+                        <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-[#005bb3] transition-colors">
+                          mail
+                        </span>
+                        <input 
+                          className="w-full pl-11 pr-4 py-3 bg-[#faf8ff] border border-[#c1c6d6] rounded-lg focus:ring-2 focus:ring-[#005bb3]/20 focus:border-[#005bb3] outline-none transition-all text-xs sm:text-sm text-[#131b2e] placeholder:text-slate-400/60" 
+                          id="student-email" 
+                          placeholder="Ex: seu.nome@gmail.com" 
+                          type="email"
+                          value={studentEmailInput}
+                          onChange={(e) => setStudentEmailInput(e.target.value)}
+                        />
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                   <p className="text-[11px] text-[#414754] px-1 leading-normal">
-                    Insira o seu código de acesso simples de 6 dígitos e seu e-mail do Gmail ou Outlook para autenticar instantaneamente!
+                    {isOnline 
+                      ? "Insira o seu código de acesso simples de 6 dígitos e seu e-mail do Gmail ou Outlook para autenticar instantaneamente!"
+                      : "Login por e-mail indisponível offline. Insira seu Código de Acesso Único de 6 dígitos para autenticar instantaneamente!"
+                    }
                   </p>
                 </div>
 

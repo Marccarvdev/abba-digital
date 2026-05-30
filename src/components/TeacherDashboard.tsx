@@ -184,6 +184,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [students, setStudents] = useState<any[]>(() => {
     const local = localStorage.getItem('abba_students_list');
+    const deletedStudentIds = JSON.parse(localStorage.getItem('abba_deleted_student_ids') || '[]');
+    const deletedStudentNames = JSON.parse(localStorage.getItem('abba_deleted_student_names') || '[]');
     if (local) {
       try {
         const parsed = JSON.parse(local);
@@ -191,6 +193,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
           const filtered = parsed.filter((s: any) => 
             s && 
             s.id && 
+            !deletedStudentIds.includes(s.id) &&
+            !deletedStudentNames.includes(s.name.trim().toLowerCase()) &&
             !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
             !/^st-\d+$/.test(s.id) && 
             s.id !== 'student-fixed-id' &&
@@ -211,7 +215,10 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         console.error(e);
       }
     }
-    return INITIAL_STUDENTS;
+    return INITIAL_STUDENTS.filter((s: any) =>
+      !deletedStudentIds.includes(s.id) &&
+      !deletedStudentNames.includes(s.name.trim().toLowerCase())
+    );
   });
 
   const [gridSearchQuery, setGridSearchQuery] = useState('');
@@ -221,12 +228,16 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   useEffect(() => {
     // Proactive migration already handled synchronously on state init, kept for safety
     const listStr = localStorage.getItem('abba_students_list');
+    const deletedStudentIds = JSON.parse(localStorage.getItem('abba_deleted_student_ids') || '[]');
+    const deletedStudentNames = JSON.parse(localStorage.getItem('abba_deleted_student_names') || '[]');
     if (listStr) {
       try {
         const list = JSON.parse(listStr);
         const filtered = list.filter((s: any) => 
           s && 
           s.id && 
+          !deletedStudentIds.includes(s.id) &&
+          !deletedStudentNames.includes(s.name.trim().toLowerCase()) &&
           !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
           !/^st-\d+$/.test(s.id) && 
           s.id !== 'student-fixed-id' &&
@@ -254,6 +265,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         const filteredLog = log.filter((s: any) => 
           s && 
           s.id && 
+          !deletedStudentIds.includes(s.id) &&
+          !deletedStudentNames.includes(s.studentName.trim().toLowerCase()) &&
           !/^st-\d+$/.test(s.id) && 
           s.id !== 'student-fixed-id' &&
           s.studentName !== 'Alana' &&
@@ -288,7 +301,11 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
     const local = localStorage.getItem('abba_teacher_tasks');
     const loaded: TaskItem[] = local ? JSON.parse(local) : INITIAL_TASKS;
-    return loaded.filter(t => !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id));
+    const deletedTaskIds = JSON.parse(localStorage.getItem('abba_deleted_task_ids') || '[]');
+    return loaded.filter(t => 
+      !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id) &&
+      !deletedTaskIds.includes(t.id)
+    );
   });
   
   const [submissions, setSubmissions] = useState<StudentSubmission[]>(() => {
@@ -564,20 +581,13 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         });
 
         setTasks(prev => {
-          const merged = [...prev];
-          // Filtrar tarefas de mock temporárias para evitar alternâncias no contador
-          const cleanMappedTasks = mappedTasks.filter(t => !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id));
-          
-          cleanMappedTasks.forEach(mt => {
-            const index = merged.findIndex(x => x.id === mt.id);
-            if (index !== -1) {
-              merged[index] = { ...merged[index], ...mt };
-            } else {
-              merged.push(mt);
-            }
-          });
-          localStorage.setItem('abba_teacher_tasks', JSON.stringify(merged));
-          return merged;
+          const deletedTaskIds = JSON.parse(localStorage.getItem('abba_deleted_task_ids') || '[]');
+          const cleanMappedTasks = mappedTasks.filter(t => 
+            !['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].includes(t.id) &&
+            !deletedTaskIds.includes(t.id)
+          );
+          localStorage.setItem('abba_teacher_tasks', JSON.stringify(cleanMappedTasks));
+          return cleanMappedTasks;
         });
       }
 
@@ -681,10 +691,15 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             }
           }
 
+          const deletedStudentIds = JSON.parse(localStorage.getItem('abba_deleted_student_ids') || '[]');
+          const deletedStudentNames = JSON.parse(localStorage.getItem('abba_deleted_student_names') || '[]');
+
           const mapped = dbStudents
             .filter((s: any) => 
               s && 
               s.id && 
+              !deletedStudentIds.includes(s.id) &&
+              !deletedStudentNames.includes(s.name.trim().toLowerCase()) &&
               !ghostIds.includes(s.id) &&
               !/^st-\d+$/.test(s.id) && 
               s.id !== 'student-fixed-id' &&
@@ -718,9 +733,14 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
             .order('logged_at', { ascending: false });
           if (dbLogins && !loginsErr) {
             setStudents(prev => {
+              const deletedStudentIds = JSON.parse(localStorage.getItem('abba_deleted_student_ids') || '[]');
+              const deletedStudentNames = JSON.parse(localStorage.getItem('abba_deleted_student_names') || '[]');
+
               const updated = prev.filter((s: any) => 
                 s && 
                 s.id && 
+                !deletedStudentIds.includes(s.id) &&
+                !deletedStudentNames.includes(s.name.trim().toLowerCase()) &&
                 !(s.id.startsWith('st-') && s.id !== 'student-fixed-id' && s.loginMethod !== 'login' && s.loginMethod !== 'code' && s.loginMethod !== 'link') &&
                 !/^st-\d+$/.test(s.id) && 
                 s.id !== 'student-fixed-id' &&
@@ -733,7 +753,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                 s.name !== 'Giovanna'
               );
               dbLogins.forEach((login: any) => {
-                // Skip mock logins
+                // Skip mock logins and deleted student names
                 if (
                   !login ||
                   login.student_name === 'Alana' ||
@@ -744,7 +764,8 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                   login.student_name === 'Felipe' ||
                   login.student_name === 'Giovanna' ||
                   /^st-\d+$/.test(login.id) ||
-                  login.id === 'student-fixed-id'
+                  login.id === 'student-fixed-id' ||
+                  deletedStudentNames.includes(login.student_name.trim().toLowerCase())
                 ) {
                   return;
                 }
@@ -1662,6 +1683,19 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       const updated = tasks.filter(t => !filteredIds.includes(t.id));
       setTasks(updated);
       
+      // Add all to local blacklist of deleted tasks
+      try {
+        const deletedTaskIds = JSON.parse(localStorage.getItem('abba_deleted_task_ids') || '[]');
+        filteredIds.forEach(id => {
+          if (!deletedTaskIds.includes(id)) {
+            deletedTaskIds.push(id);
+          }
+        });
+        localStorage.setItem('abba_deleted_task_ids', JSON.stringify(deletedTaskIds));
+      } catch (e) {
+        console.error(e);
+      }
+
       // Salvar na fila de exclusões pendentes para robustez offline
       try {
         const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
@@ -5043,6 +5077,17 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                           setTasks(updated);
                           setEditingTask(null);
 
+                          // Add to local blacklist of deleted tasks
+                          try {
+                            const deletedTaskIds = JSON.parse(localStorage.getItem('abba_deleted_task_ids') || '[]');
+                            if (!deletedTaskIds.includes(taskIdToDelete)) {
+                              deletedTaskIds.push(taskIdToDelete);
+                              localStorage.setItem('abba_deleted_task_ids', JSON.stringify(deletedTaskIds));
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          }
+
                           // Salvar na fila de exclusões pendentes para robustez offline
                           try {
                             const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
@@ -6377,6 +6422,30 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                         }
                         if (confirm(`Tem certeza de que deseja excluir permanentemente os ${selectedStudentIdsDelete.length} alunos selecionados?`)) {
                           const idsToDelete = [...selectedStudentIdsDelete];
+                          const namesToDelete = students
+                            .filter(s => idsToDelete.includes(s.id))
+                            .map(s => s.name.trim().toLowerCase());
+
+                          // Update blacklists in localStorage
+                          try {
+                            const deletedStudentIds = JSON.parse(localStorage.getItem('abba_deleted_student_ids') || '[]');
+                            const deletedStudentNames = JSON.parse(localStorage.getItem('abba_deleted_student_names') || '[]');
+                            idsToDelete.forEach(id => {
+                              if (!deletedStudentIds.includes(id)) {
+                                deletedStudentIds.push(id);
+                              }
+                            });
+                            namesToDelete.forEach(name => {
+                              if (name && !deletedStudentNames.includes(name)) {
+                                deletedStudentNames.push(name);
+                              }
+                            });
+                            localStorage.setItem('abba_deleted_student_ids', JSON.stringify(deletedStudentIds));
+                            localStorage.setItem('abba_deleted_student_names', JSON.stringify(deletedStudentNames));
+                          } catch (e) {
+                            console.error(e);
+                          }
+
                           // Update students list
                           setStudents(prev => prev.filter(s => !idsToDelete.includes(s.id)));
                           
