@@ -4519,34 +4519,52 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       {/* SAVING TASK ACTIVITY OVERLAY */}
       <AnimatePresence>
         {isSavingActivity && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 99999,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(2, 6, 23, 0.85)',
-              backdropFilter: 'blur(8px)',
-              padding: '24px',
-              boxSizing: 'border-box'
-            }}
-          >
-            <div className="flex flex-col items-center max-w-sm px-6 text-center select-none">
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative z-10 flex flex-col items-center justify-center text-center select-none"
+            >
               {/* Premium Rotating/Pulsing Spinner with gradient */}
               <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
                 <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20" />
                 <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-emerald-500 border-r-emerald-500 animate-spin" />
+                <span className="material-symbols-outlined text-[36px] text-emerald-500 animate-pulse">save</span>
+              </div>
+              
+              <h3 className="text-xl font-bold text-white tracking-tight leading-tight">Salvando Palavra</h3>
+              <p className="text-sm font-medium text-slate-400 mt-2 min-h-[40px] transition-all duration-300">
+                Aguarde, estamos registrando no seu ábaco...
+              </p>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* SAVING LOADER OVERLAY */}
+      <AnimatePresence>
+        {isSavingInProgress && (
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="relative z-10 flex flex-col items-center justify-center text-center select-none"
+            >
+              <div className="w-16 h-16 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-6 shadow-2xl">
                 <span className="material-symbols-outlined text-[36px] text-emerald-500 animate-pulse">save</span>
               </div>
               
@@ -4559,42 +4577,35 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               <div className="w-48 h-1 bg-slate-800 rounded-full mt-4 overflow-hidden relative">
                 <div className="absolute inset-y-0 left-0 bg-emerald-500 w-full animate-[fillProgress_3.2s_linear_infinite]" />
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
       {/* TASK CONCLUDED SUCCESS MODAL */}
       <AnimatePresence>
         {showSuccessModal && lastSavedTask && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(2, 6, 23, 0.75)',
-              backdropFilter: 'blur(4px)',
-              padding: '16px',
-              boxSizing: 'border-box'
-            }}
-          >
+          <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 select-text">
+            {/* Backdrop */}
             <motion.div
-              initial={{ scale: 0.95, y: 15 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 15 }}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => {
+                setShowSuccessModal(false);
+                setActiveTaskInfo(null);
+                setCurrentScreen('student-dashboard');
+              }}
+              className="absolute inset-0 bg-slate-950/80 backdrop-blur-md cursor-pointer"
+            />
+            
+            <motion.div
+              initial={{ scale: 0.95, y: 15, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative"
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-lg bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col relative z-10 text-left"
             >
               {/* Header Decorative Confetti Ribbon */}
               <div className="h-2 bg-gradient-to-r from-emerald-400 via-teal-500 to-indigo-500" />
@@ -4674,7 +4685,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
 
