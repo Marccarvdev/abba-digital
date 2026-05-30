@@ -469,19 +469,26 @@ export default function App() {
       return;
     }
 
-    const studentName = user?.name || "Estudante";
-    const studentEmail = user?.email || "aluno@abbadigital.com";
+    const studentName = activeReviewSubmission ? activeReviewSubmission.studentName : (user?.name || "Estudante");
+    const studentEmail = activeReviewSubmission ? (activeReviewSubmission.studentEmail || "aluno@abbadigital.com") : (user?.email || "aluno@abbadigital.com");
 
-    // Update state (preserve existing real teacherReply if already loaded)
-    setChatMessage(textToSave);
+    const isTeacher = user?.role === 'teacher';
+
+    if (isTeacher) {
+      setTeacherReply(textToSave);
+      setReviewTeacherReplySaved(textToSave);
+      setReviewTeacherReplyInput(textToSave);
+    } else {
+      setChatMessage(textToSave);
+    }
 
     // Save to localStorage
     try {
       const allCommentsRaw = localStorage.getItem('abba_subject_comments');
       const allComments = allCommentsRaw ? JSON.parse(allCommentsRaw) : {};
       allComments[chatSubject] = {
-        comment: textToSave,
-        reply: teacherReply
+        comment: isTeacher ? chatMessage : textToSave,
+        reply: isTeacher ? textToSave : teacherReply
       };
       localStorage.setItem('abba_subject_comments', JSON.stringify(allComments));
     } catch (e) {
@@ -496,8 +503,8 @@ export default function App() {
           student_name: studentName,
           student_email: studentEmail,
           subject: chatSubject,
-          comment_text: textToSave,
-          teacher_reply: teacherReply,
+          comment_text: isTeacher ? chatMessage : textToSave,
+          teacher_reply: isTeacher ? textToSave : teacherReply,
           updated_at: new Date().toISOString()
         }, {
           onConflict: 'student_email,subject'
@@ -512,14 +519,16 @@ export default function App() {
 
     // Log User Action
     await logUserAction({
-      userName: studentName,
-      userEmail: studentEmail,
-      role: 'student',
-      actionType: 'subject_comment_saved',
-      actionDetails: `Comentou na matéria "${chatSubject}": "${textToSave}"`
+      userName: user?.name || studentName,
+      userEmail: user?.email || studentEmail,
+      role: isTeacher ? 'teacher' : 'student',
+      actionType: isTeacher ? 'teacher_comment_saved' : 'subject_comment_saved',
+      actionDetails: isTeacher 
+        ? `Respondeu ao comentário do aluno ${studentName} na matéria "${chatSubject}": "${textToSave}"`
+        : `Comentou na matéria "${chatSubject}": "${textToSave}"`
     });
 
-    alert("Mensagem salva e enviada com sucesso! 🚀");
+    alert(isTeacher ? "Resposta salva e enviada com sucesso! 🚀" : "Mensagem salva e enviada com sucesso! 🚀");
     setShowChatModal(false);
   };
 
@@ -630,6 +639,8 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('abba_completed_spelled_words', JSON.stringify(completedSpelledWords));
   }, [completedSpelledWords]);
+
+
 
   // Session validation interval for offline unique access code
   useEffect(() => {
@@ -810,10 +821,34 @@ export default function App() {
       words: newWords
     };
 
+    // Save board state for this task specifically so that when the student opens it next time, they see the edited version!
+    try {
+      const boardStateObj = {
+        spelledRows,
+        rowColors,
+        rowIds,
+        cutWiresRows,
+        savedWordsList: newWords
+      };
+      localStorage.setItem(`abba_board_state_${taskTitle}`, JSON.stringify(boardStateObj));
+    } catch (e) {
+      console.error(e);
+    }
+
     try {
       const localSent = localStorage.getItem('abba_student_sent_activities');
-      const sentList = localSent ? JSON.parse(localSent) : [];
-      sentList.unshift(newSentItem);
+      let sentList = localSent ? JSON.parse(localSent) : [];
+      const existingIdx = sentList.findIndex((item: any) => item.taskTitle === taskTitle);
+      if (existingIdx !== -1) {
+        sentList[existingIdx] = {
+          ...sentList[existingIdx],
+          spelledWordsCount: newWords.length,
+          words: newWords,
+          submittedAt: newSentItem.submittedAt
+        };
+      } else {
+        sentList.unshift(newSentItem);
+      }
       localStorage.setItem('abba_student_sent_activities', JSON.stringify(sentList));
     } catch (e) {
       console.error(e);
@@ -839,7 +874,34 @@ export default function App() {
     }
 
     try {
-      const { error } = await supabase.from('student_submissions').insert([submissionPayload]);
+      // Check if submission already exists in Supabase
+      const { data: existingSub, error: findError } = await supabase
+        .from('student_submissions')
+        .select('id')
+        .eq('student_email', studentEmail)
+        .eq('task_title', taskTitle)
+        .maybeSingle();
+
+      let query;
+      if (!findError && existingSub) {
+        // Update existing submission
+        query = supabase
+          .from('student_submissions')
+          .update({
+            submitted_at: submissionPayload.submitted_at,
+            spelled_words_count: submissionPayload.spelled_words_count,
+            spelled_words: submissionPayload.spelled_words
+          })
+          .eq('student_email', studentEmail)
+          .eq('task_title', taskTitle);
+      } else {
+        // Insert new submission
+        query = supabase
+          .from('student_submissions')
+          .insert([submissionPayload]);
+      }
+
+      const { error } = await query;
       if (!error) {
         await logUserAction({
           userName: studentName,
@@ -854,7 +916,7 @@ export default function App() {
         try {
           const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_submissions') || '[]');
           const remaining = unsynced.filter((item: any) => 
-            !(item.student_name === studentName && item.task_title === taskTitle && item.submitted_at === newSentItem.submittedAt)
+            !(item.student_name === studentName && item.task_title === taskTitle)
           );
           localStorage.setItem('abba_unsynced_student_submissions', JSON.stringify(remaining));
         } catch (e) {
@@ -938,6 +1000,119 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       console.error("Erro ao gerar arquivo de confirmação:", error);
       alert("Houve um erro ao gerar o arquivo de confirmação. Tente novamente.");
     }
+  };
+
+  const handleSaveReviewSubmission = async () => {
+    if (!activeReviewSubmission) return;
+    
+    const studentName = activeReviewSubmission.studentName;
+    const studentEmail = activeReviewSubmission.studentEmail || "aluno@abbadigital.com";
+    const taskTitle = activeReviewSubmission.taskTitle;
+    
+    // Build words list from current edited board layout
+    const newWords: SavedWord[] = [];
+    spelledRows.forEach((row, idx) => {
+      const wordstr = row.map(l => l.letter).join('');
+      if (wordstr) {
+        let themeColor = 'black';
+        if (rowColors[idx] === 'blue') themeColor = '#0052cc';
+        else if (rowColors[idx] === 'red') themeColor = '#ef4444';
+        else if (rowColors[idx] === 'green') themeColor = '#10b981';
+        
+        newWords.push({
+          word: wordstr,
+          letters: row.filter(l => l && l.letter),
+          themeColor: themeColor
+        });
+      }
+    });
+    
+    // 1. Update submissions locally
+    try {
+      const localSent = localStorage.getItem('abba_student_submissions');
+      const sentList = localSent ? JSON.parse(localSent) : [];
+      const updatedList = sentList.map((sub: any) => {
+        if (sub.id === activeReviewSubmission.id || (sub.studentName === studentName && sub.taskTitle === taskTitle)) {
+          return {
+            ...sub,
+            spelledWords: newWords,
+            reviewed: true
+          };
+        }
+        return sub;
+      });
+      localStorage.setItem('abba_student_submissions', JSON.stringify(updatedList));
+    } catch (e) {
+      console.error(e);
+    }
+    
+    // Also update student's own list locally
+    try {
+      const localSent = localStorage.getItem('abba_student_sent_activities');
+      const sentList = localSent ? JSON.parse(localSent) : [];
+      const updatedList = sentList.map((sub: any) => {
+        if (sub.id === activeReviewSubmission.id || (sub.studentName === studentName && sub.taskTitle === taskTitle)) {
+          return {
+            ...sub,
+            words: newWords,
+            spelledWordsCount: newWords.length
+          };
+        }
+        return sub;
+      });
+      localStorage.setItem('abba_student_sent_activities', JSON.stringify(updatedList));
+    } catch (e) {
+      console.error(e);
+    }
+    
+    // Save board state for this task specifically so that when the student opens it next time, they see the edited version!
+    try {
+      const boardStateObj = {
+        spelledRows,
+        rowColors,
+        rowIds,
+        cutWiresRows,
+        savedWordsList: newWords
+      };
+      localStorage.setItem(`abba_board_state_${taskTitle}`, JSON.stringify(boardStateObj));
+    } catch (e) {
+      console.error(e);
+    }
+
+    // 2. Save in Supabase
+    try {
+      const { error } = await supabase
+        .from('student_submissions')
+        .update({
+          spelled_words: JSON.stringify(newWords),
+          reviewed: true
+        })
+        .eq('student_email', studentEmail)
+        .eq('task_title', taskTitle);
+      
+      if (!error) {
+        console.log("Submissão do aluno revisada e salva no Supabase!");
+      }
+    } catch (err) {
+      console.warn("Erro ao atualizar submissão no Supabase:", err);
+    }
+    
+    // 3. Log Action
+    await logUserAction({
+      userName: user?.name || "José Décio de Alencar",
+      userEmail: user?.email || "inglesdecio@gmail.com",
+      role: 'teacher',
+      actionType: 'teacher_submission_reviewed',
+      actionDetails: `Salvou revisão com alterações no tabuleiro para o aluno ${studentName} na tarefa "${taskTitle}".`
+    });
+    
+    // 4. Alert "Tarefa salva"
+    alert("Tarefa salva");
+    
+    // 5. Open chat modal
+    setChatSubject(taskTitle);
+    await loadCommentForSubject(taskTitle);
+    setShowChatModal(true);
   };
 
   const handleCloseReviewMode = () => {
@@ -1102,6 +1277,20 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       return prev;
     });
   }, [spelledRows]);
+
+  // Save abacus board progress automatically in real-time when the student is working on a task/subject
+  useEffect(() => {
+    if (activeTaskInfo && activeTaskInfo.title) {
+      const boardStateObj = {
+        spelledRows,
+        rowColors,
+        rowIds,
+        cutWiresRows,
+        savedWordsList
+      };
+      localStorage.setItem(`abba_board_state_${activeTaskInfo.title}`, JSON.stringify(boardStateObj));
+    }
+  }, [spelledRows, rowColors, rowIds, cutWiresRows, savedWordsList, activeTaskInfo]);
 
   const handleOpenSaveModal = (rIdx: number) => {
     if (teacherDraftingTask) {
@@ -2825,9 +3014,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   ...l,
                   color: normalizeColor(l.color || col)
                 }));
-                if (col === '#0004FD') newRowColors[idx] = 'blue';
-                else if (col === '#FF0000') newRowColors[idx] = 'red';
-                else if (col === '#009246') newRowColors[idx] = 'green';
+                if (col === '#0004FD' || col === 'blue' || col === '#0052cc') newRowColors[idx] = 'blue';
+                else if (col === '#FF0000' || col === 'red' || col === '#ef4444') newRowColors[idx] = 'red';
+                else if (col === '#009246' || col === 'green' || col === '#10b981') newRowColors[idx] = 'green';
                 else newRowColors[idx] = 'black';
               }
             });
@@ -2835,10 +3024,40 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             setSpelledRows(newSpelledRows);
             setRowColors(newRowColors);
             setSavedWordsList(wordsToEdit);
+
+            // Persist reconstructed board state immediately in localStorage!
+            try {
+              const boardStateObj = {
+                spelledRows: newSpelledRows,
+                rowColors: newRowColors,
+                rowIds: { 0: "0", 1: "1", 2: "2", 3: "3", 4: "4", 5: "5" },
+                cutWiresRows: [false, false, false, false, false, false],
+                savedWordsList: wordsToEdit
+              };
+              if (title) {
+                localStorage.setItem(`abba_board_state_${title}`, JSON.stringify(boardStateObj));
+              }
+            } catch (err) {
+              console.warn("Erro ao salvar estado do tabuleiro reconstruído:", err);
+            }
           } else {
-            setSpelledRows([[], [], [], [], [], []]);
-            setRowColors({});
-            setSavedWordsList([]);
+            const savedTaskBoardState = title ? localStorage.getItem(`abba_board_state_${title}`) : null;
+            if (savedTaskBoardState) {
+              try {
+                const parsed = JSON.parse(savedTaskBoardState);
+                if (parsed.spelledRows) setSpelledRows(parsed.spelledRows);
+                if (parsed.rowColors) setRowColors(parsed.rowColors);
+                if (parsed.rowIds) setRowIds(parsed.rowIds);
+                if (parsed.cutWiresRows) setCutWiresRows(parsed.cutWiresRows);
+                if (parsed.savedWordsList) setSavedWordsList(parsed.savedWordsList);
+              } catch (err) {
+                console.warn("Erro ao restaurar estado do tabuleiro:", err);
+              }
+            } else {
+              setSpelledRows([[], [], [], [], [], []]);
+              setRowColors({});
+              setSavedWordsList([]);
+            }
           }
           
           setLastSavedTask(null);
@@ -3374,12 +3593,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               )}
             </div>
             
-            <button
-              onClick={handleCloseReviewMode}
-              className="inline-flex items-center justify-center gap-2 bg-[#0004fd] hover:bg-[#0003c7] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap self-start md:self-center border-none"
-            >
-              <span>Concluir Revisão</span>
-            </button>
+            <div className="flex items-center gap-2.5 flex-wrap self-start md:self-center">
+              <button
+                onClick={handleSaveReviewSubmission}
+                className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-pulse"
+              >
+                <span className="material-symbols-outlined text-[18px]">save</span>
+                <span>Salvar</span>
+              </button>
+
+              <button
+                onClick={handleCloseReviewMode}
+                className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+              >
+                <span>Voltar ao Painel</span>
+              </button>
+            </div>
           </div>
         ) : activeTaskInfo ? (
           lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? (
@@ -5249,9 +5478,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               animate={{ scale: 1, y: 0, opacity: 1 }}
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
-              className="relative z-10 w-full max-w-[620px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)]"
+              className="relative z-10 w-full max-w-[620px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)]"
             >
-              <div className="bg-white rounded-[31px] p-5 flex flex-col gap-5 text-left border border-black/[0.02] relative">
+              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-5 lg:gap-7 text-left border border-black/[0.02] relative lg:min-h-[580px] justify-between">
                 
                 {/* Header Actions: Fechar and Excluir Lixeira (Always Visible and Active!) */}
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -5318,53 +5547,65 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       />
                     </div>
                   </div>
-                  <h4 className="text-[14px] font-black text-slate-800 tracking-tight">Envie sua tarefa</h4>
-                  <p className="text-[11px] font-medium text-slate-400 mt-1 px-4 text-center">
-                    Você pode mandar uma mensagem para o professor Décio sobre a matéria: <strong className="text-emerald-600 font-semibold">{chatSubject}</strong>
+                  <h4 className="text-[14px] lg:text-[16px] font-black text-slate-800 tracking-tight">
+                    {user?.role === 'teacher' ? chatSubject : "Envie sua tarefa"}
+                  </h4>
+                  <p className="text-[11px] lg:text-[12px] font-medium text-slate-400 mt-1 px-4 text-center">
+                    {user?.role === 'teacher' ? (
+                      <>
+                        revise essa matéria adicionando um comentário sobre
+                      </>
+                    ) : (
+                      <>
+                        Você pode mandar uma mensagem para o professor Décio sobre a matéria: <strong className="text-emerald-600 font-semibold">{chatSubject}</strong>
+                      </>
+                    )}
                   </p>
                 </div>
 
-                {/* Speech bubbles: Render dynamically only if comment exists */}
-                {chatMessage ? (
-                  <div className="flex flex-col gap-3 w-full my-1">
-                    {/* Student bubble */}
-                    <div className="flex items-start gap-3 max-w-[90%]">
-                      <div className="w-7 h-7 bg-slate-200 rounded-full overflow-hidden shrink-0 mt-2 flex items-center justify-center text-[10px] text-slate-500 font-bold">
-                        <img 
-                          src="/padrao/foto-do-perfil.avif" 
-                          className="w-full h-full object-cover" 
-                          alt="User"
-                          onError={(e) => {
-                            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
-                          }}
-                        />
-                      </div>
-                      
-                      <div className="flex flex-col gap-1.5 flex-1">
-                        <h3 className="text-[13px] font-bold text-slate-900 tracking-wide ml-0.5 capitalize">
-                          {user?.name || "Nome do Aluno"}
-                        </h3>
+                <div className="flex-1 overflow-y-auto max-h-[300px] lg:max-h-[400px] w-full my-1 pr-1 py-1">
+                  {/* Speech bubbles: Render dynamically only if comment exists */}
+                  {chatMessage ? (
+                    <div className="flex flex-col gap-3 w-full">
+                      {/* Student bubble */}
+                      <div className="flex items-start gap-3 max-w-[90%]">
+                        <div className="w-7 h-7 bg-slate-200 rounded-full overflow-hidden shrink-0 mt-2 flex items-center justify-center text-[10px] text-slate-500 font-bold">
+                          <img 
+                            src="/padrao/foto-do-perfil.avif" 
+                            className="w-full h-full object-cover" 
+                            alt="User"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100";
+                            }}
+                          />
+                        </div>
                         
-                        <div className="bg-[#f4f6f8] text-[#475569] text-[12px] font-medium p-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-3xs leading-relaxed break-words whitespace-pre-wrap">
-                          {chatMessage}
+                        <div className="flex flex-col gap-1.5 flex-1">
+                          <h3 className="text-[13px] font-bold text-slate-900 tracking-wide ml-0.5 capitalize">
+                            {user?.role === 'teacher' && activeReviewSubmission ? activeReviewSubmission.studentName : (user?.name || "Nome do Aluno")}
+                          </h3>
+                          
+                          <div className="bg-[#f4f6f8] text-[#475569] text-[12px] font-medium p-3 rounded-2xl rounded-tl-none border border-slate-100 shadow-3xs leading-relaxed break-words whitespace-pre-wrap">
+                            {chatMessage}
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {/* Teacher reply bubble - Rendered only if the teacher actually replied */}
-                    {teacherReply && (
-                      <div className="flex justify-end w-full pl-10">
-                        <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
-                          {teacherReply}
+                      {/* Teacher reply bubble - Rendered only if the teacher actually replied */}
+                      {teacherReply && (
+                        <div className="flex justify-end w-full pl-10">
+                          <div className="bg-[#0075e0] text-[#ffffff] text-[12px] font-semibold px-4 py-2.5 rounded-2xl rounded-tr-xs border border-slate-100 shadow-3xs leading-relaxed max-w-[90%] break-words whitespace-pre-wrap">
+                            {teacherReply}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-slate-400 font-medium text-[12px]">
-                    Nenhuma mensagem enviada para esta matéria ainda. Digite abaixo para iniciar!
-                  </div>
-                )}
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 text-slate-400 font-medium text-[12px]">
+                      Nenhuma mensagem enviada para esta matéria ainda. Digite abaixo para iniciar!
+                    </div>
+                  )}
+                </div>
 
                 {/* Input box and buttons */}
                 <div className="w-full bg-[#f4f6f9] rounded-full px-4 py-2 flex items-center justify-between border border-slate-200/60 gap-3">
@@ -5444,9 +5685,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               exit={{ scale: 0.95, y: 15, opacity: 0 }}
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
               onClick={(e) => e.stopPropagation()}
-              className="w-full max-w-[580px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
+              className="w-full max-w-[580px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 flex flex-col gap-4 text-left border border-black/[0.02]">
+              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] lg:min-h-[580px] justify-between">
                 
                 {/* Header Container */}
                 <div className="w-full py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
@@ -5479,7 +5720,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </div>
 
                 {/* Conversation History Area */}
-                <div className="flex flex-col gap-3 w-full my-1 max-h-[260px] overflow-y-auto pr-1 py-1">
+                <div className="flex flex-col gap-3 w-full my-1 max-h-[260px] lg:max-h-[380px] overflow-y-auto pr-1 py-1 flex-1">
                   {(() => {
                     const filtered = chatMessages.filter(
                       (m: any) => m.taskId === chatTarget.taskId && m.studentName.toLowerCase().trim() === chatTarget.studentName.toLowerCase().trim()
