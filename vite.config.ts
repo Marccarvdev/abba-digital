@@ -29,7 +29,47 @@ export default defineConfig(() => {
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}']
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,avif,woff,woff2}'],
+          runtimeCaching: [
+            {
+              // Cache Google Fonts stylesheets
+              urlPattern: /^https:\/\/fonts\.googleapis\.com/,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'google-fonts-stylesheets',
+              },
+            },
+            {
+              // Cache Google Fonts files
+              urlPattern: /^https:\/\/fonts\.gstatic\.com/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-webfonts',
+                expiration: {
+                  maxEntries: 50,
+                  maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+            {
+              // Cache Cloudinary Images (avatars, thumbnails, tables, etc.)
+              urlPattern: /^https:\/\/res\.cloudinary\.com/,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'cloudinary-assets',
+                expiration: {
+                  maxEntries: 150,
+                  maxAgeSeconds: 60 * 60 * 24 * 90, // 90 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200],
+                },
+              },
+            },
+          ]
         }
       })
     ],
