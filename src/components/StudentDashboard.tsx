@@ -180,14 +180,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [showMobileAvatarSelector, setShowMobileAvatarSelector] = useState(false);
   const [customAvatarUrl, setCustomAvatarUrl] = useState('');
   const [tempAvatarUrl, setTempAvatarUrl] = useState(() => {
-    return user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+    return user.img || "/padrao/foto-do-perfil.avif";
   });
 
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (showAvatarSelector) {
-      setTempAvatarUrl(user.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif");
+      setTempAvatarUrl(user.img || "/padrao/foto-do-perfil.avif");
     }
   }, [showAvatarSelector, user.img]);
 
@@ -205,14 +205,14 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   const PRESET_AVATARS = [
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780043054/2jpNe_ezvkwa.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780042067_ltbb77.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780041890_bnfr3q.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042278/clipboard-image-1780042200_ytj6cu.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780041583_kmrnpv.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780040136_bhdpra.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780042279/clipboard-image-1780041119_jxdezy.avif",
-    "https://res.cloudinary.com/dudmozd8z/image/upload/v1780043341/qprid_iz0fd5.avif"
+    "/avatares/avatar1.avif",
+    "/avatares/avatar2.avif",
+    "/avatares/avatar3.avif",
+    "/avatares/avatar4.avif",
+    "/avatares/avatar5.avif",
+    "/avatares/avatar6.avif",
+    "/avatares/avatar7.avif",
+    "/avatares/avatar8.avif"
   ];
 
   const handleSelectAvatar = async (imgUrl: string) => {

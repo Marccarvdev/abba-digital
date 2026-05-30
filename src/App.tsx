@@ -49,8 +49,8 @@ const RefreshCw: React.FC<SVGProps<SVGSVGElement>> = (props) => (
   </svg>
 );
 
-// Preload high-quality notification sound from Cloudinary
-const notificationSound = new Audio("https://res.cloudinary.com/dudmozd8z/video/upload/v1779949946/universfield-new-notification-010-352755_egccqw.mp3");
+// Preload high-quality notification sound from public/sons/
+const notificationSound = new Audio("/sons/notificacao.mp3");
 notificationSound.preload = "auto";
 
 // Global helper to play sound
@@ -2452,7 +2452,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           onLoginSuccess={async (loggedUser) => {
             if (loggedUser.role === 'student') {
               // 1. Buscar a imagem de perfil mais recente no Supabase
-              let avatarUrl = loggedUser.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+              let avatarUrl = loggedUser.img || "/padrao/foto-do-perfil.avif";
               try {
                 const { data: dbStudent } = await supabase
                   .from('students')

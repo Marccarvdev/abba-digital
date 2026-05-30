@@ -42,47 +42,47 @@ const HeartIcon = (props: SVGProps<SVGSVGElement>) => (
 // Mapped metadata for the 8 sequential gallery images
 const GALLERY_ITEMS = [
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565246/tabvermelho_iuejrf.avif",
+    src: "/blog/tabvermelho.avif",
     title: "Tabela de Letras Vermelhas (Alemão)",
     description: "Tabela em formato A4 para os exercícios do ABBA analógico na língua alemã."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565247/tabazul_eplu2h.avif",
+    src: "/blog/tabazul.avif",
     title: "Tabela de Letras Azuis (Inglês)",
     description: "Tabela em formato A4 para os exercícios na língua inglesa."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565246/tabpreto_dbwmcl.avif",
+    src: "/blog/tabpreto.avif",
     title: "Tabela de Letras Pretas (Português)",
     description: "Tabela em formato A4 para os exercícios na língua portuguesa."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565246/palavras1_hj2w4z.avif",
+    src: "/blog/palavras1.avif",
     title: "Palavras Escritas com os Cubos (Exemplo 1)",
     description: "Exemplo de palavras montadas e alinhadas empiricamente em paralelo."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565246/palavras2_bky3wy.avif",
+    src: "/blog/palavras2.avif",
     title: "Palavras Escritas com os Cubos (Exemplo 2)",
     description: "Destaque para a correspondência de cores e caracteres entre as línguas."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565246/palav3_bhesqe.avif",
+    src: "/blog/palav3.avif",
     title: "Frases Escritas com os Cubos (Exemplo 1)",
     description: "Montagem física de frases integradoras usando os cubos do ABBA."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565245/palavr4_qbydb0.avif",
+    src: "/blog/palavr4.avif",
     title: "Frases Escritas com os Cubos (Exemplo 2)",
     description: "Tradução paralela e consolidação da velocidade de leitura e escrita."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565245/painel_k2fqw5.avif",
+    src: "/blog/painel.avif",
     title: "O Painel Magnético do ABBA",
     description: "Estrutura metálica de apoio para fixação dos cubos e treinamento pedagógico."
   },
   {
-    src: "https://res.cloudinary.com/dudmozd8z/image/upload/v1779565508/habenter_cfxsmy.avif",
+    src: "/blog/habenter.avif",
     title: "A Camiseta Bordada do ABBA",
     description: "Apresentação da identidade visual do ábaco bilingue."
   }
@@ -937,7 +937,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
             </button>
 
             {/* Logo & Title */}
-            <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
+            <img src="/icones/logo.svg" alt="ABBA Logo" className="w-10 h-10 ml-0.5 object-contain" />
             <div>
               <h1 className={`font-display font-extrabold text-xl tracking-tight flex items-center gap-1.5 transition-colors duration-500 ${
                 theme === 'dark' ? 'text-white' : 'text-gray-950'
@@ -1051,7 +1051,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
             theme === 'dark' ? 'border-white' : 'border-gray-900'
           }`}>
             <img 
-              src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
+              src="/padrao/foto-do-professor.avif" 
               alt="José Décio de Alencar" 
               className="w-10 h-10 rounded-full object-cover"
             />
@@ -1072,13 +1072,13 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
               <a href="#" onClick={(e) => { e.preventDefault(); setIsFormModalOpen(true); }} className={`flex items-center gap-1.5 transition-colors ${
                 theme === 'dark' ? 'hover:text-sky-400' : 'hover:text-[#005ba4]'
               }`}>
-                <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779574833/gmail-svgrepo-com_hwwnlb.svg" alt="Email" className="w-4 h-4 shrink-0" />
+                <img src="/icones/gmail.svg" alt="Email" className="w-4 h-4 shrink-0" />
                 <span className="break-all">projetobrasilbilingue@gmail.com</span>
               </a>
               <a href="#" onClick={(e) => { e.preventDefault(); setIsWhatsappModalOpen(true); }} className={`flex items-center gap-1.5 transition-colors ${
                 theme === 'dark' ? 'hover:text-sky-400' : 'hover:text-[#005ba4] text-gray-400'
               }`}>
-                <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779574832/whatsapp-svgrepo-com_tgqnb3.svg" alt="WhatsApp" className="w-4 h-4" />
+                <img src="/icones/whatsapp.svg" alt="WhatsApp" className="w-4 h-4" />
                 <span className="break-all">47 9 9903-4403</span>
               </a>
             </div>
@@ -1685,7 +1685,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     theme === 'dark' ? 'bg-slate-800' : 'bg-gray-100'
                   }`}>
                     <img 
-                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
+                      src="/padrao/foto-do-professor.avif"
                       alt="José Décio de Alencar"
                       className="w-full h-full object-cover object-center" 
                     />
@@ -1931,7 +1931,7 @@ export const AboutSection: React.FC<AboutSectionProps> = ({ onBack }) => {
                     theme === 'dark' ? 'bg-slate-800' : 'bg-gray-100'
                   }`}>
                     <img 
-                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
+                      src="/padrao/foto-do-professor.avif"
                       alt="José Décio de Alencar"
                       className="w-full h-full object-cover object-center" 
                     />

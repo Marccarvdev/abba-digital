@@ -684,7 +684,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
               id: s.id,
               name: s.name,
               class: s.class || 'Turma A - 3º Ano',
-              img: s.img || `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+              img: s.img || `/padrao/foto-do-perfil.avif`,
               progress: s.progress || 0,
               matricula: s.matricula || `2026${Math.floor(1000 + Math.random() * 9000)}`,
               gender: s.gender || 'M',
@@ -742,7 +742,7 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
                     id: 'st-' + login.id,
                     name: login.student_name,
                     class: "Turma A - 3º Ano",
-                    img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+                    img: `/padrao/foto-do-perfil.avif`,
                     progress: 0,
                     matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
                     gender: 'M',
@@ -1505,7 +1505,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       id: codeId,
       name: name,
       class: "Turma A - 3º Ano",
-      img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+      img: `/padrao/foto-do-perfil.avif`,
       progress: 0,
       matricula: code,
       gender: detectGenderFromName(name),
@@ -2100,7 +2100,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                     <img 
                       alt="Avatar" 
                       className="w-14 h-14 rounded-full object-cover border-2 border-indigo-500/20" 
-                      src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
+                      src="/padrao/foto-do-professor.avif" 
                     />
                     <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                       <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -2223,7 +2223,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 }`}
               >
                 <img 
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" 
+                  src="/icones/usuarios.svg" 
                   className="w-[18px] h-[18px] object-contain shrink-0"
                   style={{ filter: activeTab === 'students' ? 'brightness(0) invert(1)' : 'none' }}
                   alt="Alunos"
@@ -2237,7 +2237,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 }`}
               >
                 <img 
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" 
+                  src="/icones/tarefas_totais.svg" 
                   className="w-[18px] h-[18px] object-contain shrink-0"
                   style={{ filter: activeTab === 'tasks' ? 'brightness(0) invert(1)' : 'none' }}
                   alt="Tarefas"
@@ -2251,7 +2251,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 }`}
               >
                 <img 
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                  src="/icones/chave.svg" 
                   className="w-[18px] h-[18px] object-contain shrink-0"
                   style={{ filter: activeTab === 'access' ? 'brightness(0) invert(1)' : 'none' }}
                   alt="Acessos"
@@ -2315,7 +2315,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
               }`}
             >
               <img 
-                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" 
+                src="/icones/usuarios.svg" 
                 className="w-[18px] h-[18px] object-contain shrink-0"
                 style={{ filter: activeTab === 'students' ? 'brightness(0) invert(1)' : 'none' }}
                 alt="Alunos"
@@ -2332,7 +2332,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
               }`}
             >
               <img 
-                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" 
+                src="/icones/tarefas_totais.svg" 
                 className="w-[18px] h-[18px] object-contain shrink-0"
                 style={{ filter: activeTab === 'tasks' ? 'brightness(0) invert(1)' : 'none' }}
                 alt="Tarefas"
@@ -2349,7 +2349,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
               }`}
             >
               <img 
-                src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                src="/icones/chave.svg" 
                 className="w-[18px] h-[18px] object-contain shrink-0"
                 style={{ filter: activeTab === 'access' ? 'brightness(0) invert(1)' : 'none' }}
                 alt="Acessos"
@@ -2403,7 +2403,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 onClick={() => setShowProfileMenu(prev => !prev)}
                 className="avatar-btn-mobile w-9 h-9 rounded-full overflow-hidden border border-gray-200 p-0 bg-transparent cursor-pointer flex items-center justify-center"
               >
-                <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" alt="Teatcher" className="w-full h-full object-cover" />
+                <img src="/padrao/foto-do-professor.avif" alt="Teatcher" className="w-full h-full object-cover" />
               </button>
             </div>
           </div>
@@ -2476,7 +2476,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                 <img
                   alt={`${user.name} Avatar`}
                   className="w-full h-full object-cover"
-                  src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif"
+                  src="/padrao/foto-do-professor.avif"
                 />
               </button>
  
@@ -2586,7 +2586,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                             <img 
                               alt="Avatar" 
                               className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/20" 
-                              src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif" 
+                              src="/padrao/foto-do-professor.avif" 
                             />
                             <div className="absolute -right-1 -bottom-1 bg-[#10B981] w-4.5 h-4.5 rounded-full border-2 border-white flex items-center justify-center">
                               <span className="w-2 h-2 bg-emerald-100 rounded-full animate-pulse" />
@@ -2689,7 +2689,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   {/* Card 1 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" className="w-6 h-6 object-contain" alt="Alunos Ativos" />
+                      <img src="/icones/usuarios.svg" className="w-6 h-6 object-contain" alt="Alunos Ativos" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{students.length}</h3>
@@ -2700,7 +2700,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   {/* Card 2 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center shrink-0">
-                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" className="w-6 h-6 object-contain" alt="Tarefas Totais" />
+                      <img src="/icones/tarefas_totais.svg" className="w-6 h-6 object-contain" alt="Tarefas Totais" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{tasks.length}</h3>
@@ -2711,7 +2711,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   {/* Card 3 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_PEDENTES_avamwc.svg" className="w-6 h-6 object-contain" alt="Entregas Pendentes" />
+                      <img src="/icones/tarefas_pendentes.svg" className="w-6 h-6 object-contain" alt="Entregas Pendentes" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">{submissions.length}</h3>
@@ -2722,7 +2722,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   {/* Card 4 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center shrink-0">
-                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" className="w-6 h-6 object-contain" alt="Códigos Ativos" />
+                      <img src="/icones/chave.svg" className="w-6 h-6 object-contain" alt="Códigos Ativos" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">
@@ -2735,7 +2735,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   {/* Card 5 */}
                   <div className="bg-white p-6 rounded-[24px] border border-gray-100 shadow-sm flex items-center gap-4 text-left">
                     <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-                      <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_CONCLUIDAS_pgfbco.svg" className="w-6 h-6 object-contain" alt="Tarefas Concluídas" />
+                      <img src="/icones/tarefas_concluidas.svg" className="w-6 h-6 object-contain" alt="Tarefas Concluídas" />
                     </div>
                     <div>
                       <h3 className="text-3xl font-black text-slate-900 leading-none">
@@ -2761,7 +2761,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       submissions.map((sub, idx) => {
                         const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
                                             INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
-                        const avatarUrl = studentInfo ? studentInfo.img : `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`;
+                        const avatarUrl = studentInfo ? studentInfo.img : `/padrao/foto-do-perfil.avif`;
                         const isReviewed = sub.reviewed || false;
 
                         return (
@@ -2934,7 +2934,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-blue-50 text-blue-600 rounded-xl shrink-0 flex items-center justify-center">
-                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/USUARIOS_ndwkzb.svg" className="w-[20px] h-[20px] object-contain" alt="Alunos Ativos" />
+                        <img src="/icones/usuarios.svg" className="w-[20px] h-[20px] object-contain" alt="Alunos Ativos" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{students.length}</div>
                     </div>
@@ -2947,7 +2947,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-purple-50 text-purple-600 rounded-xl shrink-0 flex items-center justify-center">
-                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030087/TAREFAS_TOTAIS_elldk1.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Totais" />
+                        <img src="/icones/tarefas_totais.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Totais" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{tasks.length}</div>
                     </div>
@@ -2960,7 +2960,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-orange-50 text-orange-600 rounded-xl shrink-0 flex items-center justify-center">
-                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_PEDENTES_avamwc.svg" className="w-[20px] h-[20px] object-contain" alt="Entregas Pendentes" />
+                        <img src="/icones/tarefas_pendentes.svg" className="w-[20px] h-[20px] object-contain" alt="Entregas Pendentes" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">{submissions.length}</div>
                     </div>
@@ -2973,7 +2973,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-green-50 text-green-600 rounded-xl shrink-0 flex items-center justify-center">
-                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" className="w-[20px] h-[20px] object-contain" alt="Códigos Ativos" />
+                        <img src="/icones/chave.svg" className="w-[20px] h-[20px] object-contain" alt="Códigos Ativos" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">
                         {activeCodes.filter(c => c.expiresAt > Date.now()).length}
@@ -2988,7 +2988,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                   <div className="bg-white border border-slate-200 p-4 rounded-[24px] shadow-sm flex flex-col gap-2.5 text-left col-span-2">
                     <div className="flex items-center gap-3">
                       <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl shrink-0 flex items-center justify-center">
-                        <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/TAREFAS_CONCLUIDAS_pgfbco.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Concluídas" />
+                        <img src="/icones/tarefas_concluidas.svg" className="w-[20px] h-[20px] object-contain" alt="Tarefas Concluídas" />
                       </div>
                       <div className="text-2xl font-black text-slate-950 leading-none">
                         {tasks.filter(t => t.status === 'completed').length}
@@ -3015,7 +3015,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       submissions.map((sub, idx) => {
                         const studentInfo = students.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase()) || 
                                             INITIAL_STUDENTS.find(s => s.name.toLowerCase() === sub.studentName.toLowerCase());
-                        const avatarUrl = studentInfo ? studentInfo.img : `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`;
+                        const avatarUrl = studentInfo ? studentInfo.img : `/padrao/foto-do-perfil.avif`;
                         const isReviewed = sub.reviewed || false;
 
                         return (
@@ -3363,9 +3363,9 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                     <img 
                                       alt={student.name} 
                                       className="w-12 h-12 rounded-full object-cover border-2 border-surface-container-high" 
-                                      src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                                      src={student.img || "/padrao/foto-do-perfil.avif"}
                                       onError={(e) => {
-                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                        e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                       }}
                                     />
                                     <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white ${
@@ -4024,11 +4024,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
 
                           <div className="relative shrink-0">
                             <img 
-                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                              src={student.img || "/padrao/foto-do-perfil.avif"} 
                               alt={student.name} 
                               className="w-12 h-12 rounded-full object-cover border-2 border-slate-100"
                               onError={(e) => {
-                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                               }}
                             />
                             {student.lastAccessAt && (
@@ -4337,7 +4337,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                         );
                         const isExpired = activeCode ? (Date.now() > activeCode.expiresAt) : false;
                         const student = students.find(s => s.name.toLowerCase() === item.studentName.toLowerCase());
-                        const studentImg = student?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                        const studentImg = student?.img || "/padrao/foto-do-perfil.avif";
 
                         let durationLabel = activeCode ? activeCode.durationLabel : 'Ativo';
                         let friendlyCode = activeCode ? activeCode.code : item.code;
@@ -4363,11 +4363,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                           >
                             <div className="absolute -top-4 -left-4 w-16 h-16 rounded-full border-4 border-[#00c853] overflow-hidden shadow-md bg-white select-none shrink-0">
                               <img 
-                                src={studentImg || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                src={studentImg || "/padrao/foto-do-perfil.avif"} 
                                 className="w-full h-full object-cover" 
                                 alt={item.studentName} 
                                 onError={(e) => {
-                                  e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                  e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                 }}
                               />
                             </div>
@@ -4647,11 +4647,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                               >
                                 <div className="flex items-center gap-md">
                                   <img 
-                                    src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                    src={s.img || "/padrao/foto-do-perfil.avif"} 
                                     alt={s.name} 
                                     className="w-8 h-8 rounded-full object-cover border border-[#eaedff]" 
                                     onError={(e) => {
-                                      e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                      e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                     }}
                                   />
                                   <span className="font-bold text-xs text-on-background group-hover:text-primary transition-colors">{s.name}</span>
@@ -4909,13 +4909,13 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                             className="absolute top-3 right-3 w-4 h-4 rounded text-[#005bb3] border-[#c1c6d6] pointer-events-none"
                           />
                           <img 
-                            src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                            src={s.img || "/padrao/foto-do-perfil.avif"} 
                             alt={s.name}
                             className={`w-14 h-14 rounded-full object-cover mb-2 border-2 transition-all ${
                               isSelected ? 'border-[#005bb3] scale-105' : 'border-slate-100'
                             }`}
                             onError={(e) => {
-                              e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                              e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                             }}
                           />
                           <p className="font-bold text-xs text-center text-[#131b2e] truncate w-full leading-tight">{s.name}</p>
@@ -5202,11 +5202,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                 >
                                   <div className="flex items-center gap-2">
                                     <img 
-                                      src={s.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                      src={s.img || "/padrao/foto-do-perfil.avif"} 
                                       alt={s.name} 
                                       className="w-7 h-7 rounded-full object-cover border" 
                                       onError={(e) => {
-                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                        e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                       }}
                                     />
                                     <span className="font-semibold text-xs text-[#131b2e]">{s.name}</span>
@@ -5382,9 +5382,9 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                             <img 
                               alt={student.name} 
                               className="w-10 h-10 rounded-full object-cover border shrink-0" 
-                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                              src={student.img || "/padrao/foto-do-perfil.avif"}
                               onError={(e) => {
-                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                               }}
                             />
                             <div className="ml-md flex-1 min-w-0">
@@ -5481,12 +5481,12 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                                   {/* Student row with avatar, name + code generator input + generate button */}
                                   <div className="flex items-center gap-sm p-sm">
                                     <img
-                                      src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                                      src={student.img || "/padrao/foto-do-perfil.avif"}
                                       alt={student.name}
                                       className="rounded-full shrink-0 border-2 border-primary/30"
                                       style={{ width: 40, height: 40, objectFit: 'cover' }}
                                       onError={(e) => {
-                                        e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                        e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                       }}
                                     />
                                     <div className="flex-1 min-w-0">
@@ -5744,7 +5744,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       const hasCode = !!student.code;
                       const isLinkCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'link';
                       const isCodeCopied = copiedStudentItem?.id === student.id && copiedStudentItem?.type === 'code';
-                      const studentImg = students.find(s => s.id === student.id)?.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                      const studentImg = students.find(s => s.id === student.id)?.img || "/padrao/foto-do-perfil.avif";
 
                       return (
                         <div 
@@ -6075,7 +6075,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                           className="w-full py-2 bg-slate-50 hover:bg-[#d6e3ff] hover:text-[#005bb3] text-slate-600 font-label-sm text-label-sm font-bold rounded-lg transition-all active:scale-[0.97] cursor-pointer border border-outline-variant/60 flex items-center justify-center gap-xs"
                         >
                           <img 
-                            src="https://res.cloudinary.com/dudmozd8z/image/upload/v1780030086/CHAVE_kvxsz6.svg" 
+                            src="/icones/chave.svg" 
                             className="w-4 h-4 object-contain" 
                             alt="Link" 
                           />
@@ -6118,7 +6118,7 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       name: newStudentName.trim(),
                       email: emailValue,
                       class: newStudentClass,
-                      img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+                      img: `/padrao/foto-do-perfil.avif`,
                       progress: newStudentProgress,
                       matricula: String(202400 + students.length + 1),
                       gender: guessedGender,
@@ -6225,11 +6225,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                         >
                           <div className="flex justify-between items-start">
                             <img
-                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                              src={student.img || "/padrao/foto-do-perfil.avif"}
                               alt={student.name}
                               className="w-12 h-12 rounded-full border border-slate-100 object-cover"
                               onError={(e) => {
-                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                               }}
                             />
                             <input
@@ -6443,11 +6443,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                             />
                             
                             <img
-                              src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"}
+                              src={student.img || "/padrao/foto-do-perfil.avif"}
                               alt={student.name}
                               className="w-12 h-12 rounded-full object-cover border border-slate-100"
                               onError={(e) => {
-                                e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                               }}
                             />
                             
@@ -6861,11 +6861,11 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                                 <div className="flex items-center gap-3 min-w-0">
                                   <img 
-                                    src={student.img || "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif"} 
+                                    src={student.img || "/padrao/foto-do-perfil.avif"} 
                                     alt={student.name} 
                                     className="w-10 h-10 rounded-full object-cover border border-[#eaedff] shrink-0" 
                                     onError={(e) => {
-                                      e.currentTarget.src = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+                                      e.currentTarget.src = "/padrao/foto-do-perfil.avif";
                                     }}
                                   />
                                   <div className="min-w-0">

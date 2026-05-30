@@ -379,7 +379,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
                 id: matchedRecord.codeId || `st-${Date.now()}`,
                 name: matchedRecord.name,
                 class: "Turma A - 3º Ano",
-                img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+                img: `/padrao/foto-do-perfil.avif`,
                 progress: 0,
                 matricula: matchedRecord.code,
                 email: emailLower,
@@ -407,7 +407,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             id: matchedRecord.codeId || `st-${Date.now()}`,
             name: matchedRecord.name,
             class: "Turma A - 3º Ano",
-            img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+            img: `/padrao/foto-do-perfil.avif`,
             progress: 0,
             matricula: matchedRecord.code,
             gender: 'M',
@@ -423,7 +423,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       }
 
       // Buscar imagem de perfil salva no Supabase ou usar o padrão premium
-      let avatarUrl = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+      let avatarUrl = "/padrao/foto-do-perfil.avif";
       try {
         const { data: dbDetails } = await supabase
           .from('students')
@@ -531,7 +531,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
             id: sessionData.codeId,
             name: sessionData.name,
             class: "Turma A - 3º Ano",
-            img: `https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif`,
+            img: `/padrao/foto-do-perfil.avif`,
             progress: 0,
             matricula: `2026${Math.floor(1000 + Math.random() * 9000)}`,
             gender: 'M',
@@ -547,7 +547,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
       }
 
       // Buscar imagem de perfil salva no Supabase ou usar o padrão premium
-      let avatarUrl = "https://res.cloudinary.com/dudmozd8z/image/upload/v1780092946/foto-do-perfil_isq9nr.avif";
+      let avatarUrl = "/padrao/foto-do-perfil.avif";
       try {
         const { data: dbDetails } = await supabase
           .from('students')
@@ -701,7 +701,7 @@ export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, onGoTo
           title="Voltar para a página principal"
         >
           <img 
-            src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" 
+            src="/icones/logo.svg" 
             alt="ABBA Logo" 
             className="w-8 h-8 object-contain"
           />
@@ -1066,7 +1066,7 @@ export const SignupScreen: React.FC<SignupScreenProps> = ({ onSignupSuccess, onG
             onClick={() => onGoToLanding ? onGoToLanding() : onGoToLogin()}
             title="Voltar para a página principal"
           >
-            <img src="https://res.cloudinary.com/dudmozd8z/image/upload/v1779315941/logoabra2_kls3we.svg" alt="ABBA Logo" className="w-8 h-8 object-contain" />
+            <img src="/icones/logo.svg" alt="ABBA Logo" className="w-8 h-8 object-contain" />
             <span style={{ color: '#005bb3', fontSize: 28, lineHeight: '36px', fontWeight: 600, letterSpacing: '-0.02em' }}>ABBA DIGITAL</span>
           </div>
           <div className="flex items-center" style={{ gap: 16 }}>
