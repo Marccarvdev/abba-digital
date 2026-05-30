@@ -4203,7 +4203,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-[580px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] lg:min-h-[580px] justify-between">
+              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
                 
                 {/* Header Container */}
                 <div className="w-full py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
@@ -4236,7 +4236,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </div>
 
                 {/* Conversation History Area */}
-                <div className="flex flex-col gap-3 w-full my-1 max-h-[260px] lg:max-h-[380px] overflow-y-auto pr-1 py-1 flex-1">
+                <div className="flex flex-col gap-3 w-full my-1 overflow-y-auto pr-1 py-1 flex-1">
                   {(() => {
                     const filtered = chatMessages.filter(
                       (m: any) => m.taskId === chatTarget.taskId && m.studentName.toLowerCase().trim() === chatTarget.studentName.toLowerCase().trim()

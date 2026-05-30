@@ -482,6 +482,10 @@ export default function App() {
   const handleSaveComment = async (textToSave: string, shouldClose = true) => {
     if (!chatSubject) return;
     if (!textToSave.trim()) {
+      if (shouldClose) {
+        setShowChatModal(false);
+        return;
+      }
       alert("Por favor, digite uma mensagem antes de salvar.");
       return;
     }
@@ -5517,7 +5521,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               transition={{ type: "spring", damping: 25, stiffness: 220 }}
               className="relative z-10 w-full max-w-[620px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)]"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-5 lg:gap-7 text-left border border-black/[0.02] relative lg:min-h-[580px] justify-between">
+              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-5 lg:gap-4 text-left border border-black/[0.02] relative h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
                 
                 {/* Header Actions: Fechar and Excluir Lixeira (Always Visible and Active!) */}
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
@@ -5600,7 +5604,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   </p>
                 </div>
 
-                <div className="flex-1 overflow-y-auto max-h-[300px] lg:max-h-[400px] w-full my-1 pr-1 py-1">
+                <div className="flex-1 overflow-y-auto w-full my-1 pr-1 py-1">
                   {(() => {
                     const messages = getConversationMessages(chatMessage, teacherReply);
                     if (messages.length === 0) {
@@ -5688,8 +5692,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                     {/* Salvar Button (Saves and closes modal) */}
                     <button
                       onClick={() => handleSaveComment(chatInput, true)}
-                      disabled={!chatInput.trim()}
-                      className="px-3 py-1 bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full text-[11px] font-bold shadow hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer"
+                      className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-full text-[12px] font-bold shadow transition-all active:scale-95 border-none cursor-pointer"
                     >
                       Salvar
                     </button>
@@ -5738,7 +5741,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               onClick={(e) => e.stopPropagation()}
               className="w-full max-w-[580px] lg:max-w-[850px] bg-gradient-to-b from-white/70 via-white/20 to-black/[0.04] p-[1px] rounded-[32px] shadow-[0_15px_35px_rgba(15,23,42,0.06)] relative z-10 overflow-hidden"
             >
-              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] lg:min-h-[580px] justify-between">
+              <div className="bg-white rounded-[31px] p-5 lg:p-8 flex flex-col gap-4 lg:gap-6 text-left border border-black/[0.02] h-[550px] lg:h-[650px] max-h-[90vh] justify-between">
                 
                 {/* Header Container */}
                 <div className="w-full py-5 border border-dashed border-slate-200/80 rounded-2xl flex flex-col items-center justify-center bg-slate-50/40 relative">
@@ -5771,7 +5774,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </div>
 
                 {/* Conversation History Area */}
-                <div className="flex flex-col gap-3 w-full my-1 max-h-[260px] lg:max-h-[380px] overflow-y-auto pr-1 py-1 flex-1">
+                <div className="flex flex-col gap-3 w-full my-1 overflow-y-auto pr-1 py-1 flex-1">
                   {(() => {
                     const filtered = chatMessages.filter(
                       (m: any) => m.taskId === chatTarget.taskId && m.studentName.toLowerCase().trim() === chatTarget.studentName.toLowerCase().trim()
