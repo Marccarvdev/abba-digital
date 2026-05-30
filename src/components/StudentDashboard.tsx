@@ -1816,7 +1816,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               </div>
 
               {/* Upload / Submission Section */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs mb-lg max-w-2xl mx-auto w-full">
+              <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs mb-lg w-full">
                 <div className="flex items-center gap-2 mb-4">
                   <span className="material-symbols-outlined text-primary text-[22px]">key</span>
                   <h3 className="text-lg font-bold text-slate-800">Acesso via Código Alfanumérico</h3>
