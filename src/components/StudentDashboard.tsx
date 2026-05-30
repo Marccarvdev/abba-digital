@@ -801,12 +801,175 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
   };
 
-  useEffect(() => {
+  const syncStudentDeletions = async () => {
+    try {
+      // 1. Sincronizar exclusões de submissões pendentes
+      const pendingSubDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+      if (pendingSubDeletions.length > 0) {
+        const remaining: any[] = [];
+        for (const item of pendingSubDeletions) {
+          const { error } = await supabase
+            .from('student_submissions')
+            .delete()
+            .eq('student_name', item.student_name)
+            .eq('task_title', item.task_title);
+          if (error) {
+            console.warn('Erro ao sincronizar exclusão de submissão offline:', error);
+            remaining.push(item);
+          } else {
+            console.log(`🗑️ Sincronização de exclusão da submissão "${item.task_title}" para ${item.student_name} concluída!`);
+          }
+        }
+        localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
+      }
+
+      // 2. Sincronizar exclusões de links pendentes
+      const pendingLinkDeletions = JSON.parse(localStorage.getItem('abba_pending_link_deletions') || '[]');
+      if (pendingLinkDeletions.length > 0) {
+        const remaining: string[] = [];
+        for (const linkId of pendingLinkDeletions) {
+          const { error } = await supabase
+            .from('teacher_generated_links')
+            .delete()
+            .eq('link_id', linkId);
+          
+          await supabase
+            .from('student_received_task_links')
+            .delete()
+            .eq('link_id', linkId);
+
+          if (error) {
+            console.warn('Erro ao sincronizar exclusão de link offline:', error);
+            remaining.push(linkId);
+          } else {
+            console.log(`🗑️ Sincronização de exclusão do link recebido ${linkId} concluída!`);
+          }
+        }
+        localStorage.setItem('abba_pending_link_deletions', JSON.stringify(remaining));
+      }
+    } catch (err) {
+      console.warn('Erro ao processar fila de exclusões pendentes do aluno:', err);
+    }
+  };
+
+  const syncStudentSubmissions = async () => {
+    try {
+      const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_submissions') || '[]');
+      if (unsynced.length === 0) return;
+
+      const remaining: any[] = [];
+      for (const item of unsynced) {
+        const { error } = await supabase
+          .from('student_submissions')
+          .insert([item]);
+        if (error) {
+          console.warn('Erro ao enviar submissão pendente:', error);
+          remaining.push(item);
+        } else {
+          console.log(`⚡ Submissão pendente da tarefa "${item.task_title}" sincronizada com sucesso!`);
+        }
+      }
+      localStorage.setItem('abba_unsynced_student_submissions', JSON.stringify(remaining));
+    } catch (err) {
+      console.warn('Erro ao processar submissões pendentes:', err);
+    }
+  };
+
+  const fetchStudentDataFromSupabase = async () => {
+    if (!user || user.role !== 'student') return;
+    try {
+      // 1. Pull submissions from student_submissions table
+      const { data: dbSubmissions, error: subErr } = await supabase
+        .from('student_submissions')
+        .select('*')
+        .eq('student_name', user.name);
+
+      if (dbSubmissions && !subErr) {
+        const mappedSubmissions = dbSubmissions.map((s: any) => {
+          let parsedWords = [];
+          try {
+            parsedWords = typeof s.spelled_words === 'string' ? JSON.parse(s.spelled_words) : s.spelled_words || [];
+          } catch (e) {
+            console.warn('Erro ao parsear spelled_words:', e);
+          }
+          return {
+            id: s.id || `SUB-${Date.now()}-${Math.random()}`,
+            studentName: s.student_name,
+            studentEmail: s.student_email || '',
+            taskTitle: s.task_title,
+            submittedAt: s.submitted_at || new Date().toISOString(),
+            spelledWordsCount: s.spelled_words_count || 0,
+            words: parsedWords
+          };
+        });
+
+        setSentActivities(prev => {
+          const merged = [...prev];
+          mappedSubmissions.forEach(ms => {
+            const index = merged.findIndex(x => x.taskTitle === ms.taskTitle);
+            if (index !== -1) {
+              merged[index] = { ...merged[index], ...ms };
+            } else {
+              merged.push(ms);
+            }
+          });
+          const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+          const filtered = merged.filter(item => !pendingDeletions.some((del: any) => del.task_title === item.taskTitle));
+          localStorage.setItem('abba_student_sent_activities', JSON.stringify(filtered));
+          return filtered;
+        });
+      }
+
+      // 2. Pull accepted links from student_received_task_links table
+      const { data: dbLinks, error: linksErr } = await supabase
+        .from('student_received_task_links')
+        .select('*')
+        .eq('student_name', user.name);
+
+      if (dbLinks && !linksErr) {
+        const mappedLinks = dbLinks.map((l: any) => ({
+          id: l.link_id,
+          studentName: l.student_name,
+          taskId: l.task_id,
+          taskTitle: l.task_title,
+          createdAt: l.accepted_at || new Date().toISOString(),
+          link: l.link_url
+        }));
+
+        setAcceptedTaskLinks(prev => {
+          const merged = [...prev];
+          mappedLinks.forEach(ml => {
+            const index = merged.findIndex(x => x.id === ml.id || (x.taskId === ml.taskId && x.studentName === ml.studentName));
+            if (index !== -1) {
+              merged[index] = { ...merged[index], ...ml };
+            } else {
+              merged.push(ml);
+            }
+          });
+          const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_link_deletions') || '[]');
+          const filtered = merged.filter(item => !pendingDeletions.includes(item.id));
+          localStorage.setItem('abba_student_accepted_links', JSON.stringify(filtered));
+          return filtered;
+        });
+      }
+    } catch (e) {
+      console.warn('Erro ao buscar dados do aluno no Supabase:', e);
+    }
+  };
+
+  const runAllStudentSync = () => {
     syncStudentLinks();
-    window.addEventListener('online', syncStudentLinks);
-    const interval = setInterval(syncStudentLinks, 15000);
+    syncStudentDeletions();
+    syncStudentSubmissions();
+    fetchStudentDataFromSupabase();
+  };
+
+  useEffect(() => {
+    runAllStudentSync();
+    window.addEventListener('online', runAllStudentSync);
+    const interval = setInterval(runAllStudentSync, 15000);
     return () => {
-      window.removeEventListener('online', syncStudentLinks);
+      window.removeEventListener('online', runAllStudentSync);
       clearInterval(interval);
     };
   }, []);
@@ -2432,6 +2595,46 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       e.stopPropagation();
                                       if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
                                         setSentActivities(prev => prev.filter(a => a.id !== task.id));
+                                        
+                                        // Salvar na fila de exclusões pendentes para robustez offline
+                                        const delPayload = {
+                                          student_name: user?.name || '',
+                                          task_title: task.title
+                                        };
+                                        try {
+                                          const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                                          if (!pendingDeletions.some((item: any) => item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)) {
+                                            pendingDeletions.push(delPayload);
+                                            localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(pendingDeletions));
+                                          }
+                                        } catch (err) {
+                                          console.error(err);
+                                        }
+
+                                        // Deletar a submissão do Supabase para ser persistente em todos os locais!
+                                        (async () => {
+                                          try {
+                                            const { error } = await supabase
+                                              .from('student_submissions')
+                                              .delete()
+                                              .eq('student_name', delPayload.student_name)
+                                              .eq('task_title', delPayload.task_title);
+                                            if (!error) {
+                                              // Se deletado com sucesso, remover da fila
+                                              try {
+                                                const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                                                const remaining = pendingDeletions.filter((item: any) => 
+                                                  !(item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)
+                                                );
+                                                localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
+                                              } catch (err) {
+                                                console.error(err);
+                                              }
+                                            }
+                                          } catch (err) {
+                                            console.warn('Erro ao excluir submissão no Supabase:', err);
+                                          }
+                                        })();
                                       }
                                     }}
                                     className="p-1.5 rounded-lg bg-red-50 border border-red-100 hover:bg-red-100 text-red-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
@@ -2456,9 +2659,88 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       e.stopPropagation();
                                       if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
                                         if (activeTabLabel === 'recebidas') {
-                                          setAcceptedTaskLinks(prev => prev.filter(l => l.id !== task.id));
+                                          const linkIdToDelete = task.id;
+                                          setAcceptedTaskLinks(prev => prev.filter(l => l.id !== linkIdToDelete));
+                                          
+                                          // Fila de exclusão pendente
+                                          try {
+                                            const pending = JSON.parse(localStorage.getItem('abba_pending_link_deletions') || '[]');
+                                            if (!pending.includes(linkIdToDelete)) {
+                                              pending.push(linkIdToDelete);
+                                              localStorage.setItem('abba_pending_link_deletions', JSON.stringify(pending));
+                                            }
+                                          } catch (e) {
+                                            console.error(e);
+                                          }
+
+                                          // Deletar o link recebido do Supabase para persistência total!
+                                          (async () => {
+                                            try {
+                                              const { error } = await supabase
+                                                .from('teacher_generated_links')
+                                                .delete()
+                                                .eq('link_id', linkIdToDelete);
+                                              
+                                              // Tentar deletar da tabela de recebidos também por segurança
+                                              await supabase
+                                                .from('student_received_task_links')
+                                                .delete()
+                                                .eq('link_id', linkIdToDelete);
+
+                                              if (!error) {
+                                                try {
+                                                  const pending = JSON.parse(localStorage.getItem('abba_pending_link_deletions') || '[]');
+                                                  const remaining = pending.filter((id: string) => id !== linkIdToDelete);
+                                                  localStorage.setItem('abba_pending_link_deletions', JSON.stringify(remaining));
+                                                } catch (e) {
+                                                  console.error(e);
+                                                }
+                                              }
+                                            } catch (err) {
+                                              console.warn('Erro ao excluir link no Supabase:', err);
+                                            }
+                                          })();
                                         } else {
                                           setSentActivities(prev => prev.filter(a => a.id !== task.id));
+                                          
+                                          // Fila de exclusão pendente
+                                          const delPayload = {
+                                            student_name: user?.name || '',
+                                            task_title: task.title
+                                          };
+                                          try {
+                                            const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                                            if (!pendingDeletions.some((item: any) => item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)) {
+                                              pendingDeletions.push(delPayload);
+                                              localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(pendingDeletions));
+                                            }
+                                          } catch (err) {
+                                            console.error(err);
+                                          }
+
+                                          // Deletar a submissão do Supabase!
+                                          (async () => {
+                                            try {
+                                              const { error } = await supabase
+                                                .from('student_submissions')
+                                                .delete()
+                                                .eq('student_name', delPayload.student_name)
+                                                .eq('task_title', delPayload.task_title);
+                                              if (!error) {
+                                                try {
+                                                  const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                                                  const remaining = pendingDeletions.filter((item: any) => 
+                                                    !(item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)
+                                                  );
+                                                  localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
+                                                } catch (err) {
+                                                  console.error(err);
+                                                }
+                                              }
+                                            } catch (err) {
+                                              console.warn('Erro ao excluir submissão no Supabase:', err);
+                                            }
+                                          })();
                                         }
                                       }
                                     }}

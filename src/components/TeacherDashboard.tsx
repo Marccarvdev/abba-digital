@@ -764,19 +764,63 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
     }
   };
 
+  const syncTeacherDeletions = async () => {
+    try {
+      // 1. Sincronizar exclusões de tarefas pendentes
+      const pendingTaskDeletions = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
+      if (pendingTaskDeletions.length > 0) {
+        const remaining: string[] = [];
+        for (const taskId of pendingTaskDeletions) {
+          const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .eq('id', taskId);
+          if (error) {
+            console.warn('Erro ao sincronizar exclusão de tarefa offline:', error);
+            remaining.push(taskId);
+          } else {
+            console.log(`🗑️ Sincronização de exclusão da tarefa ${taskId} concluída!`);
+          }
+        }
+        localStorage.setItem('abba_pending_task_deletions', JSON.stringify(remaining));
+      }
+
+      // 2. Sincronizar exclusões de alunos pendentes
+      const pendingStudentDeletions = JSON.parse(localStorage.getItem('abba_pending_student_deletions') || '[]');
+      if (pendingStudentDeletions.length > 0) {
+        const remaining: string[] = [];
+        for (const studentId of pendingStudentDeletions) {
+          const { error } = await supabase
+            .from('students')
+            .delete()
+            .eq('id', studentId);
+          if (error) {
+            console.warn('Erro ao sincronizar exclusão de aluno offline:', error);
+            remaining.push(studentId);
+          } else {
+            console.log(`🗑️ Sincronização de exclusão do aluno ${studentId} concluída!`);
+          }
+        }
+        localStorage.setItem('abba_pending_student_deletions', JSON.stringify(remaining));
+      }
+    } catch (err) {
+      console.warn('Erro ao processar fila de exclusões pendentes do professor:', err);
+    }
+  };
+
+  const runAllTeacherSync = () => {
+    syncTeacherLinks();
+    syncTeacherDeletions();
+    fetchSupabaseData();
+  };
+
   // Sync effect
   useEffect(() => {
-    syncTeacherLinks();
-    fetchSupabaseData();
-    window.addEventListener('online', syncTeacherLinks);
-    window.addEventListener('online', fetchSupabaseData);
-    const interval = setInterval(() => {
-      syncTeacherLinks();
-      fetchSupabaseData();
-    }, 15000);
+    runAllTeacherSync();
+    window.addEventListener('online', runAllTeacherSync);
+    const interval = setInterval(runAllTeacherSync, 15000);
     return () => {
-      window.removeEventListener('online', syncTeacherLinks);
-      window.removeEventListener('online', fetchSupabaseData);
+      window.removeEventListener('online', runAllTeacherSync);
       clearInterval(interval);
     };
   }, []);
@@ -1600,6 +1644,45 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
       const filteredIds = filteredTasks.map(t => t.id);
       const updated = tasks.filter(t => !filteredIds.includes(t.id));
       setTasks(updated);
+      
+      // Salvar na fila de exclusões pendentes para robustez offline
+      try {
+        const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
+        filteredIds.forEach(id => {
+          if (!pending.includes(id)) {
+            pending.push(id);
+          }
+        });
+        localStorage.setItem('abba_pending_task_deletions', JSON.stringify(pending));
+      } catch (e) {
+        console.error(e);
+      }
+
+      // Deletar do Supabase para persistência total!
+      (async () => {
+        try {
+          const { error } = await supabase
+            .from('tasks')
+            .delete()
+            .in('id', filteredIds);
+          if (!error) {
+            console.log(`🗑️ ${filteredIds.length} tarefas excluídas com sucesso do Supabase!`);
+            // Se deletado com sucesso, remover da fila
+            try {
+              const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
+              const remaining = pending.filter((id: string) => !filteredIds.includes(id));
+              localStorage.setItem('abba_pending_task_deletions', JSON.stringify(remaining));
+            } catch (e) {
+              console.error(e);
+            }
+          } else {
+            console.warn('Erro ao excluir tarefas no Supabase:', error);
+          }
+        } catch (err) {
+          console.warn('Falha na comunicação com Supabase ao excluir tarefas:', err);
+        }
+      })();
+
       alert(`${filteredIds.length} tarefas foram excluídas permanentemente com sucesso! 🗑️`);
     }
   };
@@ -4938,9 +5021,46 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                       type="button"
                       onClick={() => {
                         if (confirm("Deseja realmente excluir permanentemente esta tarefa?")) {
-                          const updated = tasks.filter(t => t.id !== editingTask.id);
+                          const taskIdToDelete = editingTask.id;
+                          const updated = tasks.filter(t => t.id !== taskIdToDelete);
                           setTasks(updated);
                           setEditingTask(null);
+
+                          // Salvar na fila de exclusões pendentes para robustez offline
+                          try {
+                            const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
+                            if (!pending.includes(taskIdToDelete)) {
+                              pending.push(taskIdToDelete);
+                              localStorage.setItem('abba_pending_task_deletions', JSON.stringify(pending));
+                            }
+                          } catch (e) {
+                            console.error(e);
+                          }
+
+                          // Deletar do Supabase para persistência total!
+                          (async () => {
+                            try {
+                              const { error } = await supabase
+                                .from('tasks')
+                                .delete()
+                                .eq('id', taskIdToDelete);
+                              if (!error) {
+                                console.log(`🗑️ Tarefa "${taskIdToDelete}" excluída do Supabase!`);
+                                try {
+                                  const pending = JSON.parse(localStorage.getItem('abba_pending_task_deletions') || '[]');
+                                  const remaining = pending.filter((id: string) => id !== taskIdToDelete);
+                                  localStorage.setItem('abba_pending_task_deletions', JSON.stringify(remaining));
+                                } catch (e) {
+                                  console.error(e);
+                                }
+                              } else {
+                                console.warn('Erro ao deletar tarefa no Supabase:', error);
+                              }
+                            } catch (err) {
+                              console.warn('Falha na comunicação com o Supabase ao excluir tarefa:', err);
+                            }
+                          })();
+
                           alert("Tarefa excluída com sucesso! 🗑️");
                         }
                       }}
@@ -6239,12 +6359,36 @@ Ficha de atividade oficial gerada pelo Painel do Professor.
                           return;
                         }
                         if (confirm(`Tem certeza de que deseja excluir permanentemente os ${selectedStudentIdsDelete.length} alunos selecionados?`)) {
+                          const idsToDelete = [...selectedStudentIdsDelete];
                           // Update students list
-                          setStudents(prev => prev.filter(s => !selectedStudentIdsDelete.includes(s.id)));
+                          setStudents(prev => prev.filter(s => !idsToDelete.includes(s.id)));
+                          
+                          // Salvar na fila de exclusões pendentes para robustez offline
+                          try {
+                            const pending = JSON.parse(localStorage.getItem('abba_pending_student_deletions') || '[]');
+                            idsToDelete.forEach(id => {
+                              if (!pending.includes(id)) {
+                                pending.push(id);
+                              }
+                            });
+                            localStorage.setItem('abba_pending_student_deletions', JSON.stringify(pending));
+                          } catch (e) {
+                            console.error(e);
+                          }
+
                           // Delete from database
-                          selectedStudentIdsDelete.forEach(async (id) => {
+                          idsToDelete.forEach(async (id) => {
                             try {
-                              await supabase.from('students').delete().eq('id', id);
+                              const { error } = await supabase.from('students').delete().eq('id', id);
+                              if (!error) {
+                                try {
+                                  const pending = JSON.parse(localStorage.getItem('abba_pending_student_deletions') || '[]');
+                                  const remaining = pending.filter((x: string) => x !== id);
+                                  localStorage.setItem('abba_pending_student_deletions', JSON.stringify(remaining));
+                                } catch (e) {
+                                  console.error(e);
+                                }
+                              }
                             } catch (err) {
                               console.warn('Erro ao excluir no banco:', err);
                             }

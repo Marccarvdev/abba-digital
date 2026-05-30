@@ -541,26 +541,50 @@ export default function App() {
         console.error(e);
       }
 
+      // Salvar na fila de não sincronizados para resiliência offline-online total!
+      const submissionPayload = {
+        student_name: studentName,
+        student_email: studentEmail,
+        task_title: taskTitle,
+        submitted_at: newSentItem.submittedAt,
+        spelled_words_count: newSentItem.spelledWordsCount,
+        spelled_words: JSON.stringify(newWords),
+        task_files: JSON.stringify([])
+      };
+
       try {
-        await supabase.from('student_submissions').insert([
-          {
-            student_name: studentName,
-            student_email: studentEmail,
-            task_title: taskTitle,
-            submitted_at: newSentItem.submittedAt,
-            spelled_words_count: newSentItem.spelledWordsCount,
-            spelled_words: JSON.stringify(newWords),
-            task_files: JSON.stringify([])
+        const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_submissions') || '[]');
+        unsynced.push(submissionPayload);
+        localStorage.setItem('abba_unsynced_student_submissions', JSON.stringify(unsynced));
+      } catch (e) {
+        console.error('Erro ao salvar submissão offline:', e);
+      }
+
+      try {
+        const { error } = await supabase.from('student_submissions').insert([submissionPayload]);
+        if (!error) {
+          await logUserAction({
+            userName: studentName,
+            userEmail: studentEmail,
+            role: 'student',
+            actionType: 'task_submission',
+            actionDetails: `Concluiu a tarefa ativa "${taskTitle}" com ${newSentItem.spelledWordsCount} palavras soletradas.`
+          });
+          console.log('⚡ Submission synced with Supabase from active task!');
+          
+          // Se sincronizou com sucesso, remover da fila
+          try {
+            const unsynced = JSON.parse(localStorage.getItem('abba_unsynced_student_submissions') || '[]');
+            const remaining = unsynced.filter((item: any) => 
+              !(item.student_name === studentName && item.task_title === taskTitle && item.submitted_at === newSentItem.submittedAt)
+            );
+            localStorage.setItem('abba_unsynced_student_submissions', JSON.stringify(remaining));
+          } catch (e) {
+            console.error('Erro ao atualizar fila de submissões:', e);
           }
-        ]);
-        await logUserAction({
-          userName: studentName,
-          userEmail: studentEmail,
-          role: 'student',
-          actionType: 'task_submission',
-          actionDetails: `Concluiu a tarefa ativa "${taskTitle}" com ${newSentItem.spelledWordsCount} palavras soletradas.`
-        });
-        console.log('⚡ Submission synced with Supabase from active task!');
+        } else {
+          console.warn('Erro ao salvar submissão no Supabase:', error);
+        }
       } catch (err) {
         console.warn('Erro ao salvar submissão no Supabase:', err);
       }
@@ -3169,6 +3193,49 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         console.error(e);
                       }
                       
+                      // Salvar exclusão na fila pendente para resiliência offline total!
+                      const delPayload = {
+                        student_name: user?.name || '',
+                        task_title: activeTaskInfo.title
+                      };
+                      try {
+                        const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                        if (!pendingDeletions.some((item: any) => item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)) {
+                          pendingDeletions.push(delPayload);
+                          localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(pendingDeletions));
+                        }
+                      } catch (e) {
+                        console.error('Erro ao enfileirar exclusão de submissão:', e);
+                      }
+
+                      // Deletar do Supabase para persistência total!
+                      (async () => {
+                        try {
+                          const { error } = await supabase
+                            .from('student_submissions')
+                            .delete()
+                            .eq('student_name', delPayload.student_name)
+                            .eq('task_title', delPayload.task_title);
+                          if (!error) {
+                            console.log("🗑️ Submissão excluída do Supabase com sucesso!");
+                            // Remover da fila de exclusões pendentes se online
+                            try {
+                              const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                              const remaining = pendingDeletions.filter((item: any) => 
+                                !(item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)
+                              );
+                              localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
+                            } catch (e) {
+                              console.error(e);
+                            }
+                          } else {
+                            console.warn("Erro ao excluir submissão no Supabase:", error);
+                          }
+                        } catch (err) {
+                          console.warn("Erro ao excluir submissão no Supabase:", err);
+                        }
+                      })();
+
                       setLastSavedTask(null);
                       setSpelledRows([[], [], [], [], [], []]);
                       setRowColors({});
