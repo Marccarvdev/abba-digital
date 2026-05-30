@@ -520,11 +520,16 @@ export default function App() {
     });
 
     alert("Mensagem salva e enviada com sucesso! 🚀");
+    setShowChatModal(false);
   };
 
   // Delete comment permanently
   const handleDeleteComment = async () => {
     if (!chatSubject) return;
+    if (!chatMessage) {
+      alert("Não há mensagem salva para excluir! 📝");
+      return;
+    }
     if (!window.confirm("Tem certeza que deseja excluir o comentário permanentemente?")) {
       return;
     }
@@ -5235,8 +5240,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               exit={{ opacity: 0 }}
               onClick={() => {
                 setShowChatModal(false);
-                setActiveTaskInfo(null);
-                setCurrentScreen('student-dashboard');
               }}
               className="absolute inset-0 bg-[#0B1121]/60 backdrop-blur-sm cursor-pointer"
             />
@@ -5250,33 +5253,29 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             >
               <div className="bg-white rounded-[31px] p-5 flex flex-col gap-5 text-left border border-black/[0.02] relative">
                 
-                {/* Header Actions: Fechar and Excluir Lixeira if comment exists */}
+                {/* Header Actions: Fechar and Excluir Lixeira (Always Visible and Active!) */}
                 <div className="absolute top-4 right-4 flex items-center gap-2 z-20">
-                  {chatMessage && (
-                    <button
-                      onClick={handleDeleteComment}
-                      title="Excluir Comentário"
-                      className="w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors border-none cursor-pointer"
-                    >
-                      <img 
-                        src="/icones/lixeira.svg" 
-                        alt="Excluir" 
-                        className="w-4 h-4 object-contain filter invert-[20%] sepia-[90%] saturate-[6000%] hue-rotate-[350deg]" 
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                          const span = document.createElement('span');
-                          span.className = "material-symbols-outlined text-red-600 text-[18px]";
-                          span.innerText = "delete";
-                          (e.target as HTMLElement).parentNode?.appendChild(span);
-                        }}
-                      />
-                    </button>
-                  )}
+                  <button
+                    onClick={handleDeleteComment}
+                    title="Excluir Comentário"
+                    className="w-8 h-8 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors border-none cursor-pointer"
+                  >
+                    <img 
+                      src="/icones/lixeira.svg" 
+                      alt="Excluir" 
+                      className="w-4 h-4 object-contain filter invert-[20%] sepia-[90%] saturate-[6000%] hue-rotate-[350deg]" 
+                      onError={(e) => {
+                        (e.target as HTMLElement).style.display = 'none';
+                        const span = document.createElement('span');
+                        span.className = "material-symbols-outlined text-red-600 text-[18px]";
+                        span.innerText = "delete";
+                        (e.target as HTMLElement).parentNode?.appendChild(span);
+                      }}
+                    />
+                  </button>
                   <button
                     onClick={() => {
                       setShowChatModal(false);
-                      setActiveTaskInfo(null);
-                      setCurrentScreen('student-dashboard');
                     }}
                     className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors border-none cursor-pointer font-bold text-xs"
                     title="Fechar"
@@ -5385,7 +5384,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
-                          handleSaveComment(chatInput);
+                          if (chatInput.trim()) {
+                            handleSaveComment(chatInput);
+                          }
                         }
                       }}
                     />
@@ -5395,7 +5396,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                     {/* Salvar Button (next to Send arrow) */}
                     <button
                       onClick={() => handleSaveComment(chatInput)}
-                      className="px-3 py-1 bg-emerald-600 text-white rounded-full text-[11px] font-bold shadow hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer"
+                      disabled={!chatInput.trim()}
+                      className="px-3 py-1 bg-emerald-600 disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full text-[11px] font-bold shadow hover:bg-emerald-700 active:scale-95 transition-all border-none cursor-pointer"
                     >
                       Salvar
                     </button>
@@ -5403,7 +5405,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                     {/* Enviar Button */}
                     <button 
                       onClick={() => handleSaveComment(chatInput)}
-                      className="w-8 h-8 bg-[#0B1121] text-white rounded-full flex items-center justify-center shadow-md hover:bg-slate-800 transition-all active:scale-95 border-none cursor-pointer"
+                      disabled={!chatInput.trim()}
+                      className="w-8 h-8 bg-[#0B1121] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed text-white rounded-full flex items-center justify-center shadow-md hover:bg-slate-800 transition-all active:scale-95 border-none cursor-pointer"
                     >
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                         <line x1="5" y1="12" x2="19" y2="12"></line>
