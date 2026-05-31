@@ -4467,7 +4467,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       </div>
 
                       {/* ══════════════ CENTERED HORIZONTAL PILL MENU (between containers) ══════════════ */}
-                      <div className="flex flex-col items-center my-2 relative z-10" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col items-center my-2 relative z-30" onClick={(e) => e.stopPropagation()}>
                         
                         {/* Relative wrapper for the main pill + absolute popup */}
                         <div className="relative flex items-center h-[46px]">
