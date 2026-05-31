@@ -4237,7 +4237,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
                             updateElementPositions();
                           }}
-                          className="spelling-scroll-container w-full h-[calc((100vw-6.5rem)/4+8px)] min-h-[calc((100vw-6.5rem)/4+8px)] max-h-[calc((100vw-6.5rem)/4+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-3 overflow-x-auto no-scrollbar scroll-auto relative"
+                          className="spelling-scroll-container w-full h-[calc((100vw-10.5rem)/5+8px)] min-h-[calc((100vw-10.5rem)/5+8px)] max-h-[calc((100vw-10.5rem)/5+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-2 sm:gap-3.5 py-1 px-3 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
                           <AnimatePresence>
                             {row.length === 0 && isLastRow && (
@@ -4286,7 +4286,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-10.5rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -4332,7 +4332,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                          ease: [0.32, 0.94, 0.60, 1]
                                        } 
                                      }}
-                                    className={`relative z-20 min-w-[calc((100vw-6.5rem)/4)] w-[calc((100vw-6.5rem)/4)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
+                                    className={`relative z-20 min-w-[calc((100vw-10.5rem)/5)] w-[calc((100vw-10.5rem)/5)] sm:min-w-[66px] sm:w-[66px] md:min-w-[76px] md:w-[76px] aspect-square flex items-center justify-center rounded-xl cursor-grab active:cursor-grabbing shrink-0 touch-none transition-shadow transition-colors duration-250 ${
                                       isBeingReplaced 
                                         ? 'ring-4 ring-offset-2' 
                                         : ''
@@ -4410,7 +4410,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-10.5rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -4445,7 +4445,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                         transition: { duration: 0.05 }
                                       }}
                                       transition={{ type: "spring", stiffness: 450, damping: 25 }}
-                                      className="relative w-0 h-[calc((100vw-6.5rem)/4)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
+                                      className="relative w-0 h-[calc((100vw-10.5rem)/5)] sm:h-[66px] md:h-[76px] flex items-center justify-center shrink-0 z-35 select-none pointer-events-none"
                                     >
                                       <motion.div 
                                         initial={{ scaleY: 0, opacity: 0 }}
@@ -4470,59 +4470,64 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       <div className="flex flex-col items-center my-2 relative z-10" onClick={(e) => e.stopPropagation()}>
                         
                         {/* Relative wrapper for the main pill + absolute popup */}
-                        <div className="relative flex flex-col items-center">
+                        <div className="relative flex items-center h-[46px]">
 
-                          {/* Popup pill (color circle + spacebar) - ABSOLUTE positioned above, no layout shift */}
+                          {/* Backdrop to close the popup when clicked outside */}
                           {plusMenuOpenRowIdx === rIdx && (
-                            <>
-                              {/* Backdrop to close the popup */}
-                              <div 
-                                className="fixed inset-0 z-[-1]" 
-                                onClick={(e) => { e.stopPropagation(); setPlusMenuOpenRowIdx(null); }}
-                              />
-                              <div className="absolute bottom-[50px] left-1/2 -translate-x-1/2 w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-3 flex items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.04)] animate-[fadeIn_0.15s_ease-out] z-20">
-                                {/* Color cycle circle */}
-                                <button
-                                  type="button"
-                                  title="Mudar cor do fio desta linha"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    cycleRowColor(rIdx);
-                                  }}
-                                  className="w-4 h-4 rounded-full shrink-0 border border-black/10 shadow-sm cursor-pointer transition-all hover:scale-110 active:scale-95"
-                                  style={{
-                                    backgroundColor: (() => {
-                                      const c = rowColors[rIdx] || 'black';
-                                      if (c === 'black') return '#000000';
-                                      if (c === 'blue') return '#0008fb';
-                                      if (c === 'green') return '#00944d';
-                                      if (c === 'red') return '#ff0000';
-                                      return '#000000';
-                                    })()
-                                  }}
-                                />
-                                
-                                {/* Divider */}
-                                <div className="w-[1px] h-3.5 bg-slate-200 shrink-0" />
-
-                                {/* Spacebar key button */}
-                                <button
-                                  type="button"
-                                  title="Adicionar espaço à direita do último bloco"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    insertSpaceInRow(rIdx);
-                                  }}
-                                  className="h-6 w-14 bg-slate-50 border border-slate-300 rounded-md shadow-[0_2px_0_#cbd5e1] flex items-center justify-center text-[#94a3b8] font-semibold text-[11px] select-none hover:bg-slate-100/70 active:translate-y-[2px] active:shadow-none transition-all cursor-pointer"
-                                >
-                                  ⎵
-                                </button>
-                              </div>
-                            </>
+                            <div 
+                              className="fixed inset-0 z-[-1]" 
+                              onClick={(e) => { e.stopPropagation(); setPlusMenuOpenRowIdx(null); }}
+                            />
                           )}
 
+                          {/* Popup pill (color circle + spacebar) - ABSOLUTE positioned, transition-all duration-200 */}
+                          <div className={`absolute w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-3 flex items-center justify-center gap-3 shadow-[0_4px_15px_rgba(0,0,0,0.03)] z-10 transition-all duration-200
+                            bottom-[50px] left-1/2 md:bottom-auto md:left-[126px] md:translate-x-0
+                            ${plusMenuOpenRowIdx === rIdx 
+                              ? 'opacity-100 pointer-events-auto -translate-x-1/2 translate-y-0 md:translate-x-0 md:opacity-100' 
+                              : 'opacity-0 pointer-events-none -translate-x-1/2 translate-y-2 md:translate-y-0 md:-translate-x-[10px] md:opacity-0'
+                            }`}
+                          >
+                            {/* Color cycle circle */}
+                            <button
+                              type="button"
+                              title="Mudar cor do fio desta linha"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                cycleRowColor(rIdx);
+                              }}
+                              className="w-4 h-4 rounded-full shrink-0 border border-black/10 shadow-sm cursor-pointer transition-all hover:scale-110 active:scale-95"
+                              style={{
+                                backgroundColor: (() => {
+                                  const c = rowColors[rIdx] || 'black';
+                                  if (c === 'black') return '#000000';
+                                  if (c === 'blue') return '#0008fb';
+                                  if (c === 'green') return '#00944d';
+                                  if (c === 'red') return '#ff0000';
+                                  return '#000000';
+                                })()
+                              }}
+                            />
+                            
+                            {/* Divider */}
+                            <div className="w-[1px] h-3.5 bg-slate-200 shrink-0" />
+
+                            {/* Spacebar key button */}
+                            <button
+                              type="button"
+                              title="Adicionar espaço à direita do último bloco"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                insertSpaceInRow(rIdx);
+                              }}
+                              className="h-6 w-14 bg-slate-50 border border-slate-300 rounded-md shadow-[0_2px_0_#cbd5e1] flex items-center justify-center text-[#94a3b8] font-semibold text-[11px] select-none hover:bg-slate-100/70 active:translate-y-[2px] active:shadow-none transition-all cursor-pointer"
+                            >
+                              ⎵
+                            </button>
+                          </div>
+
                           {/* Main pill with Plus, Scissors, Trash */}
-                          <div className="w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-2 flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
+                          <div className="w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-2 flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative z-20">
                           {/* Plus button (toggle popup) */}
                           <button
                             type="button"
@@ -5086,7 +5091,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       <AnimatePresence>
         {((draggedCube && draggedLetter) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null)) && (
           <div
-            className="pointer-events-none fixed z-50 w-[calc((100vw-6.5rem)/4)] h-[calc((100vw-6.5rem)/4)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+            className="pointer-events-none fixed z-50 w-[calc((100vw-10.5rem)/5)] h-[calc((100vw-10.5rem)/5)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] -translate-x-1/2 -translate-y-1/2 overflow-visible"
             style={{
               left: pointerPos.x,
               top: pointerPos.y,
