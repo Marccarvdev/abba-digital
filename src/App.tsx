@@ -1687,7 +1687,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   const [draggedCube, setDraggedCube] = useState<LetterCubeData | null>(null);
   const [draggedLetter, setDraggedLetter] = useState<string | null>(null);
   const [dragHoverInfo, setDragHoverInfo] = useState<{ rIdx: number; type: 'insert' | 'replace'; index: number } | null>(null);
-  const [pointerPos, setPointerPos] = useState({ x: 0, y: 0 }); // client viewport coords for floating preview
+  // DOM Refs para manipulação direta de alta performance durante o arraste
+  const activeDragWireBgRef = useRef<SVGPathElement>(null);
+  const activeDragWireFgRef = useRef<SVGPathElement>(null);
+  const activeDragWireStartRef = useRef<SVGCircleElement>(null);
+  const activeDragWireEndRef = useRef<SVGCircleElement>(null);
+  const dragPreviewContainerRef = useRef<HTMLDivElement>(null);
+  const dragPreviewContentRef = useRef<HTMLDivElement>(null);
+  const dragPreviewTrashOverlayRef = useRef<HTMLDivElement>(null);
+  const dragStartRectRef = useRef<{ left: number; top: number; width: number; height: number; centerX: number; centerY: number } | null>(null);
+
+  // Ref para sincronização de cores e hover sem stale-closure
+  const rowColorsRef = useRef<string[]>(rowColors);
+  useEffect(() => { rowColorsRef.current = rowColors; }, [rowColors]);
+
+  const dragHoverInfoRef = useRef<{ rIdx: number; type: 'insert' | 'replace'; index: number } | null>(null);
+  useEffect(() => { dragHoverInfoRef.current = dragHoverInfo; }, [dragHoverInfo]);
   const [dragStartPosCenter, setDragStartPosCenter] = useState({ x: 0, y: 0 }); // page-coords
   const [dragScribblePoints, setDragScribblePoints] = useState<{ x: number, y: number }[]>([]); // page-coords
 
@@ -1762,8 +1777,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   const isPointerInsideTray = (x?: number, y?: number) => {
     const refEl = boardRef.current || trayRef.current;
     if (!refEl) return false;
-    const px = x !== undefined ? x : pointerPos.x;
-    const py = y !== undefined ? y : pointerPos.y;
+    const px = x !== undefined ? x : pointerPosRef.current.x;
+    const py = y !== undefined ? y : pointerPosRef.current.y;
     const rect = refEl.getBoundingClientRect();
     
     const isMobile = window.innerWidth < 768 || ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
@@ -2093,6 +2108,15 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
   // Pointer move handler to track active drags / lines / reorders
   useEffect(() => {
+    const getRowColorRefSafe = (rIdx: number): string => {
+      const colorKey = rowColorsRef.current[rIdx];
+      if (colorKey === 'black') return '#000000';
+      if (colorKey === 'blue') return '#0004FD';
+      if (colorKey === 'red') return '#FF0000';
+      if (colorKey === 'green') return '#009246';
+      return themeColorRef.current;
+    };
+
     const calculatePreciseDropInRow = (
       clientX: number,
       rowEl: Element,
@@ -2213,12 +2237,33 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     };
 
     const handlePointerMove = (e: PointerEvent) => {
-      // Map pointer coordinates directly and milimetrically to eliminate drag latency,
-      // ensuring the dragging cube coordinates align instantly with the finger.
-      setPointerPos({ x: e.clientX, y: e.clientY });
+      // Direct coordinate updates without state re-renders
       pointerPosRef.current = { x: e.clientX, y: e.clientY };
 
+      const clientX = e.clientX;
+      const clientY = e.clientY;
 
+      // Update dragging preview position directly in DOM using GPU-accelerated translate3d
+      if (dragPreviewContainerRef.current) {
+        dragPreviewContainerRef.current.style.transform = `translate3d(${clientX}px, ${clientY}px, 0) translate(-50%, -50%)`;
+      }
+
+      // Check if cursor is inside the board/tray
+      const inside = isPointerInsideTray(clientX, clientY);
+
+      // Mutate drag preview hover styles directly in DOM
+      if (dragPreviewContentRef.current) {
+        if (inside) {
+          dragPreviewContentRef.current.style.opacity = '1';
+          dragPreviewContentRef.current.style.transform = 'scale(1)';
+        } else {
+          dragPreviewContentRef.current.style.opacity = '0.4';
+          dragPreviewContentRef.current.style.transform = 'scale(0.9)';
+        }
+      }
+      if (dragPreviewTrashOverlayRef.current) {
+        dragPreviewTrashOverlayRef.current.style.display = inside ? 'none' : 'flex';
+      }
 
       // Calculate velocity and time intervals
       const now = performance.now();
@@ -2227,8 +2272,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       let vx = 0;
       let vy = 0;
       if (dt > 1 && dragLastTimeRef.current > 0) {
-        vx = (e.clientX - dragLastMouseRef.current.x) / dt;
-        vy = (e.clientY - dragLastMouseRef.current.y) / dt;
+        vx = (clientX - dragLastMouseRef.current.x) / dt;
+        vy = (clientY - dragLastMouseRef.current.y) / dt;
       }
       
       dragVelocityRef.current = {
@@ -2236,67 +2281,134 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         y: dragVelocityRef.current.y * 0.7 + vy * 0.3,
       };
       
-      dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
+      dragLastMouseRef.current = { x: clientX, y: clientY };
       dragLastTimeRef.current = now;
 
-
-
       if (draggedShelfIndexRef.current !== null) {
-        // Just let it track pointerPos. Swap of elements in shelfCubes happens on pointerUp!
+        // Shelf reorder
       } else if (draggedCubeRef.current && draggedLetterRef.current) {
         // Dragging from alphabet grid
         setDragScribblePoints(prev => {
-          if (prev.length === 0) return [{ x: e.clientX, y: e.clientY }];
+          if (prev.length === 0) return [{ x: clientX, y: clientY }];
           const last = prev[prev.length - 1];
-          const dist = Math.hypot(e.clientX - last.x, e.clientY - last.y);
+          const dist = Math.hypot(clientX - last.x, clientY - last.y);
           if (dist > 3) {
-            return [...prev, { x: e.clientX, y: e.clientY }];
+            return [...prev, { x: clientX, y: clientY }];
           }
           return prev;
         });
       } else if (trayDragStartRef.current !== null && draggedTrayIndexRef.current === null) {
         // Anti-jitter drag launch
-        const dist = Math.hypot(e.clientX - trayDragStartRef.current.x, e.clientY - trayDragStartRef.current.y);
+        const dist = Math.hypot(clientX - trayDragStartRef.current.x, clientY - trayDragStartRef.current.y);
         if (dist > 8) {
-          const deltaX = Math.abs(e.clientX - trayDragStartRef.current.x);
-          const deltaY = Math.abs(e.clientY - trayDragStartRef.current.y);
-          
-          // Allow extremely fluid and immediate drag launches in any direction on touch and mobile!
-
           // Launch the drag!
           dragLastTimeRef.current = performance.now();
-          dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
+          dragLastMouseRef.current = { x: clientX, y: clientY };
           dragVelocityRef.current = { x: 0, y: 0 };
           const dragIdx = { rIdx: trayDragStartRef.current.rowIdx, lIdx: trayDragStartRef.current.index };
           const dragLetterObj = trayDragStartRef.current.letterObj;
+          
+          // Cache start element rect
+          const startKey = dragLetterObj.originCubeId || dragLetterObj.id;
+          const startEl = document.getElementById(startKey);
+          if (startEl) {
+            const startRect = startEl.getBoundingClientRect();
+            dragStartRectRef.current = {
+              left: startRect.left,
+              top: startRect.top,
+              width: startRect.width,
+              height: startRect.height,
+              centerX: startRect.left + startRect.width / 2 + window.scrollX,
+              centerY: startRect.top + startRect.height / 2 + window.scrollY,
+            };
+          } else {
+            dragStartRectRef.current = null;
+          }
+
           setDraggedTrayIndex(dragIdx);
           draggedTrayIndexRef.current = dragIdx;
           setDraggedBoardLetter(dragLetterObj);
           draggedBoardLetterRef.current = dragLetterObj;
-          // Keep it in spelledRows to show clean empty dashed slot at the original position while dragging,
-          // preventing jerky resizing or layout shifting in the scrolling row!
         }
       }
 
-      // Real-time hover tracking with coordinates-based lookup
+      // Mutate active dragging abacus wire directly in DOM for 60fps/120fps tracking
+      if (dragStartRectRef.current && (activeDragWireBgRef.current || activeDragWireFgRef.current)) {
+        const startRect = dragStartRectRef.current;
+        const currentDragPageX = clientX + window.scrollX;
+        const currentDragPageY = clientY + window.scrollY;
+
+        const startW = startRect.width;
+        const startH = startRect.height;
+        const isStartCube = draggedCubeRef.current !== null || (draggedBoardLetterRef.current && (draggedBoardLetterRef.current.originCubeId || draggedBoardLetterRef.current.id).startsWith('cube-'));
+
+        let startCenterX = startRect.centerX;
+        let startCenterY = startRect.centerY;
+        let startFaceH = startH;
+
+        if (isStartCube) {
+          startCenterX = startRect.centerX + 0.1244 * startW;
+          startCenterY = startRect.centerY + 0.1244 * startH;
+          startFaceH = 0.720 * startH;
+        }
+
+        const dragW = window.innerWidth < 640 ? (window.innerWidth - 104) / 4 : 66;
+        const dragH = dragW;
+        const dragFaceH = 0.720 * dragH;
+
+        const wireStartX = startCenterX;
+        const wireStartY = startCenterY + (startFaceH / 2);
+        const wireEndX = currentDragPageX + 0.1244 * dragW;
+        const wireEndY = currentDragPageY + 0.1244 * dragH - (dragFaceH / 2);
+
+        const midY = wireStartY + (wireEndY - wireStartY) * 0.45;
+        const pathData = `M ${wireStartX} ${wireStartY} C ${wireStartX} ${midY}, ${wireEndX} ${wireStartY + (wireEndY - wireStartY) * 0.55}, ${wireEndX} ${wireEndY}`;
+
+        if (activeDragWireBgRef.current) activeDragWireBgRef.current.setAttribute('d', pathData);
+        if (activeDragWireFgRef.current) activeDragWireFgRef.current.setAttribute('d', pathData);
+        
+        if (activeDragWireStartRef.current) {
+          activeDragWireStartRef.current.setAttribute('cx', wireStartX.toString());
+          activeDragWireStartRef.current.setAttribute('cy', wireStartY.toString());
+        }
+        if (activeDragWireEndRef.current) {
+          activeDragWireEndRef.current.setAttribute('cx', wireEndX.toString());
+          activeDragWireEndRef.current.setAttribute('cy', wireEndY.toString());
+        }
+
+        // Apply updated color immediately in DOM
+        const activeColor = dragHoverInfoRef.current ? getRowColorRefSafe(dragHoverInfoRef.current.rIdx) : themeColorRef.current;
+        if (activeDragWireBgRef.current) activeDragWireBgRef.current.style.stroke = activeColor;
+        if (activeDragWireFgRef.current) activeDragWireFgRef.current.style.stroke = activeColor;
+        if (activeDragWireStartRef.current) activeDragWireStartRef.current.style.fill = activeColor;
+        if (activeDragWireEndRef.current) activeDragWireEndRef.current.style.fill = activeColor;
+      }
+
+      // Sparse React state updates for hover targets (only trigger when crossing slot boundaries)
       if ((draggedCubeRef.current && draggedLetterRef.current) || (draggedTrayIndexRef.current && draggedBoardLetterRef.current)) {
-        if (isPointerInsideTray(e.clientX, e.clientY)) {
-          const rowMatch = findRowAtCoords(e.clientX, e.clientY);
+        if (inside) {
+          const rowMatch = findRowAtCoords(clientX, clientY);
           if (rowMatch) {
             const rowEl = rowMatch.element;
             const targetRowIdx = rowMatch.index;
             const dropResult = calculatePreciseDropInRow(
-              e.clientX,
+              clientX,
               rowEl,
               targetRowIdx,
               draggedTrayIndexRef.current?.rIdx,
               draggedTrayIndexRef.current?.lIdx
             );
-            setDragHoverInfo({
-              rIdx: targetRowIdx,
-              type: dropResult.type,
-              index: dropResult.index
-            });
+
+            const prev = dragHoverInfoRef.current;
+            if (!prev || prev.rIdx !== targetRowIdx || prev.type !== dropResult.type || prev.index !== dropResult.index) {
+              const newInfo = {
+                rIdx: targetRowIdx,
+                type: dropResult.type,
+                index: dropResult.index
+              };
+              setDragHoverInfo(newInfo);
+              dragHoverInfoRef.current = newInfo;
+            }
 
             // Smooth horizontal auto-scrolling matching edge coordinates
             const scrollContainer = document.getElementById(`row-scroll-${targetRowIdx}`);
@@ -2305,22 +2417,31 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               const leftThreshold = rect.left + 75; // 75px zone from left
               const rightThreshold = rect.right - 75; // 75px zone from right
               
-              if (e.clientX < leftThreshold) {
-                const intensity = Math.max(1, (leftThreshold - e.clientX) / 3.5);
+              if (clientX < leftThreshold) {
+                const intensity = Math.max(1, (leftThreshold - clientX) / 3.5);
                 scrollContainer.scrollLeft -= intensity;
-              } else if (e.clientX > rightThreshold) {
-                const intensity = Math.max(1, (e.clientX - rightThreshold) / 3.5);
+              } else if (clientX > rightThreshold) {
+                const intensity = Math.max(1, (clientX - rightThreshold) / 3.5);
                 scrollContainer.scrollLeft += intensity;
               }
             }
           } else {
-            setDragHoverInfo(null);
+            if (dragHoverInfoRef.current !== null) {
+              setDragHoverInfo(null);
+              dragHoverInfoRef.current = null;
+            }
           }
         } else {
-          setDragHoverInfo(null);
+          if (dragHoverInfoRef.current !== null) {
+            setDragHoverInfo(null);
+            dragHoverInfoRef.current = null;
+          }
         }
       } else {
-        setDragHoverInfo(null);
+        if (dragHoverInfoRef.current !== null) {
+          setDragHoverInfo(null);
+          dragHoverInfoRef.current = null;
+        }
       }
     };
 
@@ -2590,6 +2711,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
       setTrayDragStart(null);
       setDragHoverInfo(null);
+      dragStartRectRef.current = null;
     };
 
     const handlePointerCancel = (e: PointerEvent) => {
@@ -2606,6 +2728,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       setTrayDragStart(null);
       setDragHoverInfo(null);
       setDragScribblePoints([]);
+      dragStartRectRef.current = null;
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -2974,6 +3097,15 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     const startX = rect.left + rect.width / 2 + window.scrollX;
     const startY = rect.top + rect.height / 2 + window.scrollY;
 
+    dragStartRectRef.current = {
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      centerX: startX,
+      centerY: startY,
+    };
+
     setDraggedCube(cube);
     draggedCubeRef.current = cube;
     setDraggedLetter(letter);
@@ -2985,7 +3117,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
     dragVelocityRef.current = { x: 0, y: 0 };
     
-    setPointerPos({ x: e.clientX, y: e.clientY });
     pointerPosRef.current = { x: e.clientX, y: e.clientY };
     setDragScribblePoints([{ x: startX, y: startY }]);
 
@@ -4107,12 +4238,20 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       } catch (err) {}
                     }
                     if (isReorderCubesActive) {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      dragStartRectRef.current = {
+                        left: rect.left,
+                        top: rect.top,
+                        width: rect.width,
+                        height: rect.height,
+                        centerX: rect.left + rect.width / 2 + window.scrollX,
+                        centerY: rect.top + rect.height / 2 + window.scrollY,
+                      };
                       setDraggedShelfIndex(cubeIdx);
                       draggedShelfIndexRef.current = cubeIdx;
                       dragLastTimeRef.current = performance.now();
                       dragLastMouseRef.current = { x: e.clientX, y: e.clientY };
                       dragVelocityRef.current = { x: 0, y: 0 };
-                      setPointerPos({ x: e.clientX, y: e.clientY });
                       pointerPosRef.current = { x: e.clientX, y: e.clientY };
                     } else {
                       let activeLetter = cube.primaryLetter;
@@ -4871,40 +5010,31 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           });
         })()}
 
-        {/* Real-time board letter dragging elastic wire connection line */}
-        {!isReorderCubesActive && draggedBoardLetter && draggedTrayIndex !== null && (
+        {/* Real-time dragging elastic wire connection line */}
+        {!isReorderCubesActive && (
           (() => {
-            const startKey = draggedBoardLetter.originCubeId || draggedBoardLetter.id;
-            const startEl = document.getElementById(startKey);
-            if (!startEl) return null;
+            const isBoardDrag = draggedBoardLetter && draggedTrayIndex !== null;
+            const isShelfDrag = draggedCube && draggedLetter;
+            if (!isBoardDrag && !isShelfDrag) return null;
+            if (!dragStartRectRef.current) return null;
 
-            const startRect = startEl.getBoundingClientRect();
-            const currentDragPageX = pointerPos.x + window.scrollX;
-            const currentDragPageY = pointerPos.y + window.scrollY;
+            const startRect = dragStartRectRef.current;
+            const currentDragPageX = pointerPosRef.current.x + window.scrollX;
+            const currentDragPageY = pointerPosRef.current.y + window.scrollY;
 
             const startW = startRect.width;
             const startH = startRect.height;
-            const endW = 66;
-            const endH = 66;
+            const isStartCube = isShelfDrag || (draggedBoardLetter && (draggedBoardLetter.originCubeId || draggedBoardLetter.id).startsWith('cube-'));
 
-            const isStart3D = startKey.startsWith('cube-');
-            let startCenterX = startRect.left + startW / 2 + window.scrollX;
-            let startCenterY = startRect.top + startH / 2 + window.scrollY;
-            let startFaceW = startW;
+            let startCenterX = startRect.centerX;
+            let startCenterY = startRect.centerY;
             let startFaceH = startH;
 
-            if (isStart3D) {
-              startCenterX = startRect.left + startW / 2 + window.scrollX + 0.1244 * startW;
-              startCenterY = startRect.top + startH / 2 + window.scrollY + 0.1244 * startH;
-              startFaceW = 0.720 * startW;
+            if (isStartCube) {
+              startCenterX = startRect.centerX + 0.1244 * startW;
+              startCenterY = startRect.centerY + 0.1244 * startH;
               startFaceH = 0.720 * startH;
             }
-
-            const dx = currentDragPageX - startCenterX;
-            const dy = currentDragPageY - startCenterY;
-            const dist = Math.hypot(dx, dy) || 1;
-            const ux = dx / dist;
-            const uy = dy / dist;
 
             const dragW = window.innerWidth < 640 ? (window.innerWidth - 104) / 4 : 66;
             const dragH = dragW;
@@ -4918,11 +5048,14 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             const midY = wireStartY + (wireEndY - wireStartY) * 0.45;
             const pathData = `M ${wireStartX} ${wireStartY} C ${wireStartX} ${midY}, ${wireEndX} ${wireStartY + (wireEndY - wireStartY) * 0.55}, ${wireEndX} ${wireEndY}`;
 
-            const wireColor = draggedBoardLetter.color || getRowColor(draggedTrayIndex.rIdx);
+            const wireColor = isBoardDrag
+              ? (draggedBoardLetter.color || getRowColor(draggedTrayIndex.rIdx))
+              : getDragPreviewColor();
 
             return (
-              <g key={`wire-dragging-board-${draggedBoardLetter.id}`}>
+              <g key="active-drag-wire">
                 <path
+                  ref={activeDragWireBgRef}
                   d={pathData}
                   fill="none"
                   stroke={wireColor}
@@ -4931,6 +5064,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   opacity="0.12"
                 />
                 <path
+                  ref={activeDragWireFgRef}
                   d={pathData}
                   fill="none"
                   stroke={wireColor}
@@ -4939,76 +5073,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   strokeLinejoin="round"
                   opacity="0.85"
                 />
-                <circle cx={wireStartX} cy={wireStartY} r="3" fill={wireColor} opacity="0.9" />
-                <circle cx={wireEndX} cy={wireEndY} r="3" fill={wireColor} opacity="0.9" />
-              </g>
-            );
-          })()
-        )}
-
-        {/* Real-time dragging elastic wire connection line */}
-        {!isReorderCubesActive && draggedCube && draggedLetter && (
-          (() => {
-            const startEl = document.getElementById(`cube-${draggedCube.id}`);
-            if (!startEl) return null;
-
-            const startRect = startEl.getBoundingClientRect();
-            const currentDragPageX = pointerPos.x + window.scrollX;
-            const currentDragPageY = pointerPos.y + window.scrollY;
-            
-            const startW = startRect.width;
-            const startH = startRect.height;
-            const startX = startRect.left + startW / 2 + window.scrollX;
-            const startY = startRect.top + startH / 2 + window.scrollY;
-
-            // startCubePos represents a 3D shelf cube
-            const startCenterX = startX + 0.1244 * startW;
-            const startCenterY = startY + 0.1244 * startH;
-            const startFaceW = 0.720 * startW;
-            const startFaceH = 0.720 * startH;
-
-            const dx = currentDragPageX - startCenterX;
-            const dy = currentDragPageY - startCenterY;
-            const dist = Math.hypot(dx, dy) || 1;
-            const ux = dx / dist;
-            const uy = dy / dist;
-
-            const dragW = window.innerWidth < 640 ? (window.innerWidth - 104) / 4 : 66;
-            const dragH = dragW;
-            const dragFaceH = 0.720 * dragH;
-
-            const edgeStartX = startCenterX;
-            const edgeStartY = startCenterY + (startFaceH / 2);
-            const edgeEndX = currentDragPageX + 0.1244 * dragW;
-            const edgeEndY = currentDragPageY + 0.1244 * dragH - (dragFaceH / 2);
-
-            const dragMidY = edgeStartY + (edgeEndY - edgeStartY) * 0.45;
-            const livePathData = `M ${edgeStartX} ${edgeStartY} C ${edgeStartX} ${dragMidY}, ${edgeEndX} ${edgeStartY + (edgeEndY - edgeStartY) * 0.55}, ${edgeEndX} ${edgeEndY}`;
-
-            // Adapte a cor do fio reativamente se pairado sobre uma linha com blocos
-            const wireColor = getDragPreviewColor();
-
-            return (
-              <g>
-                <path
-                  d={livePathData}
-                  fill="none"
-                  stroke={wireColor}
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  opacity="0.12"
-                />
-                <path
-                  d={livePathData}
-                  fill="none"
-                  stroke={wireColor}
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity="0.9"
-                />
-                <circle cx={edgeStartX} cy={edgeStartY} r="3.5" fill={wireColor} />
-                <circle cx={edgeEndX} cy={edgeEndY} r="3.5" fill={wireColor} />
+                <circle ref={activeDragWireStartRef} cx={wireStartX} cy={wireStartY} r="3" fill={wireColor} opacity="0.9" />
+                <circle ref={activeDragWireEndRef} cx={wireEndX} cy={wireEndY} r="3" fill={wireColor} opacity="0.9" />
               </g>
             );
           })()
@@ -5019,10 +5085,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       <AnimatePresence>
         {((draggedCube && draggedLetter) || (draggedTrayIndex !== null && draggedBoardLetter !== null) || (draggedShelfIndex !== null)) && (
           <div
-            className="pointer-events-none fixed z-50 w-[calc((100vw-10.5rem)/5)] h-[calc((100vw-10.5rem)/5)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] -translate-x-1/2 -translate-y-1/2 overflow-visible"
+            ref={dragPreviewContainerRef}
+            className="pointer-events-none fixed z-50 w-[calc((100vw-10.5rem)/5)] h-[calc((100vw-10.5rem)/5)] sm:w-[66px] sm:h-[66px] md:w-[76px] md:h-[76px] overflow-visible"
             style={{
-              left: pointerPos.x,
-              top: pointerPos.y,
+              left: 0,
+              top: 0,
+              transform: `translate3d(${pointerPosRef.current.x}px, ${pointerPosRef.current.y}px, 0) translate(-50%, -50%)`,
+              willChange: 'transform'
             }}
           >
             {draggedShelfIndex !== null ? (
@@ -5037,7 +5106,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 themeColor={themeColor}
               />
             ) : draggedTrayIndex !== null && draggedBoardLetter !== null ? (
-              <div className={`relative w-full h-full transition-[opacity,transform] duration-200 ${isPointerInsideTray() ? 'opacity-100 scale-100' : 'opacity-40 scale-90'}`}>
+              <div 
+                ref={dragPreviewContentRef}
+                className={`relative w-full h-full transition-[opacity,transform] duration-200 ${isPointerInsideTray() ? 'opacity-100 scale-100' : 'opacity-40 scale-90'}`}
+              >
                 <LetterCube 
                   data={{
                     id: `floating-reorder-${draggedBoardLetter.id}`,
@@ -5049,11 +5121,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   sizeClassName="w-full h-full text-red-650"
                   themeColor={getDragPreviewColor()}
                 />
-                {!isPointerInsideTray() && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-red-500/15 rounded-2xl border border-red-500/35 backdrop-blur-[1px] animate-pulse">
-                    <Trash2 className="w-6 h-6 text-red-500 stroke-[2.5]" />
-                  </div>
-                )}
+                <div 
+                  ref={dragPreviewTrashOverlayRef}
+                  className="absolute inset-0 flex items-center justify-center bg-red-500/15 rounded-2xl border border-red-500/35 backdrop-blur-[1px] animate-pulse"
+                  style={{ display: isPointerInsideTray() ? 'none' : 'flex' }}
+                >
+                  <Trash2 className="w-6 h-6 text-red-500 stroke-[2.5]" />
+                </div>
               </div>
             ) : draggedCube && draggedLetter ? (
               <LetterCube 
