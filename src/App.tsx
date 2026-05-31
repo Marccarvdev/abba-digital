@@ -4942,6 +4942,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
       {/* ABSOLUTE PAGE-RELATIVE SVG CONNECTION OVERLAY */}
       <svg className="pointer-events-none absolute inset-0 w-full h-full z-10 overflow-visible">
+        <defs>
+          {spelledRows.map((_, rIdx) => {
+            const clip = elementPositions[`row-clip-${rIdx}`];
+            if (!clip) return null;
+            return (
+              <clipPath key={`clip-path-${rIdx}`} id={`clip-row-${rIdx}`}>
+                <rect
+                  x={clip.x}
+                  y={0}
+                  width={Math.max(1, clip.y - clip.x)}
+                  height={10000}
+                />
+              </clipPath>
+            );
+          })}
+        </defs>
         {(() => {
           if (isReorderCubesActive) return null;
 
@@ -4978,16 +4994,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           return visibleWires.map((w) => {
             const { letter, rIdx } = w;
 
-            // Hide the connection wire ONLY if the placed block has been scrolled past at the TOP of the board container
-            if (boardRef.current) {
+            const letterEl = document.getElementById(letter.id);
+            if (boardRef.current && letterEl) {
               const boardRect = boardRef.current.getBoundingClientRect();
-              const letterEl = document.getElementById(letter.id);
-              if (letterEl) {
-                const rect = letterEl.getBoundingClientRect();
-                // ONLY hide if the block goes above the top visible border of the board container!
-                if (rect.bottom < boardRect.top + 4) {
-                  return null;
-                }
+              const rect = letterEl.getBoundingClientRect();
+              // ONLY hide if the block goes above the top visible border of the board container!
+              if (rect.bottom < boardRect.top + 4) {
+                return null;
               }
             }
 
@@ -5059,12 +5072,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             let wireEndX = endCenterX;
             let wireEndY = endCenterY - (endFaceH / 2);
 
-            if (clip) {
-              const buffer = 18;
-              if (wireEndX < clip.x + buffer) wireEndX = clip.x + buffer;
-              if (wireEndX > clip.y - buffer) wireEndX = clip.y - buffer;
-            }
-            
             if (trayBounds) {
               const buffer = 18;
               if (wireEndY < trayBounds.y + buffer) wireEndY = trayBounds.y + buffer;
@@ -5079,6 +5086,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             return (
               <g 
                 key={`wire-${letter.id}`}
+                clipPath={`url(#clip-row-${rIdx})`}
                 className={isAnyDragActive ? "pointer-events-none" : "pointer-events-auto cursor-pointer"}
                 onClick={(e) => {
                   if (isAnyDragActive) return;
