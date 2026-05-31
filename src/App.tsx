@@ -1432,6 +1432,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   // Actually cut/hidden wires for each row
   const [cutWiresRows, setCutWiresRows] = useState<Record<number, boolean>>({});
 
+  // Plus Menu Open State per row index (controls the popup pill menu showing color cycle circle and spacebar)
+  const [plusMenuOpenRowIdx, setPlusMenuOpenRowIdx] = useState<number | null>(null);
+
   // Keep active index in bounds
   useEffect(() => {
     if (activeRowIdx >= spelledRows.length) {
@@ -2939,6 +2942,23 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     });
   };
 
+  const insertSpaceInRow = (rIdx: number) => {
+    if (isEditingBlocked) return;
+    const rowColor = rowColors[rIdx] || 'black';
+    const newHex = rowColor === 'black' ? '#000000' : rowColor === 'blue' ? '#0004FD' : rowColor === 'red' ? '#FF0000' : '#009246';
+    const newSpace: SpelledLetter = {
+      id: 'space-' + Math.random().toString(36).substring(2, 9),
+      letter: ' ',
+      originCubeId: 'space-origin',
+      color: newHex
+    };
+    setSpelledRows(prev => {
+      const copy = prev.map(r => [...r]);
+      copy[rIdx] = [...copy[rIdx], newSpace];
+      return copy;
+    });
+  };
+
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
     if (isEditingBlocked) return;
@@ -4183,148 +4203,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         }
                       }}
                       data-row-container-idx={rIdx}
-                      className={`w-full relative py-2.5 px-3 pb-6 rounded-xl transition-all duration-200 cursor-pointer flex flex-col gap-1.5 ${
+                      className={`w-full relative rounded-2xl transition-all duration-200 cursor-pointer flex flex-col gap-1.5 ${
                         isActiveRow 
-                          ? 'bg-white/70 shadow-sm ring-1 ring-gray-100/80' 
-                          : 'hover:bg-white/30'
+                          ? 'bg-[#f8fafc] border border-slate-200 shadow-sm' 
+                          : 'bg-[#f8fafc] border border-slate-100 hover:border-slate-200'
                       }`}
                     >
-                      <div className="w-full flex items-center gap-3">
-                        {/* Row Left Controls (Pill Capsule Toggle: Save/Bookmark vs Scissors vs Trash) */}
-                        <div className="flex flex-col gap-2 shrink-0">
-                          <div 
-                            className="w-[40px] h-[114px] bg-[#F9F9F9] rounded-full relative flex flex-col items-center justify-between p-[3px] select-none border border-[#E2E4E6] shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)] shrink-0"
-                            title="Selecione um modo: Salvar (2 cliques para confirmar), Cortar conexões, ou Excluir (2 cliques para confirmar)"
-                          >
-                            {/* Sliding light-green background active indicator */}
-                            <motion.div
-                              className="absolute bg-[#CAFAE3] rounded-full w-[32px] h-[32px] shadow-[0_1px_3px_rgba(0,170,108,0.15)] left-[3px] top-[3px]"
-                              initial={{ opacity: 0, scale: 0 }}
-                              animate={{
-                                opacity: rowActiveModes[rIdx] ? 1 : 0,
-                                scale: rowActiveModes[rIdx] ? 1 : 0,
-                                y: rowActiveModes[rIdx] === 'save' 
-                                  ? 0 
-                                  : rowActiveModes[rIdx] === 'scissors' 
-                                  ? 38 
-                                  : rowActiveModes[rIdx] === 'trash'
-                                  ? 76
-                                  : 0
-                              }}
-                              transition={{
-                                type: "spring",
-                                stiffness: 450,
-                                damping: 28
-                              }}
-                            />
-
-                             {/* Top Option: Bookmark (ACTIVE when wires are shown / not hidden) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 if (rowActiveModes[rIdx] === 'save') {
-                                   handleOpenSaveModal(rIdx);
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'save'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 handleOpenSaveModal(rIdx);
-                                }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para salvar esta palavra"
-                             >
-                               <Bookmark 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'save' ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
-
-                             {/* Middle Option: Scissors (ACTIVE when wires are hidden) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 if (rowActiveModes[rIdx] === 'scissors') {
-                                   setCutWiresRows(prev => ({
-                                     ...prev,
-                                     [rIdx]: !prev[rIdx]
-                                   }));
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'scissors'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 setCutWiresRows(prev => ({
-                                   ...prev,
-                                   [rIdx]: !prev[rIdx]
-                                 }));
-                                 setRowActiveModes(prev => ({
-                                   ...prev,
-                                   [rIdx]: 'scissors'
-                                 }));
-                               }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para cortar/mostrar conexões"
-                             >
-                               <Scissors 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'scissors' || cutWiresRows[rIdx] ? 'text-[#00AA6C] font-semibold' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
-
-                             {/* Bottom Option: Trash (Double Click to Delete Individual Row) */}
-                             <button
-                               type="button"
-                               onClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 if (rowActiveModes[rIdx] === 'trash') {
-                                   handleDeleteRowWithHistory(rIdx);
-                                 } else {
-                                   setRowActiveModes(prev => ({
-                                     ...prev,
-                                     [rIdx]: 'trash'
-                                   }));
-                                 }
-                               }}
-                               onDoubleClick={(e) => {
-                                 e.stopPropagation();
-                                 if (isEditingBlocked) return;
-                                 handleDeleteRowWithHistory(rIdx);
-                               }}
-                               style={{ touchAction: 'manipulation' }}
-                               className="z-10 w-[32px] h-[32px] flex items-center justify-center rounded-full cursor-pointer focus:outline-none transition-all hover:scale-105 active:scale-95"
-                               title="Toque/Clique uma vez para selecionar; toque/clique novamente para excluir esta palavra"
-                             >
-                               <Trash2 
-                                 className={`w-[18px] h-[18px] transition-colors duration-200 ${
-                                   rowActiveModes[rIdx] === 'trash' ? 'text-red-500 font-semibold md:group-hover:text-red-650' : 'text-[#9CA3AF]'
-                                 }`} 
-                               />
-                             </button>
-                          </div>
-                        </div>
-
-                        
-                        
+                      <div className="w-full flex items-center">
                         {/* Horizontal Scroller Container */}
                         <div 
                           id={`row-scroll-${rIdx}`}
@@ -4352,7 +4237,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
                             updateElementPositions();
                           }}
-                          className="spelling-scroll-container w-full h-[calc((100vw-6.5rem)/4+8px)] min-h-[calc((100vw-6.5rem)/4+8px)] max-h-[calc((100vw-6.5rem)/4+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-1 overflow-x-auto no-scrollbar scroll-auto relative"
+                          className="spelling-scroll-container w-full h-[calc((100vw-6.5rem)/4+8px)] min-h-[calc((100vw-6.5rem)/4+8px)] max-h-[calc((100vw-6.5rem)/4+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-3.5 py-1 px-3 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
                           <AnimatePresence>
                             {row.length === 0 && isLastRow && (
@@ -4715,6 +4600,127 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           </div>
                         </div>
                       )}
+
+                      {/* ══════════════ CENTERED HORIZONTAL PILL MENU (between containers) ══════════════ */}
+                      <div className="flex flex-col items-center my-2 relative z-10" onClick={(e) => e.stopPropagation()}>
+                        
+                        {/* Popup pill (color circle + spacebar) - shown when plus is toggled */}
+                        {plusMenuOpenRowIdx === rIdx && (
+                          <>
+                            {/* Backdrop to close the popup */}
+                            <div 
+                              className="fixed inset-0 z-[-1]" 
+                              onClick={(e) => { e.stopPropagation(); setPlusMenuOpenRowIdx(null); }}
+                            />
+                            <div className="w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-3 flex items-center justify-center gap-3 shadow-[0_8px_20px_rgba(0,0,0,0.04)] mb-2 animate-[fadeIn_0.15s_ease-out]">
+                              {/* Color cycle circle */}
+                              <button
+                                type="button"
+                                title="Mudar cor do fio desta linha"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  cycleRowColor(rIdx);
+                                }}
+                                className="w-4 h-4 rounded-full shrink-0 border border-black/10 shadow-sm cursor-pointer transition-all hover:scale-110 active:scale-95"
+                                style={{
+                                  backgroundColor: (() => {
+                                    const c = rowColors[rIdx] || 'black';
+                                    if (c === 'black') return '#000000';
+                                    if (c === 'blue') return '#0008fb';
+                                    if (c === 'green') return '#00944d';
+                                    if (c === 'red') return '#ff0000';
+                                    return '#000000';
+                                  })()
+                                }}
+                              />
+                              
+                              {/* Divider */}
+                              <div className="w-[1px] h-3.5 bg-slate-200 shrink-0" />
+
+                              {/* Spacebar key button */}
+                              <button
+                                type="button"
+                                title="Adicionar espaço à direita do último bloco"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  insertSpaceInRow(rIdx);
+                                }}
+                                className="h-6 w-14 bg-slate-50 border border-slate-300 rounded-md shadow-[0_2px_0_#cbd5e1] flex items-center justify-center text-[#94a3b8] font-semibold text-[11px] select-none hover:bg-slate-100/70 active:translate-y-[2px] active:shadow-none transition-all cursor-pointer"
+                              >
+                                ⎵
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        {/* Main pill with Plus, Scissors, Trash */}
+                        <div className="w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-2 flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.03)]">
+                          {/* Plus button (toggle popup) */}
+                          <button
+                            type="button"
+                            title="Adicionar"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPlusMenuOpenRowIdx(prev => prev === rIdx ? null : rIdx);
+                            }}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
+                              plusMenuOpenRowIdx === rIdx 
+                                ? 'bg-slate-100 text-slate-700' 
+                                : 'text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </button>
+
+                          {/* Scissors button (cut/show wires) */}
+                          <button
+                            type="button"
+                            title="Cortar / Mostrar conexões"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isEditingBlocked) return;
+                              setCutWiresRows(prev => ({
+                                ...prev,
+                                [rIdx]: !prev[rIdx]
+                              }));
+                            }}
+                            className={`w-8 h-8 rounded-full flex items-center justify-center transition-all active:scale-95 cursor-pointer ${
+                              cutWiresRows[rIdx]
+                                ? 'bg-[#ccfbf1] text-[#00a67e]'
+                                : 'bg-[#ccfbf1] text-[#00a67e]'
+                            }`}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="6" cy="6" r="3"></circle>
+                              <circle cx="6" cy="18" r="3"></circle>
+                              <line x1="20" y1="4" x2="8.12" y2="15.88"></line>
+                              <line x1="14.47" y1="14.48" x2="20" y2="20"></line>
+                              <line x1="8.12" y1="8.12" x2="12" y2="12"></line>
+                            </svg>
+                          </button>
+
+                          {/* Trash button (delete row) */}
+                          <button
+                            type="button"
+                            title="Excluir esta linha"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isEditingBlocked) return;
+                              handleDeleteRowWithHistory(rIdx);
+                            }}
+                            className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all active:scale-95 cursor-pointer"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+
                     </motion.div>
                   );
                 })}
