@@ -1546,8 +1546,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     setIsSaveModalOpen(true);
   };
 
-  // Mobile custom scrollbar state
-  const [rowScrollMetrics, setRowScrollMetrics] = useState<Record<number, { scrollLeft: number; scrollWidth: number; clientWidth: number }>>({});
   const [rowOverflows, setRowOverflows] = useState<Record<number, boolean>>({});
   const [activeScrollingRow, setActiveScrollingRow] = useState<number | null>(null);
   const [isDraggingScrollbar, setIsDraggingScrollbar] = useState<number | null>(null);
@@ -1791,6 +1789,64 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       py >= rect.top - vPadding &&
       py <= rect.bottom + vPadding
     );
+  };
+
+  const updateRowWiresDOM = (rIdx: number) => {
+    const row = spelledRows[rIdx];
+    if (!row || cutWiresRows[rIdx]) return;
+
+    row.forEach((letter) => {
+      if (!letter || !letter.id || !letter.originCubeId) return;
+
+      const bgPath = document.getElementById(`wire-bg-${letter.id}`);
+      const fgPath = document.getElementById(`wire-fg-${letter.id}`);
+      const startCircle = document.getElementById(`wire-start-${letter.id}`);
+      const endCircle = document.getElementById(`wire-end-${letter.id}`);
+
+      if (!bgPath && !fgPath) return;
+
+      const startEl = document.getElementById(letter.originCubeId);
+      const endEl = document.getElementById(letter.id);
+      if (!startEl || !endEl) return;
+
+      const startRect = startEl.getBoundingClientRect();
+      const endRect = endEl.getBoundingClientRect();
+
+      const startW = startRect.width;
+      const startH = startRect.height;
+      const endW = endRect.width;
+      const endH = endRect.height;
+
+      const startX = startRect.left + startW / 2 + window.scrollX;
+      const startY = startRect.top + startH / 2 + window.scrollY;
+
+      const startCenterX = startX + 0.1244 * startW;
+      const startCenterY = startY + 0.1244 * startH;
+      const startFaceH = 0.720 * startH;
+
+      const endCenterX = endRect.left + endW / 2 + window.scrollX;
+      const endCenterY = endRect.top + endH / 2 + window.scrollY;
+      const endFaceH = endH;
+
+      const wireStartX = startCenterX;
+      const wireStartY = startCenterY + (startFaceH / 2);
+      const wireEndX = endCenterX;
+      const wireEndY = endCenterY - (endFaceH / 2); // Connect to the top center of the board block
+
+      const midY = wireStartY + (wireEndY - wireStartY) * 0.45;
+      const pathData = `M ${wireStartX} ${wireStartY} C ${wireStartX} ${midY}, ${wireEndX} ${wireStartY + (wireEndY - wireStartY) * 0.55}, ${wireEndX} ${wireEndY}`;
+
+      if (bgPath) bgPath.setAttribute('d', pathData);
+      if (fgPath) fgPath.setAttribute('d', pathData);
+      if (startCircle) {
+        startCircle.setAttribute('cx', wireStartX.toString());
+        startCircle.setAttribute('cy', wireStartY.toString());
+      }
+      if (endCircle) {
+        endCircle.setAttribute('cx', wireEndX.toString());
+        endCircle.setAttribute('cy', wireEndY.toString());
+      }
+    });
   };
 
   // Measure static 26 shelf cubes (only on resize/mount/reorder)
@@ -2687,7 +2743,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
           const lastTime = lastClicksRef.current[letterId] || 0;
 
           if (now - lastTime < 350) {
-            // Double click: open Cube Edit Modal
+            // Double click: Exclude/delete the cube directly from the board tray
             if (clickTimeoutsRef.current[letterId]) {
               clearTimeout(clickTimeoutsRef.current[letterId]);
               delete clickTimeoutsRef.current[letterId];
@@ -2695,12 +2751,31 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             delete lastClicksRef.current[letterId];
 
             if (!isEditingBlocked) {
-              setActiveEditCube({
-                rIdx: startRef.rowIdx,
-                slotIdx: startRef.index,
-                letterObj: startRef.letterObj
+              const targetRowIdx = startRef.rowIdx;
+              const slotIdx = startRef.index;
+              const itemDeleted = startRef.letterObj;
+
+              setUndoHistory(prev => [
+                ...prev,
+                {
+                  type: 'block',
+                  letter: itemDeleted,
+                  rIdx: targetRowIdx,
+                  lIdx: slotIdx
+                }
+              ]);
+
+              setSpelledRows(prev => {
+                const copy = prev.map(r => [...r]);
+                const sRow = copy[targetRowIdx];
+                if (sRow) {
+                  sRow.splice(slotIdx, 1);
+                }
+                return copy;
               });
-              setIsCubeEditModalOpen(true);
+
+              // Force positions update since we deleted a block
+              setTimeout(updateElementPositions, 50);
             }
           } else {
             // Single click: do nothing except register time
@@ -4354,28 +4429,30 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           id={`row-scroll-${rIdx}`}
                           onScroll={(e) => {
                             const target = e.currentTarget;
-                            setRowScrollMetrics(prev => ({
-                              ...prev,
-                              [rIdx]: {
-                                scrollLeft: target.scrollLeft,
-                                scrollWidth: target.scrollWidth,
-                                clientWidth: target.clientWidth
-                              }
-                            }));
+                            
+                            // 1. Direct DOM update of the range slider thumb position to avoid React re-render
+                            const slider = document.getElementById(`slider-${rIdx}`) as HTMLInputElement;
+                            if (slider) {
+                              slider.value = target.scrollLeft.toString();
+                            }
 
-                            // Scroll-triggered visibility for custom scrollbars
+                            // 2. High-performance direct DOM update of the abacus wires for this row
+                            updateRowWiresDOM(rIdx);
+
+                            // 3. Scroll-triggered visibility for custom scrollbars (throttle state updates)
                             if (rowOverflows[rIdx]) {
-                              setActiveScrollingRow(rIdx);
+                              if (activeScrollingRow !== rIdx) {
+                                setActiveScrollingRow(rIdx);
+                              }
                               if (activeScrollingTimeoutRef.current[rIdx]) {
                                 clearTimeout(activeScrollingTimeoutRef.current[rIdx]);
                               }
                               activeScrollingTimeoutRef.current[rIdx] = setTimeout(() => {
                                 setActiveScrollingRow(prev => prev === rIdx ? null : prev);
-                              }, 2000); // displays for 2 seconds when scrolling is detected
+                              }, 2000);
                             }
-
-                            updateElementPositions();
                           }}
+                          style={{ touchAction: 'pan-x' }}
                           className="spelling-scroll-container w-full h-[calc((100vw-10.5rem)/5+8px)] min-h-[calc((100vw-10.5rem)/5+8px)] max-h-[calc((100vw-10.5rem)/5+8px)] sm:h-[74px] sm:min-h-[74px] sm:max-h-[74px] md:h-[84px] md:min-h-[84px] md:max-h-[84px] flex flex-nowrap items-center gap-2 sm:gap-3.5 py-1 px-3 overflow-x-auto no-scrollbar scroll-auto relative"
                         >
                           <AnimatePresence>
@@ -4749,13 +4826,14 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           }`}
                         >
                           <input 
+                            id={`slider-${rIdx}`}
                             type="range" 
                             min="0" 
                             max={(() => {
                               const containerEl = document.getElementById(`row-scroll-${rIdx}`);
                               return containerEl ? containerEl.scrollWidth - containerEl.clientWidth : 100;
                             })()} 
-                            value={(() => {
+                            defaultValue={(() => {
                               const containerEl = document.getElementById(`row-scroll-${rIdx}`);
                               return containerEl ? containerEl.scrollLeft : 0;
                             })()} 
@@ -4764,23 +4842,20 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                               if (container) {
                                 const newScrollLeft = parseFloat(e.target.value);
                                 container.scrollLeft = newScrollLeft;
-                                setRowScrollMetrics(prev => ({
-                                  ...prev,
-                                  [rIdx]: {
-                                    scrollLeft: newScrollLeft,
-                                    scrollWidth: container.scrollWidth,
-                                    clientWidth: container.clientWidth
-                                  }
-                                }));
+                                updateRowWiresDOM(rIdx);
                               }
                             }}
                             onPointerDown={(e) => {
                               setIsDraggingScrollbar(rIdx);
-                              setActiveScrollingRow(rIdx);
+                              if (activeScrollingRow !== rIdx) {
+                                setActiveScrollingRow(rIdx);
+                              }
                             }}
                             onPointerUp={() => {
                               setIsDraggingScrollbar(null);
-                              setActiveScrollingRow(rIdx);
+                              if (activeScrollingRow !== rIdx) {
+                                setActiveScrollingRow(rIdx);
+                              }
                               if (activeScrollingTimeoutRef.current[rIdx]) {
                                 clearTimeout(activeScrollingTimeoutRef.current[rIdx]);
                               }
@@ -4788,6 +4863,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                 setActiveScrollingRow(null);
                               }, 3000);
                             }}
+                            onTouchStart={(e) => e.stopPropagation()}
+                            onTouchMove={(e) => {
+                              if (e.cancelable) e.preventDefault();
+                              e.stopPropagation();
+                            }}
+                            style={{ touchAction: 'none' }}
                             className="custom-slider"
                           />
                         </div>
@@ -4986,6 +5067,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   className={isAnyDragActive ? "pointer-events-none" : "cursor-pointer"}
                 />
                 <path
+                  id={`wire-bg-${letter.id}`}
                   d={pathData}
                   fill="none"
                   stroke={currentWireColor}
@@ -4994,6 +5076,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   style={{ transition: 'stroke 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                 />
                 <path
+                  id={`wire-fg-${letter.id}`}
                   d={pathData}
                   fill="none"
                   stroke={currentWireColor}
@@ -5003,8 +5086,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   opacity="0.85"
                   style={{ transition: 'stroke 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }}
                 />
-                <circle cx={wireStartX} cy={wireStartY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
-                <circle cx={wireEndX} cy={wireEndY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                <circle id={`wire-start-${letter.id}`} cx={wireStartX} cy={wireStartY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
+                <circle id={`wire-end-${letter.id}`} cx={wireEndX} cy={wireEndY} r="3" fill={currentWireColor} opacity="0.9" style={{ transition: 'fill 0.4s cubic-bezier(0.16, 1, 0.3, 1)' }} />
               </g>
             );
           });
