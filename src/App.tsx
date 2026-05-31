@@ -2732,18 +2732,20 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         draggedShelfIndexRef.current = null;
       }
 
-      if (trayDragStartRef.current !== null && draggedTrayIndexRef.current === null) {
+      if (trayDragStartRef.current !== null) {
         const startRef = trayDragStartRef.current; // Capture local ref value before asynchronous/batched state updates
         const dist = Math.hypot(e.clientX - startRef.x, e.clientY - startRef.y);
         const timeElapsed = Date.now() - startRef.time;
-        // Only trigger action if it was a quick click, not a long press
-        if (dist < 10 && timeElapsed < 300) {
+        
+        // Use a touch-friendly 28px tolerance for mobile/coarse pointers to absorb natural finger jitter
+        const clickTolerance = window.matchMedia('(pointer: coarse)').matches ? 28 : 12;
+        if (dist < clickTolerance && timeElapsed < 350) {
           const letterId = startRef.letterObj.id;
           const now = Date.now();
           const lastTime = lastClicksRef.current[letterId] || 0;
 
           if (now - lastTime < 350) {
-            // Double click: Exclude/delete the cube directly from the board tray
+            // Double click: Exclude/delete the block directly from the board tray
             if (clickTimeoutsRef.current[letterId]) {
               clearTimeout(clickTimeoutsRef.current[letterId]);
               delete clickTimeoutsRef.current[letterId];
@@ -2777,6 +2779,16 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               // Force positions update since we deleted a block
               setTimeout(updateElementPositions, 50);
             }
+            
+            // Clean up drag states to prevent drop logic from firing after deletion
+            setDraggedTrayIndex(null);
+            draggedTrayIndexRef.current = null;
+            setDraggedBoardLetter(null);
+            draggedBoardLetterRef.current = null;
+            setTrayDragStart(null);
+            setDragHoverInfo(null);
+            dragStartRectRef.current = null;
+            return;
           } else {
             // Single click: do nothing except register time
             lastClicksRef.current[letterId] = now;
