@@ -4480,12 +4480,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                             />
                           )}
 
-                          {/* Popup pill (color circle + spacebar) - ABSOLUTE positioned, transition-all duration-200 */}
-                          <div className={`absolute w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-3 flex items-center justify-center gap-3 shadow-[0_4px_15px_rgba(0,0,0,0.03)] z-10 transition-all duration-200
-                            bottom-[50px] left-1/2 md:bottom-auto md:left-[126px] md:translate-x-0
+                           {/* Popup pill (color circle + spacebar) - ABSOLUTE positioned, side-by-side transition matching mobile reference */}
+                          <div className={`absolute w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-3 flex items-center justify-center gap-3 shadow-[0_4px_15px_rgba(0,0,0,0.03)] z-10 transition-all duration-300 ease-out
+                            left-[calc(50%-2px)] md:left-[126px] md:bottom-auto md:translate-x-0
                             ${plusMenuOpenRowIdx === rIdx 
-                              ? 'opacity-100 pointer-events-auto -translate-x-1/2 translate-y-0 md:translate-x-0 md:opacity-100' 
-                              : 'opacity-0 pointer-events-none -translate-x-1/2 translate-y-2 md:translate-y-0 md:-translate-x-[10px] md:opacity-0'
+                              ? 'opacity-100 pointer-events-auto scale-100 translate-x-0 md:opacity-100 md:translate-x-0' 
+                              : 'opacity-0 pointer-events-none scale-90 translate-x-2 md:translate-x-[-10px] md:scale-100 md:opacity-0'
                             }`}
                           >
                             {/* Color cycle circle */}
@@ -4527,7 +4527,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           </div>
 
                           {/* Main pill with Plus, Scissors, Trash */}
-                          <div className="w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-2 flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative z-20">
+                          <div className={`w-[122px] h-[46px] bg-white border border-slate-200/80 rounded-full px-2 flex items-center justify-between shadow-[0_4px_12px_rgba(0,0,0,0.03)] relative z-20 transition-all duration-300 ease-out
+                            ${plusMenuOpenRowIdx === rIdx 
+                              ? '-translate-x-16 md:translate-x-0' 
+                              : 'translate-x-0'
+                            }`}
+                          >
                           {/* Plus button (toggle popup) */}
                           <button
                             type="button"
@@ -4595,134 +4600,57 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         </div>
                       </div>
 
-                      {/* Small modern custom scrollbar - positioned BELOW the pill menu */}
+                      {/* Small modern custom scrollbar - interactive range slider */}
                       {rowOverflows[rIdx] && (
                         <div 
-                          className={`flex justify-center py-0.5 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-35 ${
+                          className={`flex justify-center items-center py-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-35 ${
                             (activeScrollingRow === rIdx || isDraggingScrollbar === rIdx) 
                               ? 'opacity-100 scale-100 pointer-events-auto'
                               : 'opacity-0 scale-95 pointer-events-none'
                           }`}
                         >
-                          <div 
-                            className="w-32 h-1.5 bg-gray-200/60 rounded-full relative cursor-pointer active:h-2 transition-all shadow-inner touch-none"
-                            onPointerDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              
-                              const trackEl = e.currentTarget;
-                              trackEl.setPointerCapture(e.pointerId);
-                              setIsDraggingScrollbar(rIdx);
-                              setActiveScrollingRow(rIdx);
-                              
+                          <input 
+                            type="range" 
+                            min="0" 
+                            max={(() => {
+                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
+                              return containerEl ? containerEl.scrollWidth - containerEl.clientWidth : 100;
+                            })()} 
+                            value={(() => {
+                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
+                              return containerEl ? containerEl.scrollLeft : 0;
+                            })()} 
+                            onChange={(e) => {
                               const container = document.getElementById(`row-scroll-${rIdx}`);
-                              if (!container) return;
-                              
-                              const rect = trackEl.getBoundingClientRect();
-                              const relativeX = e.clientX - rect.left;
-                              const scrollWidth = container.scrollWidth;
-                              const clientWidth = container.clientWidth;
-                              const maxScroll = scrollWidth - clientWidth;
-                              
-                              if (maxScroll <= 0) return;
-                              
-                              const visibleFraction = clientWidth / scrollWidth;
-                              const thumbWidthPct = Math.min(80, Math.max(20, visibleFraction * 100));
-                              const thumbWidthPx = (thumbWidthPct / 100) * rect.width;
-                              const draggableTrackWidth = rect.width - thumbWidthPx;
-                              
-                              const currentThumbLeft = (container.scrollLeft / maxScroll) * draggableTrackWidth;
-                              
-                              let grabOffset = thumbWidthPx / 2;
-                              if (relativeX >= currentThumbLeft && relativeX <= currentThumbLeft + thumbWidthPx) {
-                                grabOffset = relativeX - currentThumbLeft;
-                              } else {
-                                const clickX = relativeX;
-                                const newThumbLeft = Math.max(0, Math.min(draggableTrackWidth, clickX - grabOffset));
-                                const pct = draggableTrackWidth > 0 ? newThumbLeft / draggableTrackWidth : 0;
-                                container.scrollLeft = pct * maxScroll;
-                              }
-                              
-                              const handlePointerMove = (moveEvent: PointerEvent) => {
-                                if (moveEvent.cancelable) {
-                                  moveEvent.preventDefault();
-                                }
-                                
-                                const currentRect = trackEl.getBoundingClientRect();
-                                const currentRelativeX = moveEvent.clientX - currentRect.left;
-                                const newThumbLeft = Math.max(0, Math.min(draggableTrackWidth, currentRelativeX - grabOffset));
-                                const pct = draggableTrackWidth > 0 ? newThumbLeft / draggableTrackWidth : 0;
-                                
-                                container.scrollLeft = pct * maxScroll;
-                                
-                                const maxLeftPct = 100 - thumbWidthPct;
-                                const thumbLeftPct = pct * maxLeftPct;
-                                const thumbEl = document.getElementById(`scrollbar-thumb-${rIdx}`);
-                                if (thumbEl) {
-                                  thumbEl.style.left = `${thumbLeftPct}%`;
-                                }
-                                
+                              if (container) {
+                                const newScrollLeft = parseFloat(e.target.value);
+                                container.scrollLeft = newScrollLeft;
                                 setRowScrollMetrics(prev => ({
                                   ...prev,
                                   [rIdx]: {
-                                    scrollLeft: container.scrollLeft,
-                                    scrollWidth,
-                                    clientWidth
+                                    scrollLeft: newScrollLeft,
+                                    scrollWidth: container.scrollWidth,
+                                    clientWidth: container.clientWidth
                                   }
                                 }));
-                              };
-                              
-                              const handlePointerUp = (upEvent: PointerEvent) => {
-                                trackEl.releasePointerCapture(upEvent.pointerId);
-                                setIsDraggingScrollbar(null);
-                                
-                                setActiveScrollingRow(rIdx);
-                                if (activeScrollingTimeoutRef.current[rIdx]) {
-                                  clearTimeout(activeScrollingTimeoutRef.current[rIdx]);
-                                }
-                                activeScrollingTimeoutRef.current[rIdx] = setTimeout(() => {
-                                  setActiveScrollingRow(null);
-                                }, 3000);
-                                
-                                trackEl.removeEventListener('pointermove', handlePointerMove);
-                                trackEl.removeEventListener('pointerup', handlePointerUp);
-                                trackEl.removeEventListener('pointercancel', handlePointerUp);
-                              };
-                              
-                              trackEl.addEventListener('pointermove', handlePointerMove, { passive: false });
-                              trackEl.addEventListener('pointerup', handlePointerUp);
-                              trackEl.addEventListener('pointercancel', handlePointerUp);
+                              }
                             }}
-                          >
-                            <div 
-                              id={`scrollbar-thumb-${rIdx}`}
-                              className="h-full bg-[#005ba4] rounded-full absolute top-0"
-                              style={(() => {
-                                const containerEl = document.getElementById(`row-scroll-${rIdx}`);
-                                const realScrollLeft = containerEl ? containerEl.scrollLeft : 0;
-                                const realScrollWidth = containerEl ? containerEl.scrollWidth : 1;
-                                const realClientWidth = containerEl ? containerEl.clientWidth : 1;
-                                
-                                const metrics = rowScrollMetrics[rIdx] || { 
-                                  scrollLeft: realScrollLeft, 
-                                  scrollWidth: realScrollWidth, 
-                                  clientWidth: realClientWidth 
-                                };
-                                const maxScroll = metrics.scrollWidth - metrics.clientWidth;
-                                const scrollFraction = maxScroll > 0 ? metrics.scrollLeft / maxScroll : 0;
-                                const visibleFraction = metrics.scrollWidth > 0 ? metrics.clientWidth / metrics.scrollWidth : 1;
-                                
-                                const thumbWidthPct = Math.min(80, Math.max(20, visibleFraction * 100));
-                                const maxLeftPct = 100 - thumbWidthPct;
-                                const thumbLeftPct = scrollFraction * maxLeftPct;
-                                
-                                return {
-                                  width: `${thumbWidthPct}%`,
-                                  left: `${thumbLeftPct}%`
-                                };
-                              })()}
-                            />
-                          </div>
+                            onPointerDown={(e) => {
+                              setIsDraggingScrollbar(rIdx);
+                              setActiveScrollingRow(rIdx);
+                            }}
+                            onPointerUp={() => {
+                              setIsDraggingScrollbar(null);
+                              setActiveScrollingRow(rIdx);
+                              if (activeScrollingTimeoutRef.current[rIdx]) {
+                                clearTimeout(activeScrollingTimeoutRef.current[rIdx]);
+                              }
+                              activeScrollingTimeoutRef.current[rIdx] = setTimeout(() => {
+                                setActiveScrollingRow(null);
+                              }, 3000);
+                            }}
+                            className="custom-slider"
+                          />
                         </div>
                       )}
 
