@@ -3768,175 +3768,214 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeTaskInfo ? (
-          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                  {lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? 'Atividade Salva' : 'Atividade Atual'}
-                </span>
+          <div className="w-full max-w-[850px] bg-white rounded-3xl p-8 border border-slate-100 shadow-[0_10px_30px_rgba(0,0,0,0.04)] text-left">
+            
+            {/* Linha do Topo (Alinhamento dos Badges com os Ícones Globais) */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full mb-4">
+              
+              {/* Badges de Status (Lado Esquerdo) */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? (
+                  <span className="bg-[#1edb27] text-[#ffffff] text-[11px] font-extrabold tracking-wider uppercase px-3 py-1.5 rounded-full border border-[#e2e8f0]">
+                    Atividade Salva
+                  </span>
+                ) : (
+                  <span className="bg-slate-100 text-slate-700 text-[11px] font-extrabold tracking-wider uppercase px-3 py-1.5 rounded-full border border-[#e2e8f0]">
+                    Atividade Atual
+                  </span>
+                )}
+                
                 {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
                   <>
-                    <span className="text-gray-400 text-sm">•</span>
-                    <span className="text-emerald-600 text-xs sm:text-sm font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px] font-bold">check_circle</span>
+                    <span className="text-slate-300 select-none">•</span>
+                    <div className="flex items-center gap-1.5 text-[#009b72] text-[13px] font-semibold">
+                      {/* Ícone Check Verde */}
+                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <polyline points="12 8 12 12 14 14"></polyline>
+                      </svg>
                       Salva com sucesso!
-                    </span>
+                    </div>
                   </>
                 )}
               </div>
-              <h2 className="font-display font-extrabold text-xl sm:text-2xl text-gray-950 tracking-tight leading-tight mb-1">
-                {activeTaskInfo.title}
-              </h2>
-              <p className="text-gray-600 text-xs sm:text-sm font-medium mt-0.5">
-                {lastSavedTask && lastSavedTask.title === activeTaskInfo.title
-                  ? (isStudentEditing 
-                      ? 'Modo de Edição Ativo. Modifique o tabuleiro e clique em "Salvar Atividade" para atualizar.' 
-                      : 'Sua atividade está salva. Clique em "Editar Atividade" para destravar e modificar o ábaco.')
-                  : 'Monte as palavras deslizando as letras e clique em "Salvar Atividade" para gravar o progresso.'
-                }
-              </p>
-            </div>
-            
-            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center shrink-0">
-              {/* Message / Chat button (Always visible) */}
-              <button
-                type="button"
-                title="Enviar mensagem para o professor"
-                onClick={() => {
-                  setChatTarget({
-                    studentName: user?.name || "Estudante",
-                    taskId: activeTaskInfo.title.toLowerCase().replace(/\s+/g, '-'),
-                    taskTitle: activeTaskInfo.title
-                  });
-                  setIsChatModalOpen(true);
-                }}
-                className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-slate-400 hover:text-slate-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs shrink-0"
-              >
-                <span className="material-symbols-outlined text-[20px]">chat</span>
-              </button>
 
-              {/* Edit toggle button (only if saved previously) */}
-              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
+              {/* Grupo de Ícones de Ação sem Texto (Canto Superior Direito) */}
+              <div className="flex items-center gap-2.5 self-end sm:self-auto">
+                {/* Ícone 1: Notas (Chat) */}
                 <button
                   type="button"
-                  onClick={() => setIsStudentEditing(!isStudentEditing)}
-                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none ${
-                    isStudentEditing 
-                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' 
-                      : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-150'
-                  }`}
-                  title={isStudentEditing ? 'Clique para bloquear a edição' : 'Clique para habilitar a edição'}
+                  title="Enviar mensagem para o professor"
+                  onClick={() => {
+                    setChatTarget({
+                      studentName: user?.name || "Estudante",
+                      taskId: activeTaskInfo.title.toLowerCase().replace(/\s+/g, '-'),
+                      taskTitle: activeTaskInfo.title
+                    });
+                    setIsChatModalOpen(true);
+                  }}
+                  className="w-10 h-10 bg-white border border-slate-200/80 hover:bg-slate-50 rounded-xl flex items-center justify-center text-[#94a3b8] hover:text-slate-600 transition-all active:scale-95 shadow-[0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-[18px]">
-                    {isStudentEditing ? 'edit_off' : 'edit'}
-                  </span>
-                  <span>{isStudentEditing ? 'Bloquear Edição' : 'Editar Atividade'}</span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                  </svg>
                 </button>
-              )}
 
-              {/* Save activity button (visible if fresh or student editing is unlocked) */}
-              {(!lastSavedTask || lastSavedTask.title !== activeTaskInfo.title || isStudentEditing) && (
+                {/* Ícone Save (Floppy Disk) - Visible only if unsaved or editing is active */}
+                {(!lastSavedTask || lastSavedTask.title !== activeTaskInfo.title || isStudentEditing) && (
+                  <button
+                    type="button"
+                    title="Salvar Atividade"
+                    onClick={handleSaveAndSubmitActivity}
+                    className="w-10 h-10 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 text-emerald-600 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-[0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer animate-pulse"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                      <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                      <polyline points="7 3 7 8 15 8"></polyline>
+                    </svg>
+                  </button>
+                )}
+
+                {/* Ícone 2: Lápis (Edit Toggle) - only if saved previously */}
+                {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
+                  <button
+                    type="button"
+                    title={isStudentEditing ? 'Bloquear Edição' : 'Editar Atividade'}
+                    onClick={() => setIsStudentEditing(!isStudentEditing)}
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-[0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer border ${
+                      isStudentEditing 
+                        ? 'bg-amber-50 border-amber-200/80 text-amber-600 hover:bg-amber-100' 
+                        : 'bg-white border-slate-200/80 text-[#94a3b8] hover:bg-slate-50 hover:text-slate-600'
+                    }`}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                      <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
+                    </svg>
+                  </button>
+                )}
+
+                {/* Ícone 3: Lixeira (Excluir/Limpar progresso) */}
                 <button
-                  onClick={handleSaveAndSubmitActivity}
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-pulse"
-                >
-                  <span className="material-symbols-outlined text-[18px]">save</span>
-                  <span>Salvar Atividade</span>
-                </button>
-              )}
-
-              {/* Trash delete button (Always visible) */}
-              <button
-                type="button"
-                title={lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? "Excluir atividade salva" : "Limpar progresso do ábaco"}
-                onClick={() => {
-                  const isSaved = lastSavedTask && lastSavedTask.title === activeTaskInfo.title;
-                  if (isSaved) {
-                    if (window.confirm("Deseja remover esta atividade salva permanentemente?")) {
-                      try {
-                        const localSent = localStorage.getItem('abba_student_sent_activities');
-                        const sentList = localSent ? JSON.parse(localSent) : [];
-                        const updated = sentList.filter((a: any) => a.taskTitle !== activeTaskInfo.title);
-                        localStorage.setItem('abba_student_sent_activities', JSON.stringify(updated));
-                        
-                        setCompletedSpelledWords(prev => prev.filter(w => !lastSavedTask.words.some(lw => lw.word === w.word)));
-                      } catch (e) {
-                        console.error(e);
-                      }
-                      
-                      const delPayload = {
-                        student_name: user?.name || '',
-                        task_title: activeTaskInfo.title
-                      };
-                      try {
-                        const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
-                        if (!pendingDeletions.some((item: any) => item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)) {
-                          pendingDeletions.push(delPayload);
-                          localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(pendingDeletions));
-                        }
-                      } catch (e) {
-                        console.error('Erro ao enfileirar exclusão de submissão:', e);
-                      }
-
-                      (async () => {
+                  type="button"
+                  title={lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? "Excluir atividade salva" : "Limpar progresso do ábaco"}
+                  onClick={() => {
+                    const isSaved = lastSavedTask && lastSavedTask.title === activeTaskInfo.title;
+                    if (isSaved) {
+                      if (window.confirm("Deseja remover esta atividade salva permanentemente?")) {
                         try {
-                          const { error } = await supabase
-                            .from('student_submissions')
-                            .delete()
-                            .eq('student_name', delPayload.student_name)
-                            .eq('task_title', delPayload.task_title);
-                          if (!error) {
-                            console.log("🗑️ Submissão excluída do Supabase com sucesso!");
-                            try {
-                              const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
-                              const remaining = pendingDeletions.filter((item: any) => 
-                                !(item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)
-                              );
-                              localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
-                            } catch (e) {
-                              console.error(e);
-                            }
-                          }
-                        } catch (err) {
-                          console.warn(err);
+                          const localSent = localStorage.getItem('abba_student_sent_activities');
+                          const sentList = localSent ? JSON.parse(localSent) : [];
+                          const updated = sentList.filter((a: any) => a.taskTitle !== activeTaskInfo.title);
+                          localStorage.setItem('abba_student_sent_activities', JSON.stringify(updated));
+                          
+                          setCompletedSpelledWords(prev => prev.filter(w => !lastSavedTask.words.some(lw => lw.word === w.word)));
+                        } catch (e) {
+                          console.error(e);
                         }
-                      })();
+                        
+                        const delPayload = {
+                          student_name: user?.name || '',
+                          task_title: activeTaskInfo.title
+                        };
+                        try {
+                          const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                          if (!pendingDeletions.some((item: any) => item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)) {
+                            pendingDeletions.push(delPayload);
+                            localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(pendingDeletions));
+                          }
+                        } catch (e) {
+                          console.error('Erro ao enfileirar exclusão de submissão:', e);
+                        }
 
-                      setLastSavedTask(null);
-                      setSpelledRows([[], [], [], [], [], []]);
-                      setRowColors({});
-                      setSavedWordsList([]);
-                      setIsStudentEditing(true);
-                    }
-                  } else {
-                    if (window.confirm("Deseja limpar todo o progresso atual do ábaco?")) {
-                      setSpelledRows([[], [], [], [], [], []]);
-                      setRowColors({});
-                      setSavedWordsList([]);
-                    }
-                  }
-                }}
-                className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs shrink-0"
-              >
-                <span className="material-symbols-outlined text-[20px]">delete</span>
-              </button>
+                        (async () => {
+                          try {
+                            const { error } = await supabase
+                              .from('student_submissions')
+                              .delete()
+                              .eq('student_name', delPayload.student_name)
+                              .eq('task_title', delPayload.task_title);
+                            if (!error) {
+                              console.log("🗑️ Submissão excluída do Supabase com sucesso!");
+                              try {
+                                const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
+                                const remaining = pendingDeletions.filter((item: any) => 
+                                  !(item.student_name === delPayload.student_name && item.task_title === delPayload.task_title)
+                                );
+                                localStorage.setItem('abba_pending_submission_deletions', JSON.stringify(remaining));
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }
+                          } catch (err) {
+                            console.warn(err);
+                          }
+                        })();
 
-              {/* Back to student dashboard */}
-              <button
-                onClick={() => {
-                  setActiveTaskInfo(null);
-                  setLastSavedTask(null);
-                  setSpelledRows([[], [], [], [], [], []]);
-                  setRowColors({});
-                  setSavedWordsList([]);
-                  setIsStudentEditing(true);
-                  setCurrentScreen('student-dashboard');
-                }}
-                className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-none"
-              >
-                <span>Voltar ao Painel</span>
-              </button>
+                        setLastSavedTask(null);
+                        setSpelledRows([[], [], [], [], [], []]);
+                        setRowColors({});
+                        setSavedWordsList([]);
+                        setIsStudentEditing(true);
+                      }
+                    } else {
+                      if (window.confirm("Deseja limpar todo o progresso atual do ábaco?")) {
+                        setSpelledRows([[], [], [], [], [], []]);
+                        setRowColors({});
+                        setSavedWordsList([]);
+                      }
+                    }
+                  }}
+                  className="w-10 h-10 bg-white border border-slate-200/80 hover:border-red-200 hover:bg-red-50 text-[#94a3b8] hover:text-red-500 rounded-xl flex items-center justify-center transition-all active:scale-95 shadow-[0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"></polyline>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                  </svg>
+                </button>
+
+                {/* Ícone 4: Casa / Voltar ao Painel */}
+                <button
+                  type="button"
+                  title="Voltar ao Painel"
+                  onClick={() => {
+                    setActiveTaskInfo(null);
+                    setLastSavedTask(null);
+                    setSpelledRows([[], [], [], [], [], []]);
+                    setRowColors({});
+                    setSavedWordsList([]);
+                    setIsStudentEditing(true);
+                    setCurrentScreen('student-dashboard');
+                  }}
+                  className="w-10 h-10 bg-white border border-slate-200/80 hover:bg-slate-50 rounded-xl flex items-center justify-center text-[#94a3b8] transition-all active:scale-95 shadow-[0_2px_4px_rgba(0,0,0,0.02)] cursor-pointer"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                    <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                  </svg>
+                </button>
+              </div>
+
             </div>
+
+            {/* Conteúdo do Card (Título e Descrição) */}
+            <div className="w-full mt-2">
+              <div className="max-w-[650px]">
+                <h1 className="text-[26px] md:text-[28px] font-extrabold text-slate-900 tracking-tight leading-tight font-display">
+                  {activeTaskInfo.title}
+                </h1>
+                <p className="text-[14px] font-medium text-slate-500 mt-2.5 leading-relaxed font-sans">
+                  {lastSavedTask && lastSavedTask.title === activeTaskInfo.title
+                    ? (isStudentEditing 
+                        ? 'Modo de Edição Ativo. Modifique o tabuleiro e clique no botão de salvar para atualizar.' 
+                        : 'Sua atividade está salva. Clique no ícone de lápis para destravar e modificar o ábaco.')
+                    : 'Monte as palavras deslizando as letras e clique no botão verde de salvar para gravar o progresso.'
+                  }
+                </p>
+              </div>
+            </div>
+
           </div>
         ) : (
           <div className="text-left">
