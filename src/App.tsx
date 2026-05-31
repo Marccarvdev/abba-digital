@@ -1415,6 +1415,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
   // Which row index is currently focused / active for adding clicked letters (or landing drops in general)
   const [activeRowIdx, setActiveRowIdx] = useState<number>(0);
+  const [showScrollbarZone, setShowScrollbarZone] = useState(false);
 
   // Shelf cubes state supporting custom ordering
   const [shelfCubes, setShelfCubes] = useState<LetterCubeData[]>(ALPHABET_CUBES);
@@ -4443,16 +4444,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           onScroll={(e) => {
                             const target = e.currentTarget;
                             
-                            // 1. Direct DOM update of the range slider thumb position to avoid React re-render
-                            // ONLY sync if the user is NOT actively dragging this specific slider to break feedback fighting!
-                            if (isDraggingScrollbarRef.current !== rIdx) {
-                              const slider = document.getElementById(`slider-${rIdx}`) as HTMLInputElement;
-                              if (slider) {
-                                slider.value = target.scrollLeft.toString();
-                              }
-                            }
-
-                            // 2. High-performance direct DOM update of the abacus wires for this row
+                            // 1. High-performance direct DOM update of the abacus wires for this row
                             updateRowWiresDOM(rIdx);
 
                             // 3. Scroll-triggered visibility for custom scrollbars (throttle state updates)
@@ -4832,76 +4824,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         </div>
                       </div>
 
-                      {/* Small modern custom scrollbar - interactive range slider */}
-                      {rowOverflows[rIdx] && (
-                        <div 
-                          className={`flex justify-center items-center py-2 transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] z-35 ${
-                            (activeScrollingRow === rIdx || isDraggingScrollbar === rIdx) 
-                              ? 'opacity-100 scale-100 pointer-events-auto'
-                              : 'opacity-0 scale-95 pointer-events-none'
-                          }`}
-                        >
-                          <input 
-                            ref={(el) => {
-                              if (el && !(el as any).__touchListenersAttached) {
-                                (el as any).__touchListenersAttached = true;
-                                const preventTouch = (e: TouchEvent) => {
-                                  if (e.cancelable) e.preventDefault();
-                                  e.stopPropagation();
-                                };
-                                el.addEventListener('touchstart', preventTouch, { passive: false });
-                                el.addEventListener('touchmove', preventTouch, { passive: false });
-                              }
-                            }}
-                            id={`slider-${rIdx}`}
-                            type="range" 
-                            min="0" 
-                            max={(() => {
-                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
-                              return containerEl ? containerEl.scrollWidth - containerEl.clientWidth : 100;
-                            })()} 
-                            defaultValue={(() => {
-                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
-                              return containerEl ? containerEl.scrollLeft : 0;
-                            })()} 
-                            onChange={(e) => {
-                              const container = document.getElementById(`row-scroll-${rIdx}`);
-                              if (container) {
-                                const newScrollLeft = parseFloat(e.target.value);
-                                container.scrollLeft = newScrollLeft;
-                                updateRowWiresDOM(rIdx);
-                              }
-                            }}
-                            onPointerDown={(e) => {
-                              isDraggingScrollbarRef.current = rIdx;
-                              setIsDraggingScrollbar(rIdx);
-                              if (activeScrollingRow !== rIdx) {
-                                setActiveScrollingRow(rIdx);
-                              }
-                            }}
-                            onPointerUp={() => {
-                              isDraggingScrollbarRef.current = null;
-                              setIsDraggingScrollbar(null);
-                              if (activeScrollingRow !== rIdx) {
-                                setActiveScrollingRow(rIdx);
-                              }
-                              if (activeScrollingTimeoutRef.current[rIdx]) {
-                                clearTimeout(activeScrollingTimeoutRef.current[rIdx]);
-                              }
-                              activeScrollingTimeoutRef.current[rIdx] = setTimeout(() => {
-                                setActiveScrollingRow(null);
-                              }, 3000);
-                            }}
-                            onLostPointerCapture={() => {
-                              isDraggingScrollbarRef.current = null;
-                              setIsDraggingScrollbar(null);
-                            }}
-                            style={{ touchAction: 'none' }}
-                            className="custom-slider"
-                          />
-                        </div>
-                      )}
-
                     </motion.div>
                   );
                 })}
@@ -4934,6 +4856,78 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               </div>
 
             </motion.div>
+
+            {/* Clickable scrollbar zone below the container where blocks are positioned */}
+            {rowOverflows.some((val) => val) && (
+              <div 
+                onClick={() => {
+                  setShowScrollbarZone(true);
+                }}
+                className="w-full mt-4 flex flex-col items-center justify-center min-h-[52px] rounded-2xl cursor-pointer transition-all border border-dashed border-slate-200 hover:border-indigo-300 bg-slate-50/30 hover:bg-indigo-50/10 py-3 px-4 shadow-2xs select-none"
+              >
+                {!showScrollbarZone ? (
+                  <div className="flex items-center gap-2 text-slate-400">
+                    <span className="material-symbols-outlined text-[20px]">drag_pan</span>
+                    <span className="text-xs font-semibold">Toque aqui para usar a barra de rolagem</span>
+                  </div>
+                ) : (
+                  <div className="w-full flex flex-col items-center animate-fade-in gap-2" onClick={(e) => e.stopPropagation()}>
+                    {spelledRows.map((row, rIdx) => {
+                      if (!rowOverflows[rIdx] || rIdx !== activeRowIdx) return null;
+                      return (
+                        <div key={`external-scroll-${rIdx}`} className="w-full flex flex-col items-center gap-2">
+                          <div className="flex items-center justify-between w-full max-w-[320px] px-1">
+                            <span className="text-xs font-bold text-indigo-600 uppercase tracking-wider">
+                              Rolagem Linha {rIdx + 1}
+                            </span>
+                            <button 
+                              onClick={() => setShowScrollbarZone(false)}
+                              className="text-slate-400 hover:text-slate-600 p-1 bg-transparent border-none cursor-pointer flex items-center justify-center"
+                            >
+                              <span className="material-symbols-outlined text-[16px]">close</span>
+                            </button>
+                          </div>
+                          <input 
+                            id={`slider-${rIdx}`}
+                            type="range" 
+                            min="0" 
+                            max={(() => {
+                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
+                              return containerEl ? containerEl.scrollWidth - containerEl.clientWidth : 100;
+                            })()} 
+                            defaultValue={(() => {
+                              const containerEl = document.getElementById(`row-scroll-${rIdx}`);
+                              return containerEl ? containerEl.scrollLeft : 0;
+                            })()} 
+                            onInput={(e) => {
+                              const container = document.getElementById(`row-scroll-${rIdx}`);
+                              if (container) {
+                                const newScrollLeft = parseFloat((e.target as HTMLInputElement).value);
+                                container.scrollLeft = newScrollLeft;
+                                updateRowWiresDOM(rIdx);
+                              }
+                            }}
+                            onPointerDown={(e) => {
+                              isDraggingScrollbarRef.current = rIdx;
+                              setIsDraggingScrollbar(rIdx);
+                            }}
+                            onPointerUp={() => {
+                              isDraggingScrollbarRef.current = null;
+                              setIsDraggingScrollbar(null);
+                            }}
+                            onLostPointerCapture={() => {
+                              isDraggingScrollbarRef.current = null;
+                              setIsDraggingScrollbar(null);
+                            }}
+                            className="custom-slider w-full max-w-[320px]"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
           </div>
         </section>
