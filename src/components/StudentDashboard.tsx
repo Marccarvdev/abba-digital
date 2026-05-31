@@ -181,6 +181,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     }
     return 'tasks-list';
   });
+  const [importedTxtTasks, setImportedTxtTasks] = useState<any[]>(() => {
+    try {
+      const raw = localStorage.getItem('abba_student_imported_txt_tasks');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem('abba_student_imported_txt_tasks', JSON.stringify(importedTxtTasks));
+  }, [importedTxtTasks]);
+
+  const [txtDragActive, setTxtDragActive] = useState(false);
+  const txtFileInputRef = useRef<HTMLInputElement>(null);
+
   const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'in-progress' | 'completed'>('all');
   const [generalSearchQuery, setGeneralSearchQuery] = useState('');
   const [taskFiles, setTaskFiles] = useState<{ name: string; size: string }[]>([]);
@@ -316,7 +332,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   });
 
   // Dynamic filter tab labels above cards
-  const [activeTabLabel, setActiveTabLabel] = useState<'recebidas' | 'acessos' | 'enviadas'>('recebidas');
+  const [activeTabLabel, setActiveTabLabel] = useState<'recebidas' | 'enviadas'>('recebidas');
 
   // Track active processing task details for redirection
   const [activeProcessingTask, setActiveProcessingTask] = useState<{ title: string; description: string } | null>(null);
@@ -662,6 +678,109 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const fileInputRef = React.useRef<HTMLInputElement | null>(null);
 
+  // ---------- parse and import TXT file ----------
+  const parseAccessTxt = (text: string) => {
+    const codeMatch = text.match(/👉\s*(ATV-[A-Za-z0-9-]+)/i) || text.match(/(ATV-[A-Za-z0-9-]+)/i);
+    const code = codeMatch ? codeMatch[1].trim() : null;
+
+    const studentMatch = text.match(/Estudante:\s*(.+)/i);
+    const studentName = studentMatch ? studentMatch[1].trim() : '';
+
+    const taskTitleMatch = text.match(/Tarefa:\s*(.+)/i);
+    const taskTitle = taskTitleMatch ? taskTitleMatch[1].trim() : '';
+
+    return { code, studentName, taskTitle };
+  };
+
+  const importTaskFromTxtContent = async (text: string) => {
+    setLinkError(null);
+    setValidatedLink(null);
+
+    const { code, studentName, taskTitle } = parseAccessTxt(text);
+
+    if (!code) {
+      setLinkError('Código de acesso não encontrado no arquivo TXT. Verifique se o arquivo enviado é a Ficha de Acesso válida.');
+      return;
+    }
+
+    if (!code.startsWith('ATV-')) {
+      setLinkError('Código inválido detectado no arquivo TXT. O código deve começar com ATV-.');
+      return;
+    }
+
+    // Enforce student ownership check
+    if (user?.name && studentName.toLowerCase().trim() !== user.name.toLowerCase().trim()) {
+      setLinkError(`Não foi possível carregar a atividade. Esta tarefa pertence ao aluno(a) "${studentName}" e não pode ser importada para sua conta (${user.name}).`);
+      return;
+    }
+
+    // Check if already imported
+    const isAlreadyImported = importedTxtTasks.some((t: any) => t.id === code || t.taskId === code);
+    if (isAlreadyImported) {
+      setLinkError('Esta tarefa já foi importada anteriormente.');
+      return;
+    }
+
+    // First, look up locally
+    const registryKey = 'abba_invite_codes_registry';
+    const localRegistry = localStorage.getItem(registryKey);
+    const registryList = localRegistry ? JSON.parse(localRegistry) : [];
+    const matchedRegistry = registryList.find((item: any) => item.code === code);
+
+    const generatedLinks = JSON.parse(localStorage.getItem('abba_generated_task_links') || '[]');
+    let matchedLink = generatedLinks.find((l: any) => l.id === code) || (matchedRegistry ? {
+      id: matchedRegistry.codeId || matchedRegistry.code,
+      studentName: matchedRegistry.name,
+      taskId: matchedRegistry.taskId,
+      taskTitle: matchedRegistry.taskTitle,
+      createdAt: new Date().toISOString(),
+      link: window.location.origin + `?code=${matchedRegistry.code}`
+    } : null);
+
+    // If not found locally, query Supabase database
+    if (!matchedLink) {
+      setIsValidatingLink(true);
+      try {
+        const { data, error } = await supabase
+          .from('teacher_generated_links')
+          .select('*')
+          .eq('link_id', code)
+          .maybeSingle();
+
+        if (data && !error) {
+          matchedLink = {
+            id: data.link_id,
+            studentName: data.student_name,
+            taskId: data.task_id,
+            taskTitle: data.task_title,
+            createdAt: data.created_at,
+            link: data.link_url
+          };
+        }
+      } catch (err) {
+        console.warn('Erro ao consultar Supabase para código:', err);
+      } finally {
+        setIsValidatingLink(false);
+      }
+    }
+
+    if (!matchedLink) {
+      // Offline/Local fallback
+      matchedLink = {
+        id: code,
+        studentName: studentName || user.name || 'Estudante',
+        taskId: code,
+        taskTitle: taskTitle || 'Tarefa Importada',
+        createdAt: new Date().toISOString(),
+        link: 'Ficha de acesso importada localmente'
+      };
+    }
+
+    const enriched = { ...matchedLink };
+    setImportedTxtTasks(prev => [enriched, ...prev]);
+    setValidatedLink(enriched);
+  };
+
   // ---------- validate link typed in the input ----------
   const validateAndPreviewLink = async (raw: string) => {
     setLinkError(null);
@@ -1004,19 +1123,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const handleAcceptTaskLink = async () => {
     if (!validatedLink) return;
 
-    // Check if task is already automatically assigned by the professor
-    const autoAssignedTasks = teacherTasks.filter((task: any) =>
-      task.status === 'active' &&
-      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
-    );
-    const isAlreadyAutoAssigned = autoAssignedTasks.some((t: any) => t.id === validatedLink.taskId);
-    if (isAlreadyAutoAssigned) {
-      setShowAlreadyAssignedModal(true);
-      setValidatedLink(null);
-      setUploadLink('');
-      return;
-    }
-
     // Prevent duplicates
     if (acceptedTaskLinks.some(l => l.id === validatedLink.id)) {
       setLinkError('Este link já foi adicionado anteriormente.');
@@ -1240,10 +1346,15 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     return matchesLanguage && matchesSearch;
   });
 
-  const autoAssignedTasks = teacherTasks.filter((task: any) =>
-    task.status === 'active' &&
-    (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
-  );
+  const autoAssignedTasks = importedTxtTasks.map((link: any) => {
+    const dbTask = teacherTasks.find((t: any) => t.id === link.taskId || t.title === link.taskTitle);
+    return {
+      id: link.id,
+      title: link.taskTitle,
+      description: dbTask?.description || 'Tarefa carregada via arquivo TXT.',
+      startDate: link.createdAt || new Date().toISOString()
+    };
+  });
 
   const formatTimeAgo = (dateStr: string) => {
     const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -2027,210 +2138,208 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </p>
               </div>
 
-              {/* Upload / Submission Section */}
+              {/* Importar via TXT Section */}
               <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-xs mb-lg w-full">
                 <div className="flex items-center gap-2 mb-4">
-                  <span className="material-symbols-outlined text-primary text-[22px]">key</span>
-                  <h3 className="text-lg font-bold text-slate-800">Acesso via Código Alfanumérico</h3>
+                  <span className="material-symbols-outlined text-primary text-[22px]">upload_file</span>
+                  <h3 className="text-lg font-bold text-slate-800">Importar Atividade via Ficha (.txt)</h3>
                 </div>
                 <p className="text-sm text-slate-500 mb-5">
-                  Insira o código de acesso alfanumérico enviado pelo seu professor para carregar os dados da tarefa ativa.
+                  Arraste e solte o arquivo de Ficha de Acesso <code>.txt</code> fornecido pelo seu professor ou clique para selecionar de seu dispositivo.
                 </p>
 
-                {/* Smart Teacher Code Input */}
-                <div className="border border-slate-100 rounded-xl p-6 flex flex-col gap-4 bg-slate-50/50">
-                  <div className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-slate-400 text-[20px]">vpn_key</span>
-                    <p className="text-sm font-semibold text-slate-700">Código de acesso de 6 dígitos</p>
+                {/* Drag and Drop Zone */}
+                <div
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setTxtDragActive(true);
+                  }}
+                  onDragLeave={() => setTxtDragActive(false)}
+                  onDrop={async (e) => {
+                    e.preventDefault();
+                    setTxtDragActive(false);
+                    const file = e.dataTransfer.files?.[0];
+                    if (file && file.name.endsWith('.txt')) {
+                      const text = await file.text();
+                      importTaskFromTxtContent(text);
+                    } else {
+                      setLinkError('Por favor, envie apenas arquivos de texto (.txt).');
+                    }
+                  }}
+                  onClick={() => txtFileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${
+                    txtDragActive
+                      ? 'border-primary bg-primary/5 scale-[1.01]'
+                      : 'border-slate-300 hover:border-primary hover:bg-slate-50/50 bg-slate-50/20'
+                  }`}
+                >
+                  <input
+                    type="file"
+                    ref={txtFileInputRef}
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const text = await file.text();
+                        importTaskFromTxtContent(text);
+                      }
+                    }}
+                    accept=".txt"
+                    className="hidden"
+                  />
+                  <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-primary">
+                    <span className="material-symbols-outlined text-[28px]">file_upload</span>
                   </div>
-
-                  <div className="flex flex-col justify-center flex-grow gap-4">
-                    {/* Input field */}
-                    <div className="relative">
-                      <input
-                        type="text"
-                        id="task-link-input"
-                        value={uploadLink}
-                        onChange={(e) => {
-                          setUploadLink(e.target.value);
-                          setLinkError(null);
-                          setValidatedLink(null);
-                        }}
-                        onBlur={(e) => validateAndPreviewLink(e.target.value)}
-                        onKeyDown={(e) => { if (e.key === 'Enter') validateAndPreviewLink(uploadLink); }}
-                        placeholder="Cole o código de acesso de 6 dígitos..."
-                        className={`w-full px-4 py-3 rounded-lg border text-sm placeholder-slate-400 outline-none transition-all bg-white ${linkError
-                          ? 'border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100 text-red-700'
-                          : validatedLink
-                            ? 'border-emerald-300 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 text-slate-700'
-                            : 'border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 text-slate-700'
-                          }`}
-                      />
-                      {uploadLink && (
-                        <button
-                          type="button"
-                          onClick={() => { setUploadLink(''); setValidatedLink(null); setLinkError(null); }}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer p-1"
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Validation error */}
-                    <AnimatePresence>
-                      {linkError && (
-                        <motion.div
-                          key="link-error"
-                          initial={{ opacity: 0, y: -6 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -6 }}
-                          className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-100"
-                        >
-                          <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
-                          <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Validated link preview */}
-                    <AnimatePresence>
-                      {validatedLink && (
-                        <motion.div
-                          key="link-preview"
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
-                          style={{ overflow: 'hidden' }}
-                        >
-                          <div
-                            className="rounded-xl p-4 flex flex-col gap-3"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
-                              border: '1px solid rgba(99,102,241,0.2)'
-                            }}
-                          >
-                            {/* Tag */}
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase"
-                                style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
-                              >
-                                ✓ Código verificado
-                              </span>
-                            </div>
-
-                            {/* Task info */}
-                            <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                                <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
-                              </div>
-                              <div>
-                                <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
-                                <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
-                                <p className="text-xs text-slate-500 mt-0.5">Para: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
-                              </div>
-                            </div>
-
-                            {/* Code preview text */}
-                            <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
-                              <p className="text-[11px] text-slate-400 font-medium truncate">Código de Acesso: {validatedLink.id}</p>
-                            </div>
-
-                            {/* Fazer tarefa button */}
-                            <button
-                              type="button"
-                              onClick={handleAcceptTaskLink}
-                              className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
-                              style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff' }}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
-                              Fazer tarefa
-                            </button>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-
-                    {/* Validate button when no preview yet */}
-                    {!validatedLink && !linkError && (
-                      <button
-                        type="button"
-                        onClick={() => validateAndPreviewLink(uploadLink)}
-                        disabled={!uploadLink.trim()}
-                        className="w-full py-2.5 rounded-lg bg-[#0052cc] hover:bg-[#0043a4] disabled:bg-slate-100 disabled:text-slate-400 text-white font-semibold text-sm transition-all disabled:hover:bg-slate-100 disabled:cursor-not-allowed cursor-pointer border-none active:scale-[0.98]"
-                      >
-                        Verificar Código
-                      </button>
-                    )}
+                  <div className="text-center">
+                    <p className="text-sm font-semibold text-slate-700">Arrastar ficha .txt ou clicar para carregar</p>
+                    <p className="text-xs text-slate-400 mt-1">Apenas arquivos .txt são aceitos</p>
                   </div>
                 </div>
 
-                  {/* Accepted Task Links history */}
-                  <AnimatePresence>
-                    {acceptedTaskLinks.length > 0 && (
-                      <motion.div
-                        key="accepted-links"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="mt-1"
-                      >
-                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Links de tarefa aceitos ({acceptedTaskLinks.length})</p>
-                        <div className="flex flex-col gap-2">
-                          {acceptedTaskLinks.map((item) => (
-                            <motion.div
-                              key={item.id}
-                              layout
-                              initial={{ opacity: 0, y: 6 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-slate-100 shadow-sm"
-                            >
-                              <div className="flex items-center gap-3 overflow-hidden">
-                                <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}>
-                                  <span className="material-symbols-outlined text-white" style={{ fontSize: 16 }}>assignment</span>
-                                </div>
-                                <div className="overflow-hidden">
-                                  <p className="text-sm font-semibold text-slate-800 truncate">{item.taskTitle}</p>
-                                  <p className="text-[11px] text-slate-400 truncate">{item.link}</p>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-2 shrink-0 ml-2">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    if (onGoToAbacus) {
-                                      onGoToAbacus(
-                                        item.taskTitle,
-                                        'Atividade carregada via link do professor.'
-                                      );
-                                    } else {
-                                      alert(`Iniciando atividade: ${item.taskTitle}`);
-                                    }
-                                  }}
-                                  className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:brightness-110 active:scale-95 cursor-pointer border-none flex items-center gap-1"
-                                  style={{ background: 'linear-gradient(135deg, #6366f1, #8b5cf6)' }}
-                                >
-                                  <span className="material-symbols-outlined text-[14px]">play_arrow</span>
-                                  Fazer tarefa
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => setAcceptedTaskLinks(prev => prev.filter(l => l.id !== item.id))}
-                                  className="text-slate-300 hover:text-red-400 transition-colors bg-transparent border-none cursor-pointer p-1"
-                                  title="Remover"
-                                >
-                                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
-                                </button>
-                              </div>
-                            </motion.div>
-                          ))}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                {/* Validation error */}
+                <AnimatePresence>
+                  {linkError && (
+                    <motion.div
+                      key="link-error"
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -6 }}
+                      className="flex items-start gap-2 p-3 mt-4 rounded-lg bg-red-50 border border-red-100"
+                    >
+                      <span className="material-symbols-outlined text-red-500 shrink-0" style={{ fontSize: 18 }}>error</span>
+                      <p className="text-xs text-red-600 font-medium" style={{ lineHeight: 1.5 }}>{linkError}</p>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
-                {/* Uploaded Files List */}
+                {/* Validated link preview / Import Success details */}
+                <AnimatePresence>
+                  {validatedLink && (
+                    <motion.div
+                      key="link-preview"
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+                      style={{ overflow: 'hidden' }}
+                      className="mt-4"
+                    >
+                      <div
+                        className="rounded-xl p-4 flex flex-col gap-3"
+                        style={{
+                          background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(34,197,94,0.06) 100%)',
+                          border: '1px solid rgba(34,197,94,0.2)'
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span
+                            className="px-2 py-0.5 rounded-full text-[10px] font-bold tracking-wider uppercase flex items-center gap-1"
+                            style={{ background: 'rgba(34,197,94,0.15)', color: '#16a34a' }}
+                          >
+                            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+                            Atividade Importada com Sucesso!
+                          </span>
+                        </div>
+
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                            <span className="material-symbols-outlined text-white" style={{ fontSize: 20 }}>assignment</span>
+                          </div>
+                          <div>
+                            <p className="text-xs text-slate-500 font-medium mb-0.5">Tarefa do professor</p>
+                            <p className="text-sm font-bold text-slate-800">{validatedLink.taskTitle}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">Aluno: <span className="font-semibold text-slate-700">{validatedLink.studentName}</span></p>
+                          </div>
+                        </div>
+
+                        <div className="rounded-lg px-3 py-2 bg-white/70 border border-slate-100">
+                          <p className="text-[11px] text-slate-400 font-medium truncate">Código da Ficha: {validatedLink.id}</p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const dbTask = teacherTasks.find(t => t.id === validatedLink.taskId || t.title === validatedLink.taskTitle);
+                            if (onGoToAbacus) {
+                              onGoToAbacus(validatedLink.taskTitle, dbTask?.description || 'Atividade carregada via arquivo TXT.');
+                            }
+                            setValidatedLink(null);
+                          }}
+                          className="w-full py-3 rounded-lg font-semibold text-sm flex items-center justify-center gap-2 transition-all active:scale-[0.98] cursor-pointer border-none"
+                          style={{ background: 'linear-gradient(135deg, #10b981, #059669)', color: '#fff' }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>play_arrow</span>
+                          Fazer tarefa agora
+                        </button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Imported TXT Tasks history */}
+                <AnimatePresence>
+                  {importedTxtTasks.length > 0 && (
+                    <motion.div
+                      key="imported-txt-tasks-history"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="mt-4"
+                    >
+                      <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 font-display">Fichas Importadas ({importedTxtTasks.length})</p>
+                      <div className="flex flex-col gap-2">
+                        {importedTxtTasks.map((item) => (
+                          <motion.div
+                            key={item.id}
+                            layout
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            className="flex items-center justify-between bg-white rounded-xl px-4 py-3 border border-slate-100 shadow-sm"
+                          >
+                            <div className="flex items-center gap-3 overflow-hidden">
+                              <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0" style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}>
+                                <span className="material-symbols-outlined text-white" style={{ fontSize: 16 }}>assignment</span>
+                              </div>
+                              <div className="overflow-hidden">
+                                <p className="text-sm font-semibold text-slate-800 truncate">{item.taskTitle}</p>
+                                <p className="text-[11px] text-slate-400 truncate">Código: {item.id}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0 ml-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const dbTask = teacherTasks.find(t => t.id === item.taskId || t.title === item.taskTitle);
+                                  if (onGoToAbacus) {
+                                    onGoToAbacus(
+                                      item.taskTitle,
+                                      dbTask?.description || 'Atividade carregada via arquivo TXT.'
+                                    );
+                                  } else {
+                                    alert(`Iniciando atividade: ${item.taskTitle}`);
+                                  }
+                                }}
+                                className="px-3 py-1.5 rounded-lg text-xs font-bold text-white transition-all hover:brightness-110 active:scale-95 cursor-pointer border-none flex items-center gap-1"
+                                style={{ background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                              >
+                                <span className="material-symbols-outlined text-[14px]">play_arrow</span>
+                                Fazer tarefa
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setImportedTxtTasks(prev => prev.filter(l => l.id !== item.id))}
+                                className="text-slate-300 hover:text-red-400 transition-colors bg-transparent border-none cursor-pointer p-1"
+                                title="Remover"
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 16 }}>close</span>
+                              </button>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+              {/* Uploaded Files List */}
                 {taskFiles.length > 0 && (
                   <div className="mt-5 space-y-2">
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Arquivos enviados ({taskFiles.length})</p>
@@ -2271,15 +2380,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                     Recebidas
                   </button>
                   <button
-                    onClick={() => setActiveTabLabel('acessos')}
-                    className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'acessos'
-                      ? 'bg-primary text-on-primary font-bold shadow-sm'
-                      : 'bg-transparent text-on-surface-variant hover:bg-slate-200/50'
-                      }`}
-                  >
-                    Códigos
-                  </button>
-                  <button
                     onClick={() => setActiveTabLabel('enviadas')}
                     className={`px-lg py-sm rounded-lg font-label-md text-label-md transition-all border-none cursor-pointer ${activeTabLabel === 'enviadas'
                       ? 'bg-primary text-on-primary font-bold shadow-sm'
@@ -2309,14 +2409,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                     <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
                       Atividades recebidas
                     </h3>
-                    <p className="text-xs text-slate-400 mt-1">Essas atividades foram atribuídas de forma direta pelo professor</p>
-                  </>
-                ) : activeTabLabel === 'acessos' ? (
-                  <>
-                    <h3 className="text-lg font-extrabold text-slate-800 tracking-tight font-display">
-                      Atividades por Código
-                    </h3>
-                    <p className="text-xs text-slate-400 mt-1">Aqui aparecerão todas as suas atividades geradas por código.</p>
+                    <p className="text-xs text-slate-400 mt-1">Essas são as atividades que você importou utilizando o arquivo da ficha de acesso (.txt)</p>
                   </>
                 ) : (
                   <>
@@ -2332,43 +2425,11 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-lg min-h-[320px]">
                 <AnimatePresence mode="popLayout">
                   {(() => {
-                    const autoAssignedTasks = teacherTasks.filter(task =>
-                      task.status === 'active' &&
-                      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
-                    );
-
                     let listToRender: any[] = [];
                     
                     if (activeTabLabel === 'recebidas') {
-                      listToRender = autoAssignedTasks.map(task => {
-                        const isTask1 = task.id === 'task-1' || task.id === 'numerais';
-                        const progress = isTask1 ? progressPercent : 0;
-                        const status = progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending';
-                        return {
-                          id: task.id,
-                          title: task.title,
-                          description: task.description || 'Soletrar as palavras indicadas pelo professor usando as cores correspondentes no ábaco digital.',
-                          dueDate: task.dueDate ? `Entrega: ${new Date(task.dueDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}` : 'Entrega flexível',
-                          status: status,
-                          progress: progress,
-                          grade: null,
-                          urgent: task.priority === 'Alta',
-                          filesCount: task.targetWords?.length || 0,
-                          teacherImg: 'https://res.cloudinary.com/dudmozd8z/image/upload/v1779573141/clipboard-image-1779573127_oef0qy.avif',
-                          actionLabel: 'Fazer tarefa',
-                          supportFiles: task.supportFiles || [],
-                          onAction: () => {
-                            if (onGoToAbacus) {
-                              onGoToAbacus(task.title, task.description || 'Atividade carregada via link do professor.');
-                            } else {
-                              alert(`Iniciando atividade: ${task.title}`);
-                            }
-                          }
-                        };
-                      });
-                    } else if (activeTabLabel === 'acessos') {
-                      listToRender = acceptedTaskLinks.map(link => {
-                        const dbTask = teacherTasks.find(t => t.id === link.taskId);
+                      listToRender = importedTxtTasks.map(link => {
+                        const dbTask = teacherTasks.find(t => t.id === link.taskId || t.title === link.taskTitle);
                         const isTask1 = dbTask?.id === 'task-1' || dbTask?.id === 'numerais';
                         const progress = isTask1 ? progressPercent : 0;
                         const status = progress === 100 ? 'completed' : progress > 0 ? 'in-progress' : 'pending';
@@ -2387,7 +2448,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           supportFiles: dbTask?.supportFiles || [],
                           onAction: () => {
                             if (onGoToAbacus) {
-                              onGoToAbacus(link.taskTitle, dbTask?.description || 'Atividade carregada via link do professor.');
+                              onGoToAbacus(link.taskTitle, dbTask?.description || 'Atividade carregada via arquivo TXT.');
                             } else {
                               alert(`Iniciando atividade: ${link.taskTitle}`);
                             }
@@ -2680,6 +2741,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       if (window.confirm(`Deseja remover a atividade "${task.title}" permanentemente do seu perfil?`)) {
                                         if (activeTabLabel === 'recebidas') {
                                           const linkIdToDelete = task.id;
+                                          setImportedTxtTasks(prev => prev.filter(l => l.id !== linkIdToDelete && l.taskId !== linkIdToDelete));
                                           setAcceptedTaskLinks(prev => prev.filter(l => l.id !== linkIdToDelete));
                                           
                                           // Fila de exclusão pendente
@@ -3611,22 +3673,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   {(() => {
                     const query = studentView === 'tasks-list' ? generalSearchQuery : taskSearchQuery;
 
-                    const autoAssigned = teacherTasks.filter(task =>
-                      task.status === 'active' &&
-                      (task.assignedStudentIds?.includes(studentId) || task.assignedStudentIds?.includes(user.name))
-                    );
-
                     const merged = [...acceptedTaskLinks];
-                    autoAssigned.forEach(task => {
-                      if (!merged.some(link => link.taskId === task.id)) {
-                        merged.push({
-                          id: `AUTO-${task.id}`,
-                          studentName: user.name,
-                          taskId: task.id,
-                          taskTitle: task.title,
-                          createdAt: task.startDate || new Date().toISOString(),
-                          link: 'Atribuição direta do professor'
-                        });
+                    importedTxtTasks.forEach(task => {
+                      if (!merged.some(link => link.taskId === task.taskId || link.id === task.id)) {
+                        merged.push(task);
                       }
                     });
 
