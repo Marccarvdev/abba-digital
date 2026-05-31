@@ -3621,10 +3621,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       <main className="max-w-4xl mx-auto w-full px-4 sm:px-6 md:px-8 mt-6 flex flex-col gap-6">
         
         {teacherDraftingTask ? (
-          <div className="bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-transparent border border-blue-300 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span className="bg-blue-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
                   <span className="material-symbols-outlined text-[12px] font-bold">edit_document</span>
                   Configurando Rascunho
                 </span>
@@ -3695,10 +3695,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeReviewSubmission ? (
-          <div className="bg-gradient-to-r from-[#0004fd]/10 via-[#0004fd]/5 to-transparent border border-[#0004fd]/20 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span className="bg-[#0004fd] text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                   Revisão de Atividade
                 </span>
                 <span className="text-gray-400 text-sm">•</span>
@@ -3766,10 +3766,10 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeTaskInfo ? (
-          <div className="bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border border-green-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-md flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                <span className="bg-green-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                <span className="bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
                   {lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? 'Atividade Salva' : 'Atividade Atual'}
                 </span>
                 {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
