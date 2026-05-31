@@ -3727,7 +3727,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   setTeacherReply(reviewTeacherReplySaved);
                   setShowChatModal(true);
                 }}
-                className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-all active:scale-95 cursor-pointer relative shrink-0"
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-slate-400 hover:text-slate-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer relative shrink-0 shadow-xs"
               >
                 <span className="material-symbols-outlined text-[20px]">message</span>
                 {reviewCommentText && (
@@ -3798,24 +3798,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
             
             <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center shrink-0">
-              {/* Message / Chat button (only if saved previously) */}
-              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
-                <button
-                  type="button"
-                  title="Enviar mensagem para o professor"
-                  onClick={() => {
-                    setChatTarget({
-                      studentName: user?.name || "Estudante",
-                      taskId: activeTaskInfo.title.toLowerCase().replace(/\s+/g, '-'),
-                      taskTitle: activeTaskInfo.title
-                    });
-                    setIsChatModalOpen(true);
-                  }}
-                  className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[20px]">chat</span>
-                </button>
-              )}
+              {/* Message / Chat button (Always visible) */}
+              <button
+                type="button"
+                title="Enviar mensagem para o professor"
+                onClick={() => {
+                  setChatTarget({
+                    studentName: user?.name || "Estudante",
+                    taskId: activeTaskInfo.title.toLowerCase().replace(/\s+/g, '-'),
+                    taskTitle: activeTaskInfo.title
+                  });
+                  setIsChatModalOpen(true);
+                }}
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-slate-400 hover:text-slate-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs shrink-0"
+              >
+                <span className="material-symbols-outlined text-[20px]">chat</span>
+              </button>
 
               {/* Edit toggle button (only if saved previously) */}
               {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
@@ -3847,12 +3845,13 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </button>
               )}
 
-              {/* Trash delete button (only if saved previously) */}
-              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
-                <button
-                  type="button"
-                  title="Excluir atividade"
-                  onClick={() => {
+              {/* Trash delete button (Always visible) */}
+              <button
+                type="button"
+                title={lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? "Excluir atividade salva" : "Limpar progresso do ábaco"}
+                onClick={() => {
+                  const isSaved = lastSavedTask && lastSavedTask.title === activeTaskInfo.title;
+                  if (isSaved) {
                     if (window.confirm("Deseja remover esta atividade salva permanentemente?")) {
                       try {
                         const localSent = localStorage.getItem('abba_student_sent_activities');
@@ -3909,12 +3908,18 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       setSavedWordsList([]);
                       setIsStudentEditing(true);
                     }
-                  }}
-                  className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 text-red-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-[20px]">delete</span>
-                </button>
-              )}
+                  } else {
+                    if (window.confirm("Deseja limpar todo o progresso atual do ábaco?")) {
+                      setSpelledRows([[], [], [], [], [], []]);
+                      setRowColors({});
+                      setSavedWordsList([]);
+                    }
+                  }
+                }}
+                className="w-10 h-10 rounded-xl bg-white border border-slate-200/80 hover:bg-slate-50 text-slate-400 hover:text-red-500 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs shrink-0"
+              >
+                <span className="material-symbols-outlined text-[20px]">delete</span>
+              </button>
 
               {/* Back to student dashboard */}
               <button
