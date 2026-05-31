@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, type MouseEvent, type SVGProps } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createPortal } from 'react-dom';
+
 
 const IconBase: React.FC<SVGProps<SVGSVGElement>> = ({ children, ...props }) => (
   <svg
@@ -5139,34 +5141,19 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
       {/* WHITE GLASS-MORPHISM MODAL OVERLAY FOR WORD SAVING */}
       <AnimatePresence>
-        {isSaveModalOpen && (
+        {isSaveModalOpen && typeof document !== 'undefined' && createPortal(
           <motion.div
+            key="save-word-modal-portal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.4)',
-              backdropFilter: 'blur(8px)',
-              padding: '16px',
-              boxSizing: 'border-box'
-            }}
+            className="fixed inset-0 w-screen h-screen z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 box-border"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-white/75 backdrop-blur-2xl border border-white/45 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.12)] text-slate-800"
+              className="w-[92%] sm:w-[448px] max-w-md bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] text-slate-800"
             >
               {isSavingInProgress ? (
                 <div className="flex flex-col items-center justify-center py-12">
@@ -5463,40 +5450,26 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </>
               )}
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 
       {/* TEACHER SAVE REVIEW SELECTION MODAL */}
       <AnimatePresence>
-        {isTeacherSaveModalOpen && (
+        {isTeacherSaveModalOpen && typeof document !== 'undefined' && createPortal(
           <motion.div
+            key="teacher-save-modal-portal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.4)',
-              backdropFilter: 'blur(8px)',
-              padding: '16px',
-              boxSizing: 'border-box'
-            }}
+            className="fixed inset-0 w-screen h-screen z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 box-border"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-white/75 backdrop-blur-2xl border border-white/45 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.12)] text-slate-800"
+              className="w-[92%] sm:w-[448px] max-w-md bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] text-slate-800"
             >
               <div className="flex items-center gap-3 mb-5">
                 <div className="w-10 h-10 bg-indigo-50 border border-indigo-150 text-indigo-600 rounded-full flex items-center justify-center shrink-0">
@@ -5589,40 +5562,26 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
 
       {/* CUBE EDIT MODAL */}
       <AnimatePresence>
-        {isCubeEditModalOpen && activeEditCube && (
+        {isCubeEditModalOpen && activeEditCube && typeof document !== 'undefined' && createPortal(
           <motion.div
+            key="cube-edit-modal-portal"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            style={{
-              position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              width: '100vw',
-              height: '100vh',
-              zIndex: 99999,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              backgroundColor: 'rgba(255, 255, 255, 0.4)',
-              backdropFilter: 'blur(8px)',
-              padding: '16px',
-              boxSizing: 'border-box'
-            }}
+            className="fixed inset-0 w-screen h-screen z-[99999] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 box-border"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="w-full max-w-md bg-white/75 backdrop-blur-2xl border border-white/45 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.12)] text-slate-800"
+              className="w-[92%] sm:w-[448px] max-w-md bg-white border border-slate-200/80 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.15)] text-slate-800"
             >
               <div className="flex items-center gap-3 mb-6">
                 <div className="w-10 h-10 bg-indigo-50 border border-indigo-150 text-indigo-600 rounded-full flex items-center justify-center shrink-0">
@@ -5800,9 +5759,11 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 </button>
               </div>
             </motion.div>
-          </motion.div>
+          </motion.div>,
+          document.body
         )}
       </AnimatePresence>
+
 
       {/* SAVING TASK ACTIVITY OVERLAY */}
       <AnimatePresence>
