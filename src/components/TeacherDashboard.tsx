@@ -597,19 +597,43 @@ export const TeacherDashboard: React.FC<TeacherDashboardProps> = ({
         .select('*')
         .order('submitted_at', { ascending: false });
       if (dbSubs && !subsErr) {
-        const mappedSubs: StudentSubmission[] = dbSubs.map((s: any) => ({
-          id: s.id.toString(),
-          studentName: s.student_name,
-          studentEmail: s.student_email,
-          taskTitle: s.task_title,
-          submittedAt: s.submitted_at,
-          spelledWords: typeof s.spelled_words === 'string'
-            ? JSON.parse(s.spelled_words)
-            : s.spelled_words || [],
-          taskFiles: typeof s.task_files === 'string'
-            ? JSON.parse(s.task_files)
-            : s.task_files || []
-        }));
+        const mappedSubs: StudentSubmission[] = dbSubs.map((s: any) => {
+          let spelledWords: SavedWord[] = [];
+          let teacherEdited = false;
+          let teacherSavedChoice: 'teacher' | 'student' = 'student';
+          let originalStudentWords: SavedWord[] = [];
+
+          if (s.spelled_words) {
+            try {
+              const parsed = typeof s.spelled_words === 'string' ? JSON.parse(s.spelled_words) : s.spelled_words;
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.words) {
+                spelledWords = parsed.words;
+                teacherEdited = !!parsed.isTeacherEdited;
+                teacherSavedChoice = parsed.teacherSavedChoice || 'student';
+                originalStudentWords = parsed.originalStudentWords || [];
+              } else if (Array.isArray(parsed)) {
+                spelledWords = parsed;
+              }
+            } catch (e) {
+              console.error("Error parsing spelled_words", e);
+            }
+          }
+
+          return {
+            id: s.id.toString(),
+            studentName: s.student_name,
+            studentEmail: s.student_email,
+            taskTitle: s.task_title,
+            submittedAt: s.submitted_at,
+            spelledWords: spelledWords,
+            teacherEdited: teacherEdited,
+            teacherSavedChoice: teacherSavedChoice,
+            originalStudentWords: originalStudentWords,
+            taskFiles: typeof s.task_files === 'string'
+              ? JSON.parse(s.task_files)
+              : s.task_files || []
+          };
+        });
         setSubmissions(prev => {
           const merged = [...prev];
           mappedSubs.forEach(ms => {

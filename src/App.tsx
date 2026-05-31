@@ -249,6 +249,11 @@ export default function App() {
   // State for teacher reviewing a submission
   const [activeReviewSubmission, setActiveReviewSubmission] = useState<StudentSubmission | null>(null);
   const [isReviewLoading, setIsReviewLoading] = useState(false);
+  const [isTeacherEditingReview, setIsTeacherEditingReview] = useState(false);
+  const [teacherReviewSavedChoice, setTeacherReviewSavedChoice] = useState<'teacher' | 'student'>('student');
+  const [isTeacherSaveModalOpen, setIsTeacherSaveModalOpen] = useState(false);
+
+  const isTeacherEditingBlocked = !!activeReviewSubmission && !isTeacherEditingReview;
   
   // State for show Session Expired modal
   const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false);
@@ -818,6 +823,9 @@ export default function App() {
           
           setSpelledRows(newSpelledRows);
           setRowColors(newRowColors);
+          setIsTeacherEditingReview(false);
+          setTeacherReviewSavedChoice(submission.teacherSavedChoice || 'student');
+          setIsTeacherSaveModalOpen(false);
           setActiveReviewSubmission(submission);
           setCurrentScreen('abacus');
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -836,6 +844,10 @@ export default function App() {
       cutWiresRows
     });
     
+    setIsTeacherEditingReview(false);
+    setTeacherReviewSavedChoice(submission.teacherSavedChoice || 'student');
+    setIsTeacherSaveModalOpen(false);
+
     const newSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
     const newRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
     
@@ -1092,11 +1104,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
   const handleSaveReviewSubmission = async () => {
     if (!activeReviewSubmission) return;
-    
-    const studentName = activeReviewSubmission.studentName;
-    const studentEmail = activeReviewSubmission.studentEmail || "aluno@abbadigital.com";
-    const taskTitle = activeReviewSubmission.taskTitle;
-    
+
+    const studentOriginalWords = activeReviewSubmission.originalStudentWords || activeReviewSubmission.spelledWords || [];
+
     // Build words list from current edited board layout
     const newWords: SavedWord[] = [];
     spelledRows.forEach((row, idx) => {
@@ -1114,8 +1124,77 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         });
       }
     });
-    
-    // 1. Update submissions locally
+
+    const checkIfDifferent = (a: SavedWord[], b: SavedWord[]) => {
+      if (a.length !== b.length) return true;
+      for (let i = 0; i < a.length; i++) {
+        if (a[i].word !== b[i].word) return true;
+        
+        // normalize theme colors for perfect comparison
+        const colA = normalizeColor(a[i].themeColor);
+        const colB = normalizeColor(b[i].themeColor);
+        if (colA !== colB) return true;
+        
+        if (a[i].letters.length !== b[i].letters.length) return true;
+        for (let j = 0; j < a[i].letters.length; j++) {
+          if (a[i].letters[j].letter !== b[i].letters[j].letter) return true;
+          const letterColA = normalizeColor(a[i].letters[j].color);
+          const letterColB = normalizeColor(b[i].letters[j].color);
+          if (letterColA !== letterColB) return true;
+        }
+      }
+      return false;
+    };
+
+    const hasChanges = checkIfDifferent(newWords, studentOriginalWords);
+
+    if (hasChanges) {
+      setTeacherReviewSavedChoice('teacher'); // default choice in radio
+      setIsTeacherSaveModalOpen(true);
+    } else {
+      // No changes made or reverted back to student's original, save as student's original directly
+      await handleConfirmSaveReview('student');
+    }
+  };
+
+  const handleConfirmSaveReview = async (choice: 'teacher' | 'student') => {
+    if (!activeReviewSubmission) return;
+
+    const studentName = activeReviewSubmission.studentName;
+    const studentEmail = activeReviewSubmission.studentEmail || "aluno@abbadigital.com";
+    const taskTitle = activeReviewSubmission.taskTitle;
+    const studentOriginalWords = activeReviewSubmission.originalStudentWords || activeReviewSubmission.spelledWords || [];
+
+    // Build current board words
+    const newWords: SavedWord[] = [];
+    spelledRows.forEach((row, idx) => {
+      const wordstr = row.map(l => l.letter).join('');
+      if (wordstr) {
+        let themeColor = 'black';
+        if (rowColors[idx] === 'blue') themeColor = '#0052cc';
+        else if (rowColors[idx] === 'red') themeColor = '#ef4444';
+        else if (rowColors[idx] === 'green') themeColor = '#10b981';
+        
+        newWords.push({
+          word: wordstr,
+          letters: row.filter(l => l && l.letter),
+          themeColor: themeColor
+        });
+      }
+    });
+
+    const finalWordsToSave = choice === 'teacher' ? newWords : studentOriginalWords;
+
+    const payloadSpelledWords = {
+      isTeacherEdited: true,
+      teacherSavedChoice: choice,
+      originalStudentWords: studentOriginalWords,
+      words: finalWordsToSave
+    };
+
+    const serialized = JSON.stringify(payloadSpelledWords);
+
+    // 1. Update submissions locally in teacher's list
     try {
       const localSent = localStorage.getItem('abba_student_submissions');
       const sentList = localSent ? JSON.parse(localSent) : [];
@@ -1123,8 +1202,11 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         if (sub.id === activeReviewSubmission.id || (sub.studentName === studentName && sub.taskTitle === taskTitle)) {
           return {
             ...sub,
-            spelledWords: newWords,
-            reviewed: true
+            spelledWords: finalWordsToSave,
+            reviewed: true,
+            teacherEdited: true,
+            teacherSavedChoice: choice,
+            originalStudentWords: studentOriginalWords
           };
         }
         return sub;
@@ -1142,8 +1224,8 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         if (sub.id === activeReviewSubmission.id || (sub.studentName === studentName && sub.taskTitle === taskTitle)) {
           return {
             ...sub,
-            words: newWords,
-            spelledWordsCount: newWords.length
+            words: finalWordsToSave,
+            spelledWordsCount: finalWordsToSave.length
           };
         }
         return sub;
@@ -1152,16 +1234,35 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     } catch (e) {
       console.error(e);
     }
-    
+
     // Save board state for this task specifically so that when the student opens it next time, they see the edited version!
     try {
       const boardStateObj = {
-        spelledRows,
-        rowColors,
+        spelledRows: choice === 'teacher' ? spelledRows : [],
+        rowColors: choice === 'teacher' ? rowColors : {},
         rowIds,
-        cutWiresRows,
-        savedWordsList: newWords
+        cutWiresRows: choice === 'teacher' ? cutWiresRows : {},
+        savedWordsList: finalWordsToSave
       };
+      if (choice === 'student') {
+        const tempSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
+        const tempRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+        studentOriginalWords.forEach((wordObj, idx) => {
+          if (idx < 6) {
+            const col = normalizeColor(wordObj.themeColor);
+            tempSpelledRows[idx] = wordObj.letters.map(l => ({
+              ...l,
+              color: normalizeColor(l.color || col)
+            }));
+            if (col === '#0004FD') tempRowColors[idx] = 'blue';
+            else if (col === '#FF0000') tempRowColors[idx] = 'red';
+            else if (col === '#009246') tempRowColors[idx] = 'green';
+            else tempRowColors[idx] = 'black';
+          }
+        });
+        boardStateObj.spelledRows = tempSpelledRows;
+        boardStateObj.rowColors = tempRowColors;
+      }
       localStorage.setItem(`abba_board_state_${taskTitle}`, JSON.stringify(boardStateObj));
     } catch (e) {
       console.error(e);
@@ -1172,7 +1273,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       const { error } = await supabase
         .from('student_submissions')
         .update({
-          spelled_words: JSON.stringify(newWords),
+          spelled_words: serialized,
           reviewed: true
         })
         .eq('student_email', studentEmail)
@@ -1191,19 +1292,47 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
       userEmail: user?.email || "inglesdecio@gmail.com",
       role: 'teacher',
       actionType: 'teacher_submission_reviewed',
-      actionDetails: `Salvou revisão com alterações no tabuleiro para o aluno ${studentName} na tarefa "${taskTitle}".`
+      actionDetails: choice === 'teacher' 
+        ? `Salvou revisão com alterações no tabuleiro para o aluno ${studentName} na tarefa "${taskTitle}".`
+        : `Salvou revisão mantendo o original do aluno ${studentName} na tarefa "${taskTitle}".`
     });
-    
+
     // 4. Alert "Tarefa salva"
     alert("Tarefa salva");
-    
-    // 5. Open chat modal
+
+    // 5. If choice was 'student', reload the board to the student's original layout immediately
+    if (choice === 'student') {
+      const tempSpelledRows: SpelledLetter[][] = [[], [], [], [], [], []];
+      const tempRowColors: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
+      studentOriginalWords.forEach((wordObj, idx) => {
+        if (idx < 6) {
+          const col = normalizeColor(wordObj.themeColor);
+          tempSpelledRows[idx] = wordObj.letters.map(l => ({
+            ...l,
+            color: normalizeColor(l.color || col)
+          }));
+          if (col === '#0004FD') tempRowColors[idx] = 'blue';
+          else if (col === '#FF0000') tempRowColors[idx] = 'red';
+          else if (col === '#009246') tempRowColors[idx] = 'green';
+          else tempRowColors[idx] = 'black';
+        }
+      });
+      setSpelledRows(tempSpelledRows);
+      setRowColors(tempRowColors);
+    }
+
+    // 6. Reset editing state
+    setIsTeacherEditingReview(false);
+
+    // 7. Open chat modal
     setChatSubject(taskTitle);
     await loadCommentForSubject(taskTitle);
     setShowChatModal(true);
   };
 
   const handleCloseReviewMode = () => {
+    setIsTeacherEditingReview(false);
+    setIsTeacherSaveModalOpen(false);
     if (savedBoardState) {
       setSpelledRows(savedBoardState.spelledRows);
       setRowColors(savedBoardState.rowColors);
@@ -2721,6 +2850,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const handleUndoDelete = () => {
+    if (isTeacherEditingBlocked) return;
     if (undoHistory.length === 0) return;
 
     // Action lock to shield visual updates against rapid repetitive clicks
@@ -2824,6 +2954,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const handleClearAllRows = () => {
+    if (isTeacherEditingBlocked) return;
     // Collect all rows that actually contain cubes
     const nonKeys = spelledRows
       .map((row, idx) => ({ 
@@ -2859,6 +2990,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const cycleRowColor = (rIdx: number) => {
+    if (isTeacherEditingBlocked) return;
     const current = rowColors[rIdx] || (themeColor === '#000000' ? 'black' : themeColor === '#0004FD' ? 'blue' : themeColor === '#FF0000' ? 'red' : 'green');
     const colorCycle = ['black', 'blue', 'red', 'green'];
     const nextIdx = (colorCycle.indexOf(current) + 1) % colorCycle.length;
@@ -2876,6 +3008,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
+    if (isTeacherEditingBlocked) return;
     e.preventDefault();
     // Only use setPointerCapture on desktop — on mobile/touch it causes pointercancel which kills drags
     const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -3663,6 +3796,22 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
               </button>
 
               <button
+                type="button"
+                onClick={() => setIsTeacherEditingReview(!isTeacherEditingReview)}
+                className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none ${
+                  isTeacherEditingReview 
+                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' 
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-150'
+                }`}
+                title={isTeacherEditingReview ? 'Clique para bloquear a edição do progresso' : 'Clique para habilitar a edição do progresso'}
+              >
+                <span className="material-symbols-outlined text-[18px]">
+                  {isTeacherEditingReview ? 'edit_off' : 'edit'}
+                </span>
+                <span>{isTeacherEditingReview ? 'Bloquear Edição' : 'Editar Progresso'}</span>
+              </button>
+
+              <button
                 onClick={handleSaveReviewSubmission}
                 className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-pulse"
               >
@@ -4092,6 +4241,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'save') {
                                    handleOpenSaveModal(rIdx);
                                  } else {
@@ -4103,6 +4253,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  handleOpenSaveModal(rIdx);
                                 }}
                                style={{ touchAction: 'manipulation' }}
@@ -4121,6 +4272,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'scissors') {
                                    setCutWiresRows(prev => ({
                                      ...prev,
@@ -4135,6 +4287,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  setCutWiresRows(prev => ({
                                    ...prev,
                                    [rIdx]: !prev[rIdx]
@@ -4160,6 +4313,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'trash') {
                                    handleDeleteRowWithHistory(rIdx);
                                  } else {
@@ -4171,6 +4325,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
+                                 if (isTeacherEditingBlocked) return;
                                  handleDeleteRowWithHistory(rIdx);
                                }}
                                style={{ touchAction: 'manipulation' }}
@@ -4329,6 +4484,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       }
                                     }}
                                     onPointerDown={(e) => {
+                                      if (isTeacherEditingBlocked) return;
                                       if (isBeingDragged) return;
                                       e.preventDefault();
                                       e.stopPropagation(); // Stop bubbling to prevent showing the scrollbar when grabbing a letter
@@ -5362,6 +5518,132 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   </div>
                 </>
               )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* TEACHER SAVE REVIEW SELECTION MODAL */}
+      <AnimatePresence>
+        {isTeacherSaveModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              backdropFilter: 'blur(8px)',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-white/75 backdrop-blur-2xl border border-white/45 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.12)] text-slate-800"
+            >
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 bg-indigo-50 border border-indigo-150 text-indigo-600 rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">edit_document</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 font-display leading-tight">
+                    Alteração de Atividade
+                  </h3>
+                  <p className="text-xs text-slate-500 font-semibold">Salvar progresso revisado</p>
+                </div>
+              </div>
+
+              <div className="text-sm text-slate-700 font-medium mb-6 leading-relaxed">
+                Você alterou essa tarefa, deseja salvar ou deixar como o aluno fez?
+              </div>
+
+              <div className="flex flex-col gap-3 mb-6">
+                {/* Option A: Teacher's edits */}
+                <label 
+                  className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
+                    teacherReviewSavedChoice === 'teacher'
+                      ? 'bg-indigo-50/50 border-indigo-200 shadow-2xs'
+                      : 'bg-white/40 border-slate-150 hover:bg-slate-50/40'
+                  }`}
+                  onClick={() => setTeacherReviewSavedChoice('teacher')}
+                >
+                  <input
+                    type="radio"
+                    name="teacherSavedChoice"
+                    checked={teacherReviewSavedChoice === 'teacher'}
+                    onChange={() => setTeacherReviewSavedChoice('teacher')}
+                    className="mt-0.5 accent-indigo-600 cursor-pointer h-4 w-4 shrink-0"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 leading-tight block">
+                      Salvar alterações feitas por mim (professor)
+                    </span>
+                    <span className="text-xs text-slate-500 font-semibold block mt-0.5">
+                      Substitui o tabuleiro e salva suas edições de cubos, cores e wires.
+                    </span>
+                  </div>
+                </label>
+
+                {/* Option B: Student's original */}
+                <label 
+                  className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-all select-none ${
+                    teacherReviewSavedChoice === 'student'
+                      ? 'bg-indigo-50/50 border-indigo-200 shadow-2xs'
+                      : 'bg-white/40 border-slate-150 hover:bg-slate-50/40'
+                  }`}
+                  onClick={() => setTeacherReviewSavedChoice('student')}
+                >
+                  <input
+                    type="radio"
+                    name="teacherSavedChoice"
+                    checked={teacherReviewSavedChoice === 'student'}
+                    onChange={() => setTeacherReviewSavedChoice('student')}
+                    className="mt-0.5 accent-indigo-600 cursor-pointer h-4 w-4 shrink-0"
+                  />
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 leading-tight block">
+                      Deixar exatamente como o aluno enviou
+                    </span>
+                    <span className="text-xs text-slate-500 font-semibold block mt-0.5">
+                      Descarta suas edições temporárias de cubos e mantém o trabalho original do aluno.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="flex items-center gap-3 justify-end mt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsTeacherSaveModalOpen(false)}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2.5 rounded-xl font-bold transition-all text-sm cursor-pointer whitespace-nowrap border-none active:scale-95"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsTeacherSaveModalOpen(false);
+                    handleConfirmSaveReview(teacherReviewSavedChoice);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
+                >
+                  Confirmar Salvar
+                </button>
+              </div>
             </motion.div>
           </motion.div>
         )}

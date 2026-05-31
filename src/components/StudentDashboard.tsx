@@ -894,12 +894,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
       if (dbSubmissions && !subErr) {
         const mappedSubmissions = dbSubmissions.map((s: any) => {
-          let parsedWords = [];
-          try {
-            parsedWords = typeof s.spelled_words === 'string' ? JSON.parse(s.spelled_words) : s.spelled_words || [];
-          } catch (e) {
-            console.warn('Erro ao parsear spelled_words:', e);
+          let spelledWords: SavedWord[] = [];
+          let teacherEdited = false;
+          let teacherSavedChoice: 'teacher' | 'student' = 'student';
+          let originalStudentWords: SavedWord[] = [];
+
+          if (s.spelled_words) {
+            try {
+              const parsed = typeof s.spelled_words === 'string' ? JSON.parse(s.spelled_words) : s.spelled_words;
+              if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.words) {
+                spelledWords = parsed.words;
+                teacherEdited = !!parsed.isTeacherEdited;
+                teacherSavedChoice = parsed.teacherSavedChoice || 'student';
+                originalStudentWords = parsed.originalStudentWords || [];
+              } else if (Array.isArray(parsed)) {
+                spelledWords = parsed;
+              }
+            } catch (e) {
+              console.error("Error parsing spelled_words", e);
+            }
           }
+
           return {
             id: s.id || `SUB-${Date.now()}-${Math.random()}`,
             studentName: s.student_name,
@@ -907,7 +922,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             taskTitle: s.task_title,
             submittedAt: s.submitted_at || new Date().toISOString(),
             spelledWordsCount: s.spelled_words_count || 0,
-            words: parsedWords
+            words: spelledWords,
+            teacherEdited: teacherEdited,
+            teacherSavedChoice: teacherSavedChoice,
+            originalStudentWords: originalStudentWords
           };
         });
 

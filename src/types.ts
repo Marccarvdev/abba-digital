@@ -65,6 +65,9 @@ export interface StudentSubmission {
   spelledWords: SavedWord[];
   reviewed?: boolean;
   taskFiles?: { name: string; url?: string; size?: string }[];
+  teacherEdited?: boolean;
+  teacherSavedChoice?: 'teacher' | 'student';
+  originalStudentWords?: SavedWord[];
 }
 
 export interface AccessCode {
