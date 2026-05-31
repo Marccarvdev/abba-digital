@@ -1754,6 +1754,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   // Double tap handler refs
   const lastClicksRef = useRef<Record<string, number>>({});
   const clickTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const isDraggingScrollbarRef = useRef<number | null>(null);
 
   // Velocity-tracking and predictive cursor refs to ensure zero lag / high-speed tracking
   const dragVelocityRef = useRef({ x: 0, y: 0 });
@@ -4443,9 +4444,12 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                             const target = e.currentTarget;
                             
                             // 1. Direct DOM update of the range slider thumb position to avoid React re-render
-                            const slider = document.getElementById(`slider-${rIdx}`) as HTMLInputElement;
-                            if (slider) {
-                              slider.value = target.scrollLeft.toString();
+                            // ONLY sync if the user is NOT actively dragging this specific slider to break feedback fighting!
+                            if (isDraggingScrollbarRef.current !== rIdx) {
+                              const slider = document.getElementById(`slider-${rIdx}`) as HTMLInputElement;
+                              if (slider) {
+                                slider.value = target.scrollLeft.toString();
+                              }
                             }
 
                             // 2. High-performance direct DOM update of the abacus wires for this row
@@ -4838,6 +4842,17 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                           }`}
                         >
                           <input 
+                            ref={(el) => {
+                              if (el && !(el as any).__touchListenersAttached) {
+                                (el as any).__touchListenersAttached = true;
+                                const preventTouch = (e: TouchEvent) => {
+                                  if (e.cancelable) e.preventDefault();
+                                  e.stopPropagation();
+                                };
+                                el.addEventListener('touchstart', preventTouch, { passive: false });
+                                el.addEventListener('touchmove', preventTouch, { passive: false });
+                              }
+                            }}
                             id={`slider-${rIdx}`}
                             type="range" 
                             min="0" 
@@ -4858,12 +4873,14 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                               }
                             }}
                             onPointerDown={(e) => {
+                              isDraggingScrollbarRef.current = rIdx;
                               setIsDraggingScrollbar(rIdx);
                               if (activeScrollingRow !== rIdx) {
                                 setActiveScrollingRow(rIdx);
                               }
                             }}
                             onPointerUp={() => {
+                              isDraggingScrollbarRef.current = null;
                               setIsDraggingScrollbar(null);
                               if (activeScrollingRow !== rIdx) {
                                 setActiveScrollingRow(rIdx);
@@ -4875,10 +4892,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                 setActiveScrollingRow(null);
                               }, 3000);
                             }}
-                            onTouchStart={(e) => e.stopPropagation()}
-                            onTouchMove={(e) => {
-                              if (e.cancelable) e.preventDefault();
-                              e.stopPropagation();
+                            onLostPointerCapture={() => {
+                              isDraggingScrollbarRef.current = null;
+                              setIsDraggingScrollbar(null);
                             }}
                             style={{ touchAction: 'none' }}
                             className="custom-slider"
