@@ -85,6 +85,8 @@ html, body, button, [pointer-events-auto], .cursor-pointer, .cursor-grab, [data-
 html {
   scroll-behavior: smooth !important;
   scroll-padding-top: 5rem; /* Space for sticky header */
+  scrollbar-gutter: stable !important;
+  overflow-y: scroll !important;
 }
 
 /* Allow text selection specifically for content articles, inputs, and textareas */

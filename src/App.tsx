@@ -252,8 +252,11 @@ export default function App() {
   const [isTeacherEditingReview, setIsTeacherEditingReview] = useState(false);
   const [teacherReviewSavedChoice, setTeacherReviewSavedChoice] = useState<'teacher' | 'student'>('student');
   const [isTeacherSaveModalOpen, setIsTeacherSaveModalOpen] = useState(false);
+  const [isStudentEditing, setIsStudentEditing] = useState(true);
 
   const isTeacherEditingBlocked = !!activeReviewSubmission && !isTeacherEditingReview;
+  const isStudentEditingBlocked = (user?.role === 'student' || !user) && !!activeTaskInfo && !isStudentEditing;
+  const isEditingBlocked = isTeacherEditingBlocked || isStudentEditingBlocked;
   
   // State for show Session Expired modal
   const [isSessionExpiredOpen, setIsSessionExpiredOpen] = useState(false);
@@ -264,6 +267,8 @@ export default function App() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [lastSavedTask, setLastSavedTask] = useState<{ title: string; words: SavedWord[]; code?: string } | null>(null);
   const [isEditingTask, setIsEditingTask] = useState(false);
+  const [isCubeEditModalOpen, setIsCubeEditModalOpen] = useState(false);
+  const [activeEditCube, setActiveEditCube] = useState<{ rIdx: number; slotIdx: number; letterObj: SpelledLetter } | null>(null);
   const [teacherDraftingTask, setTeacherDraftingTask] = useState<TaskItem | null>(null);
 
   // States for Chat WhatsApp integration
@@ -1034,6 +1039,7 @@ export default function App() {
       words: newWords,
       code: newSentItem.id
     });
+    setIsStudentEditing(false);
 
     setIsSavingActivity(false);
     
@@ -2548,44 +2554,30 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         const startRef = trayDragStartRef.current; // Capture local ref value before asynchronous/batched state updates
         const dist = Math.hypot(e.clientX - startRef.x, e.clientY - startRef.y);
         const timeElapsed = Date.now() - startRef.time;
-        // Only trigger color cycle if it was a quick click, not a long press
+        // Only trigger action if it was a quick click, not a long press
         if (dist < 10 && timeElapsed < 300) {
           const letterId = startRef.letterObj.id;
           const now = Date.now();
           const lastTime = lastClicksRef.current[letterId] || 0;
 
           if (now - lastTime < 350) {
-            // Double click: remove letter
+            // Double click: open Cube Edit Modal
             if (clickTimeoutsRef.current[letterId]) {
               clearTimeout(clickTimeoutsRef.current[letterId]);
               delete clickTimeoutsRef.current[letterId];
             }
-            
-            // Remove the letter
-            const itemDeleted = spelledRows[startRef.rowIdx] ? spelledRows[startRef.rowIdx][startRef.index] : null;
-            if (itemDeleted) {
-              setUndoHistory(prev => [
-                ...prev,
-                {
-                  type: 'block',
-                  letter: itemDeleted,
-                  rIdx: startRef.rowIdx,
-                  lIdx: startRef.index
-                }
-              ]);
-            }
-
-            setSpelledRows(prev => {
-              const copy = prev.map(r => [...r]);
-              if (copy[startRef.rowIdx]) {
-                 copy[startRef.rowIdx].splice(startRef.index, 1);
-              }
-              return copy;
-            });
             delete lastClicksRef.current[letterId];
+
+            if (!isEditingBlocked) {
+              setActiveEditCube({
+                rIdx: startRef.rowIdx,
+                slotIdx: startRef.index,
+                letterObj: startRef.letterObj
+              });
+              setIsCubeEditModalOpen(true);
+            }
           } else {
-            // Single click: cycle color instantly!
-            cycleRowColor(startRef.rowIdx);
+            // Single click: do nothing except register time
             lastClicksRef.current[letterId] = now;
           }
         }
@@ -2776,52 +2768,24 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const handleRemoveRow = (rIdx: number) => {
-    setRowIds(prev => prev.filter((_, idx) => idx !== rIdx));
-    setSpelledRows(prev => prev.filter((_, idx) => idx !== rIdx));
+    setSpelledRows(prev => {
+      const copy = prev.map((r, idx) => idx === rIdx ? [] : [...r]);
+      return copy;
+    });
     setRowColors(prev => {
-      const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
-      Object.keys(prev).forEach(k => {
-        const idx = parseInt(k, 10);
-        if (idx < rIdx) {
-          next[idx] = prev[idx];
-        } else if (idx > rIdx) {
-          next[idx - 1] = prev[idx];
-        }
-      });
+      const next = { ...prev };
+      delete next[rIdx];
       return next;
     });
     setRowActiveModes(prev => {
-      const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
-      Object.keys(prev).forEach(k => {
-        const idx = parseInt(k, 10);
-        if (idx < rIdx) {
-          next[idx] = prev[idx];
-        } else if (idx > rIdx) {
-          next[idx - 1] = prev[idx];
-        }
-      });
+      const next = { ...prev };
+      delete next[rIdx];
       return next;
     });
     setCutWiresRows(prev => {
-      const next: Record<number, boolean> = {};
-      Object.keys(prev).forEach(k => {
-        const idx = parseInt(k, 10);
-        if (idx < rIdx) {
-          next[idx] = prev[idx];
-        } else if (idx > rIdx) {
-          next[idx - 1] = prev[idx];
-        }
-      });
+      const next = { ...prev };
+      delete next[rIdx];
       return next;
-    });
-    setActiveRowIdx(prev => {
-      if (prev === rIdx) {
-        return Math.max(0, rIdx - 1);
-      }
-      if (prev > rIdx) {
-        return prev - 1;
-      }
-      return prev;
     });
   };
 
@@ -2850,7 +2814,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const handleUndoDelete = () => {
-    if (isTeacherEditingBlocked) return;
+    if (isEditingBlocked) return;
     if (undoHistory.length === 0) return;
 
     // Action lock to shield visual updates against rapid repetitive clicks
@@ -2863,69 +2827,36 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     if (lastItem.type === 'row') {
       setRowIds(prev => {
         const copy = [...prev];
-        const insertIdx = Math.min(lastItem.index, copy.length);
-        copy.splice(insertIdx, 0, lastItem.rowId || ('row-' + Math.random().toString(36).substring(2, 11)));
+        if (lastItem.index < copy.length) {
+          copy[lastItem.index] = lastItem.rowId || copy[lastItem.index];
+        }
         return copy;
       });
 
       setSpelledRows(prev => {
-        const copy = [...prev];
-        if (copy.length === 1 && copy[0].length === 0) {
-          return [lastItem.row];
+        const copy = prev.map(r => [...r]);
+        if (lastItem.index < copy.length) {
+          copy[lastItem.index] = lastItem.row;
         }
-        const insertIdx = Math.min(lastItem.index, copy.length);
-        copy.splice(insertIdx, 0, lastItem.row);
         return copy;
       });
 
       if (lastItem.color) {
-        setRowColors(prev => {
-          const next: Record<number, 'black' | 'blue' | 'red' | 'green'> = {};
-          Object.entries(prev).forEach(([k, val]) => {
-            const idx = parseInt(k, 10);
-            const colorVal = val as 'black' | 'blue' | 'red' | 'green';
-            if (idx < lastItem.index) {
-              next[idx] = colorVal;
-            } else {
-              next[idx + 1] = colorVal;
-            }
-          });
-          next[lastItem.index] = lastItem.color as 'black' | 'blue' | 'red' | 'green';
-          return next;
-        });
+        setRowColors(prev => ({
+          ...prev,
+          [lastItem.index]: lastItem.color as any
+        }));
       }
 
-      setRowActiveModes(prev => {
-        const next: Record<number, 'save' | 'scissors' | 'trash' | null> = {};
-        Object.entries(prev).forEach(([k, val]) => {
-          const idx = parseInt(k, 10);
-          if (idx < lastItem.index) {
-            next[idx] = val;
-          } else {
-            next[idx + 1] = val;
-          }
-        });
-        if (lastItem.activeMode) {
-          next[lastItem.index] = lastItem.activeMode;
-        }
-        return next;
-      });
+      setRowActiveModes(prev => ({
+        ...prev,
+        [lastItem.index]: lastItem.activeMode as any
+      }));
 
-      setCutWiresRows(prev => {
-        const next: Record<number, boolean> = {};
-        Object.entries(prev).forEach(([k, val]) => {
-          const idx = parseInt(k, 10);
-          if (idx < lastItem.index) {
-            next[idx] = val;
-          } else {
-            next[idx + 1] = val;
-          }
-        });
-        if (lastItem.cutWires !== undefined) {
-          next[lastItem.index] = lastItem.cutWires;
-        }
-        return next;
-      });
+      setCutWiresRows(prev => ({
+        ...prev,
+        [lastItem.index]: lastItem.cutWires as any
+      }));
     } else if (lastItem.type === 'block') {
       // Restore individual block!
       const { letter, rIdx, lIdx } = lastItem;
@@ -2954,7 +2885,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const handleClearAllRows = () => {
-    if (isTeacherEditingBlocked) return;
+    if (isEditingBlocked) return;
     // Collect all rows that actually contain cubes
     const nonKeys = spelledRows
       .map((row, idx) => ({ 
@@ -2990,7 +2921,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
   };
 
   const cycleRowColor = (rIdx: number) => {
-    if (isTeacherEditingBlocked) return;
+    if (isEditingBlocked) return;
     const current = rowColors[rIdx] || (themeColor === '#000000' ? 'black' : themeColor === '#0004FD' ? 'blue' : themeColor === '#FF0000' ? 'red' : 'green');
     const colorCycle = ['black', 'blue', 'red', 'green'];
     const nextIdx = (colorCycle.indexOf(current) + 1) % colorCycle.length;
@@ -3008,7 +2939,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
 
   // Handle pointer down triggers from alphabet cube grid
   const handleCubePointerDown = (e: React.PointerEvent, cube: LetterCubeData, letter: string) => {
-    if (isTeacherEditingBlocked) return;
+    if (isEditingBlocked) return;
     e.preventDefault();
     // Only use setPointerCapture on desktop — on mobile/touch it causes pointercancel which kills drags
     const isMobile = window.matchMedia('(pointer: coarse)').matches;
@@ -3036,9 +2967,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
     pointerPosRef.current = { x: e.clientX, y: e.clientY };
     setDragScribblePoints([{ x: startX, y: startY }]);
 
-    if (trayRef.current && !isMobile) {
-      trayRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    // Programmatic scrolling on drag is disabled to ensure the alphabet shelf remains completely stationary
   };
 
   const hasAnyBlocks = spelledRows.some(row => row.length > 0);
@@ -3222,8 +3151,17 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
         onGoToAbacus={(title, summary, wordsToEdit) => {
           if (title && summary) {
             setActiveTaskInfo({ title, summary });
+            if (wordsToEdit && wordsToEdit.length > 0) {
+              setLastSavedTask({ title, words: wordsToEdit });
+              setIsStudentEditing(false); // start read-only for already saved task
+            } else {
+              setLastSavedTask(null);
+              setIsStudentEditing(true); // start editing for fresh/unsaved task
+            }
           } else {
             setActiveTaskInfo(null);
+            setLastSavedTask(null);
+            setIsStudentEditing(true);
           }
           setActiveSpellingTarget(null);
           
@@ -3828,22 +3766,38 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
             </div>
           </div>
         ) : activeTaskInfo ? (
-          lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? (
-            <div className="bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border border-emerald-300 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="bg-emerald-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider flex items-center gap-1">
-                    <span className="material-symbols-outlined text-[12px] font-bold">check_circle</span>
-                    Atividade Salva com Sucesso!
-                  </span>
-                </div>
-                <h2 className="font-display font-extrabold text-xl sm:text-2xl text-slate-900 tracking-tight leading-tight mb-1">
-                  {activeTaskInfo.title}
-                </h2>
-                <p className="text-xs text-slate-500 font-medium mt-0.5">Sua atividade está salva. Você pode gerenciá-la usando os botões ao lado ou voltar ao painel.</p>
+          <div className="bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border border-green-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                <span className="bg-green-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                  {lastSavedTask && lastSavedTask.title === activeTaskInfo.title ? 'Atividade Salva' : 'Atividade Atual'}
+                </span>
+                {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
+                  <>
+                    <span className="text-gray-400 text-sm">•</span>
+                    <span className="text-emerald-600 text-xs sm:text-sm font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px] font-bold">check_circle</span>
+                      Salva com sucesso!
+                    </span>
+                  </>
+                )}
               </div>
-              
-              <div className="flex items-center gap-2 flex-wrap self-start sm:self-center">
+              <h2 className="font-display font-extrabold text-xl sm:text-2xl text-gray-950 tracking-tight leading-tight mb-1">
+                {activeTaskInfo.title}
+              </h2>
+              <p className="text-gray-600 text-xs sm:text-sm font-medium mt-0.5">
+                {lastSavedTask && lastSavedTask.title === activeTaskInfo.title
+                  ? (isStudentEditing 
+                      ? 'Modo de Edição Ativo. Modifique o tabuleiro e clique em "Salvar Atividade" para atualizar.' 
+                      : 'Sua atividade está salva. Clique em "Editar Atividade" para destravar e modificar o ábaco.')
+                  : 'Monte as palavras deslizando as letras e clique em "Salvar Atividade" para gravar o progresso.'
+                }
+              </p>
+            </div>
+            
+            <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center shrink-0">
+              {/* Message / Chat button (only if saved previously) */}
+              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
                 <button
                   type="button"
                   title="Enviar mensagem para o professor"
@@ -3859,18 +3813,40 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 >
                   <span className="material-symbols-outlined text-[20px]">chat</span>
                 </button>
+              )}
 
+              {/* Edit toggle button (only if saved previously) */}
+              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
                 <button
                   type="button"
-                  title="Editar atividade"
-                  onClick={() => {
-                    setLastSavedTask(null);
-                  }}
-                  className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
+                  onClick={() => setIsStudentEditing(!isStudentEditing)}
+                  className={`inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none ${
+                    isStudentEditing 
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-800' 
+                      : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-150'
+                  }`}
+                  title={isStudentEditing ? 'Clique para bloquear a edição' : 'Clique para habilitar a edição'}
                 >
-                  <span className="material-symbols-outlined text-[20px]">edit</span>
+                  <span className="material-symbols-outlined text-[18px]">
+                    {isStudentEditing ? 'edit_off' : 'edit'}
+                  </span>
+                  <span>{isStudentEditing ? 'Bloquear Edição' : 'Editar Atividade'}</span>
                 </button>
+              )}
 
+              {/* Save activity button (visible if fresh or student editing is unlocked) */}
+              {(!lastSavedTask || lastSavedTask.title !== activeTaskInfo.title || isStudentEditing) && (
+                <button
+                  onClick={handleSaveAndSubmitActivity}
+                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-pulse"
+                >
+                  <span className="material-symbols-outlined text-[18px]">save</span>
+                  <span>Salvar Atividade</span>
+                </button>
+              )}
+
+              {/* Trash delete button (only if saved previously) */}
+              {lastSavedTask && lastSavedTask.title === activeTaskInfo.title && (
                 <button
                   type="button"
                   title="Excluir atividade"
@@ -3887,7 +3863,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         console.error(e);
                       }
                       
-                      // Salvar exclusão na fila pendente para resiliência offline total!
                       const delPayload = {
                         student_name: user?.name || '',
                         task_title: activeTaskInfo.title
@@ -3902,7 +3877,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                         console.error('Erro ao enfileirar exclusão de submissão:', e);
                       }
 
-                      // Deletar do Supabase para persistência total!
                       (async () => {
                         try {
                           const { error } = await supabase
@@ -3912,7 +3886,6 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                             .eq('task_title', delPayload.task_title);
                           if (!error) {
                             console.log("🗑️ Submissão excluída do Supabase com sucesso!");
-                            // Remover da fila de exclusões pendentes se online
                             try {
                               const pendingDeletions = JSON.parse(localStorage.getItem('abba_pending_submission_deletions') || '[]');
                               const remaining = pendingDeletions.filter((item: any) => 
@@ -3922,11 +3895,9 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                             } catch (e) {
                               console.error(e);
                             }
-                          } else {
-                            console.warn("Erro ao excluir submissão no Supabase:", error);
                           }
                         } catch (err) {
-                          console.warn("Erro ao excluir submissão no Supabase:", err);
+                          console.warn(err);
                         }
                       })();
 
@@ -3934,62 +3905,32 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                       setSpelledRows([[], [], [], [], [], []]);
                       setRowColors({});
                       setSavedWordsList([]);
+                      setIsStudentEditing(true);
                     }
                   }}
                   className="w-10 h-10 rounded-xl bg-red-50 border border-red-200 hover:bg-red-100 text-red-650 flex items-center justify-center transition-all active:scale-95 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[20px]">delete</span>
                 </button>
+              )}
 
-                <button
-                  onClick={() => {
-                    setActiveTaskInfo(null);
-                    setLastSavedTask(null);
-                    setSpelledRows([[], [], [], [], [], []]);
-                    setRowColors({});
-                    setSavedWordsList([]);
-                    setCurrentScreen('student-dashboard');
-                  }}
-                  className="inline-flex items-center justify-center gap-2 bg-gray-105 hover:bg-gray-205 text-gray-700 px-4 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none ml-2"
-                >
-                  <span>Voltar ao Painel</span>
-                </button>
-              </div>
+              {/* Back to student dashboard */}
+              <button
+                onClick={() => {
+                  setActiveTaskInfo(null);
+                  setLastSavedTask(null);
+                  setSpelledRows([[], [], [], [], [], []]);
+                  setRowColors({});
+                  setSavedWordsList([]);
+                  setIsStudentEditing(true);
+                  setCurrentScreen('student-dashboard');
+                }}
+                className="inline-flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none animate-none"
+              >
+                <span>Voltar ao Painel</span>
+              </button>
             </div>
-          ) : (
-            <div className="bg-gradient-to-r from-green-500/10 via-green-500/5 to-transparent border border-green-200 rounded-3xl p-5 sm:p-6 text-left relative overflow-hidden shadow-xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1.5">
-                  <span className="bg-green-600 text-white text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider">
-                    Atividade Atual
-                  </span>
-                </div>
-                <h2 className="font-display font-extrabold text-xl sm:text-2xl text-gray-950 tracking-tight leading-tight mb-1">
-                  {activeTaskInfo.title}
-                </h2>
-              </div>
-              
-              <div className="flex items-center gap-2.5 flex-wrap self-start sm:self-center">
-                <button
-                  onClick={handleSaveAndSubmitActivity}
-                  className="inline-flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
-                >
-                  <span className="material-symbols-outlined text-[18px]">save</span>
-                  <span>Salvar Atividade</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setActiveTaskInfo(null);
-                    setCurrentScreen('student-dashboard');
-                  }}
-                  className="inline-flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-gray-700 px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
-                >
-                  <span>Voltar ao Painel</span>
-                </button>
-              </div>
-            </div>
-          )
+          </div>
         ) : (
           <div className="text-left">
             <h2 className="font-display font-extrabold text-2xl sm:text-3xl text-gray-950 tracking-tight leading-tight">
@@ -4078,22 +4019,17 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                 data-shelf-idx={cubeIdx}
               >
                 <div 
-                  className={`select-none transition-all duration-150 w-full h-full ${
+                  className={`select-none transition-all duration-150 w-full h-full border-2 border-transparent rounded-2xl touch-none ${
                     draggedShelfIndex === cubeIdx 
-                      ? 'opacity-30 scale-95 border-2 border-dashed border-gray-300 rounded-2xl' 
+                      ? 'opacity-30 scale-95 border-gray-300 border-dashed' 
                       : 'active:scale-95 cursor-grab'
                   }`}
+                  style={{ touchAction: 'none' }}
                   onTouchStart={(e) => {
-                    // Only block native scroll when actively dragging
-                    if (draggedShelfIndexRef.current !== null || draggedCubeRef.current !== null) {
-                      if (e.cancelable) e.preventDefault();
-                    }
+                    if (e.cancelable) e.preventDefault();
                   }}
                   onTouchMove={(e) => {
-                    // Only block native scroll when actively dragging
-                    if (draggedShelfIndexRef.current !== null || draggedCubeRef.current !== null) {
-                      if (e.cancelable) e.preventDefault();
-                    }
+                    if (e.cancelable) e.preventDefault();
                   }}
                   onPointerDown={(e) => {
                     e.preventDefault();
@@ -4241,7 +4177,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'save') {
                                    handleOpenSaveModal(rIdx);
                                  } else {
@@ -4253,7 +4189,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  handleOpenSaveModal(rIdx);
                                 }}
                                style={{ touchAction: 'manipulation' }}
@@ -4272,7 +4208,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'scissors') {
                                    setCutWiresRows(prev => ({
                                      ...prev,
@@ -4287,7 +4223,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  setCutWiresRows(prev => ({
                                    ...prev,
                                    [rIdx]: !prev[rIdx]
@@ -4313,7 +4249,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                type="button"
                                onClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  if (rowActiveModes[rIdx] === 'trash') {
                                    handleDeleteRowWithHistory(rIdx);
                                  } else {
@@ -4325,7 +4261,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                }}
                                onDoubleClick={(e) => {
                                  e.stopPropagation();
-                                 if (isTeacherEditingBlocked) return;
+                                 if (isEditingBlocked) return;
                                  handleDeleteRowWithHistory(rIdx);
                                }}
                                style={{ touchAction: 'manipulation' }}
@@ -4484,7 +4420,7 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       }
                                     }}
                                     onPointerDown={(e) => {
-                                      if (isTeacherEditingBlocked) return;
+                                      if (isEditingBlocked) return;
                                       if (isBeingDragged) return;
                                       e.preventDefault();
                                       e.stopPropagation(); // Stop bubbling to prevent showing the scrollbar when grabbing a letter
@@ -4509,13 +4445,21 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                                       className="w-full h-full relative"
                                       whileHover={isBeingDragged ? undefined : { scale: 1.05 }}
                                     >
-                                      <LetterCube 
-                                        data={matchedCubeData}
-                                        variant="square"
-                                        interactive={false}
-                                        sizeClassName="w-full h-full"
-                                        themeColor={filledLetterObj.color || getRowColor(rIdx)}
-                                      />
+                                      {filledLetterObj.letter === ' ' ? (
+                                        <div className="w-full h-full rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 flex items-center justify-center relative">
+                                          <span className="material-symbols-outlined text-slate-400 text-[20px] select-none pointer-events-none">
+                                            space_bar
+                                          </span>
+                                        </div>
+                                      ) : (
+                                        <LetterCube 
+                                          data={matchedCubeData}
+                                          variant="square"
+                                          interactive={false}
+                                          sizeClassName="w-full h-full"
+                                          themeColor={filledLetterObj.color || getRowColor(rIdx)}
+                                        />
+                                      )}
                                     </motion.div>
                                   </motion.div>
                                 );
@@ -5642,6 +5586,217 @@ Acesse: abba-digital.vercel.app | Suporte Pedagógico
                   className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:shadow active:scale-95 transition-all text-sm cursor-pointer whitespace-nowrap border-none"
                 >
                   Confirmar Salvar
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* CUBE EDIT MODAL */}
+      <AnimatePresence>
+        {isCubeEditModalOpen && activeEditCube && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              zIndex: 99999,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: 'rgba(255, 255, 255, 0.4)',
+              backdropFilter: 'blur(8px)',
+              padding: '16px',
+              boxSizing: 'border-box'
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="w-full max-w-md bg-white/75 backdrop-blur-2xl border border-white/45 rounded-3xl p-6 sm:p-8 flex flex-col shadow-[0_25px_50px_-12px_rgba(0,0,0,0.12)] text-slate-800"
+            >
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-indigo-50 border border-indigo-150 text-indigo-600 rounded-full flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-[22px]">settings_accessibility</span>
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 font-display leading-tight">
+                    Editar Bloco do Ábaco
+                  </h3>
+                  <p className="text-xs text-slate-500 font-semibold">
+                    Cubo da Fila {activeEditCube.rIdx + 1} • Posição {activeEditCube.slotIdx + 1}
+                  </p>
+                </div>
+              </div>
+
+              {/* SECTION 1: COLOR SELECTION */}
+              <div className="mb-6 bg-slate-50/50 border border-slate-150 rounded-2xl p-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">
+                  1. Mudar cor da Fila Inteira
+                </span>
+                <div className="flex gap-4 justify-center py-1">
+                  {([
+                    { name: 'black', hex: '#000000', label: 'Preto' },
+                    { name: 'blue', hex: '#0004FD', label: 'Azul' },
+                    { name: 'red', hex: '#FF0000', label: 'Vermelho' },
+                    { name: 'green', hex: '#009246', label: 'Verde' }
+                  ] as const).map(color => {
+                    const rowColorHex = activeEditCube.letterObj.color || getRowColor(activeEditCube.rIdx);
+                    const isSelected = rowColorHex === color.hex;
+                    return (
+                      <button
+                        key={color.name}
+                        type="button"
+                        onClick={() => {
+                          const { rIdx } = activeEditCube;
+                          setRowColors(prev => ({ ...prev, [rIdx]: color.name }));
+                          setSpelledRows(prev => {
+                            const copy = prev.map((row, idx) => {
+                              if (idx !== rIdx) return row;
+                              return row.map(l => ({ ...l, color: color.hex }));
+                            });
+                            return copy;
+                          });
+                          setIsCubeEditModalOpen(false);
+                          setActiveEditCube(null);
+                        }}
+                        className={`w-11 h-11 rounded-full border-4 cursor-pointer transition-all active:scale-90 flex items-center justify-center ${
+                          isSelected ? 'border-indigo-600 scale-110 shadow-md' : 'border-white hover:scale-105'
+                        }`}
+                        style={{ backgroundColor: color.hex }}
+                        title={`Mudar fio e cubos para ${color.label}`}
+                      >
+                        {isSelected && (
+                          <span className="material-symbols-outlined text-white text-[18px] font-bold">check</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SECTION 2: EXCLUDE OPTIONS */}
+              <div className="mb-6 bg-slate-50/50 border border-slate-150 rounded-2xl p-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">
+                  2. Excluir Cubo ou Fila
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { rIdx, slotIdx } = activeEditCube;
+                      setSpelledRows(prev => {
+                        const copy = prev.map(r => [...r]);
+                        if (copy[rIdx]) {
+                          copy[rIdx].splice(slotIdx, 1);
+                        }
+                        return copy;
+                      });
+                      setIsCubeEditModalOpen(false);
+                      setActiveEditCube(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-xl cursor-pointer transition-all active:scale-95 text-xs font-bold"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                    <span>Apenas este Cubo</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { rIdx } = activeEditCube;
+                      handleRemoveRow(rIdx);
+                      setIsCubeEditModalOpen(false);
+                      setActiveEditCube(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 rounded-xl cursor-pointer transition-all active:scale-95 text-xs font-bold"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">clear_all</span>
+                    <span>Toda a Fila</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SECTION 3: SPACING OPTIONS */}
+              <div className="mb-6 bg-slate-50/50 border border-slate-150 rounded-2xl p-4">
+                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider block mb-3">
+                  3. Adicionar Espaçamento
+                </span>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { rIdx, slotIdx } = activeEditCube;
+                      setSpelledRows(prev => {
+                        const copy = prev.map(r => [...r]);
+                        const spaceLetter: SpelledLetter = {
+                          id: 'space-' + Math.random().toString(36).substring(2, 9),
+                          letter: ' ',
+                          originCubeId: 'space',
+                          color: getRowColor(rIdx)
+                        };
+                        if (copy[rIdx]) {
+                          copy[rIdx].splice(slotIdx, 0, spaceLetter);
+                        }
+                        return copy;
+                      });
+                      setIsCubeEditModalOpen(false);
+                      setActiveEditCube(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 rounded-xl cursor-pointer transition-all active:scale-95 text-xs font-bold"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">keyboard_double_arrow_left</span>
+                    <span>Espaço à Esquerda</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { rIdx, slotIdx } = activeEditCube;
+                      setSpelledRows(prev => {
+                        const copy = prev.map(r => [...r]);
+                        const spaceLetter: SpelledLetter = {
+                          id: 'space-' + Math.random().toString(36).substring(2, 9),
+                          letter: ' ',
+                          originCubeId: 'space',
+                          color: getRowColor(rIdx)
+                        };
+                        if (copy[rIdx]) {
+                          copy[rIdx].splice(slotIdx + 1, 0, spaceLetter);
+                        }
+                        return copy;
+                      });
+                      setIsCubeEditModalOpen(false);
+                      setActiveEditCube(null);
+                    }}
+                    className="flex flex-col items-center justify-center gap-2 p-3 bg-indigo-50 hover:bg-indigo-100 border border-indigo-150 text-indigo-700 rounded-xl cursor-pointer transition-all active:scale-95 text-xs font-bold"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">keyboard_double_arrow_right</span>
+                    <span>Espaço à Direita</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* FOOTER ACTIONS */}
+              <div className="flex justify-end gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCubeEditModalOpen(false);
+                    setActiveEditCube(null);
+                  }}
+                  className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl font-bold transition-all text-sm cursor-pointer border-none active:scale-95"
+                >
+                  Fechar
                 </button>
               </div>
             </motion.div>
